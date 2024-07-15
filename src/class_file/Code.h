@@ -1,0 +1,43 @@
+#ifndef GEEVM_VM_CODE_H
+#define GEEVM_VM_CODE_H
+
+#include <vector>
+
+#include "common/JvmTypes.h"
+#include "class_file/Opcode.h"
+
+namespace geevm
+{
+
+// TODO: Move "Code" here?
+
+class CodeCursor
+{
+public:
+  explicit CodeCursor(const std::vector<types::u1>& code, int64_t startPos = 0)
+    : mCode(code), mPos(startPos)
+  {}
+
+  bool hasNext();
+
+  int64_t position() const { return mPos; }
+  void set(int64_t target)
+  {
+    // TODO: Check bounds
+    mPos = target;
+  }
+
+  Opcode next();
+  types::u1 readU1();
+  types::u2 readU2();
+  types::u4 readU4();
+
+
+private:
+  const std::vector<types::u1>& mCode;
+  int64_t mPos;
+};
+
+}
+
+#endif //GEEVM_VM_CODE_H

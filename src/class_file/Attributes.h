@@ -1,6 +1,8 @@
 #ifndef GEEVM_CLASS_FILE_ATTRIBUTES_H
 #define GEEVM_CLASS_FILE_ATTRIBUTES_H
 
+#include <vector>
+
 namespace geevm
 {
 

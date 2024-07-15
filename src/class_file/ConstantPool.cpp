@@ -2,7 +2,7 @@
 
 using namespace geevm;
 
-std::u16string_view ConstantPool::getClassName(types::u2 index) const
+types::JStringRef ConstantPool::getClassName(types::u2 index) const
 {
   const Entry& entry = this->getEntry(index);
   assert(entry.tag == Tag::CONSTANT_Class && "Can only fetch a class name from a class entry!");
@@ -10,10 +10,18 @@ std::u16string_view ConstantPool::getClassName(types::u2 index) const
   return getString(entry.data.classInfo.nameIndex);
 }
 
-std::u16string_view ConstantPool::getString(types::u2 index) const
+types::JStringRef ConstantPool::getString(types::u2 index) const
 {
   const Entry& entry = this->getEntry(index);
   assert(entry.tag == Tag::CONSTANT_Utf8 && "Can only fetch a string from a Utf8 entry!");
 
   return mStrings.at(entry.data.utf8String);
+}
+
+std::pair<types::JStringRef, types::JStringRef> ConstantPool::getNameAndType(types::u2 index) const
+{
+  const Entry& entry = this->getEntry(index);
+  assert(entry.tag == Tag::CONSTANT_NameAndType && "Can only fetch a name and type from a NameAndType entry!");
+
+  return {getString(entry.data.nameAndType.nameIndex), getString(entry.data.nameAndType.descriptorIndex)};
 }

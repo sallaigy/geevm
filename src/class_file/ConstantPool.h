@@ -1,7 +1,7 @@
 #ifndef GEEVM_CLASS_FILE_CONSTANTPOOL_H
 #define GEEVM_CLASS_FILE_CONSTANTPOOL_H
 
-#include "JvmTypes.h"
+#include "common/JvmTypes.h"
 
 #include <vector>
 #include <cassert>
@@ -107,9 +107,11 @@ public:
     return this->getEntry(index);
   }
 
-  std::u16string_view getString(types::u2 index) const;
-  std::u16string_view getClassName(types::u2 index) const;
-  std::optional<std::u16string_view> getOptionalClassName(types::u2 index) const;
+  types::JStringRef getString(types::u2 index) const;
+  types::JStringRef getClassName(types::u2 index) const;
+  std::optional<types::JStringRef> getOptionalClassName(types::u2 index) const;
+
+  std::pair<types::JStringRef, types::JStringRef> getNameAndType(types::u2 index) const;
 
 private:
   std::vector<Entry> mEntries;

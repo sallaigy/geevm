@@ -13,8 +13,10 @@ using u4 = std::uint32_t;
 using u8 = std::uint64_t;
 
 using JString = std::u16string;
+using JStringRef = std::u16string_view;
 
 std::string convertJString(const JString& str);
+JString convertString(const std::string& str);
 
 } // namespace geevm::types
 
