@@ -7,7 +7,7 @@
 namespace geevm::types
 {
 
-using u1  = std::uint8_t;
+using u1 = std::uint8_t;
 using u2 = std::uint16_t;
 using u4 = std::uint32_t;
 using u8 = std::uint64_t;
@@ -20,4 +20,4 @@ JString convertString(const std::string& str);
 
 } // namespace geevm::types
 
-#endif //GEEVM_JVMTYPES_H
+#endif // GEEVM_JVMTYPES_H

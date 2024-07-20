@@ -1,8 +1,8 @@
 #include "ClassFile.h"
 
-#include <span>
-#include <fstream>
 #include <format>
+#include <fstream>
+#include <span>
 
 using namespace geevm;
 
@@ -37,8 +37,7 @@ public:
     return (chunks[0] << 24u) | (chunks[1] << 16u) | (chunks[2] << 8u) | chunks[3];
   }
 
-  template<size_t N>
-  std::array<types::u1, N> readArray()
+  template <size_t N> std::array<types::u1, N> readArray()
   {
     std::array<types::u1, N> result;
     mStream.read(reinterpret_cast<char*>(result.data()), N);
@@ -62,14 +61,13 @@ public:
       throw ClassFileReadError("not enough bytes in the stream " + i);
     }
     // Check if stream has enough bytes
-    //mStream.read(reinterpret_cast<char*>(result.data()), size);
+    // mStream.read(reinterpret_cast<char*>(result.data()), size);
 
     return result;
   }
 
 private:
   std::istream& mStream;
-
 };
 
 class ClassFileReader
@@ -77,7 +75,8 @@ class ClassFileReader
 public:
   explicit ClassFileReader(ClassFileStream& stream)
     : mStream(stream)
-  {}
+  {
+  }
 
   std::unique_ptr<ClassFile> parse()
   {
@@ -104,17 +103,8 @@ public:
     std::vector<FieldInfo> fields = this->readFields();
     std::vector<MethodInfo> methods = this->readMethods(*constantPool);
 
-    return std::make_unique<ClassFile>(
-      minorVersion,
-      majorVersion,
-      std::move(constantPool),
-      classAccessFlags,
-      thisClass,
-      superClass,
-      interfaces,
-      fields,
-      std::move(methods)
-    );
+    return std::make_unique<ClassFile>(minorVersion, majorVersion, std::move(constantPool), classAccessFlags, thisClass, superClass, interfaces, fields,
+                                       std::move(methods));
   }
 
   std::unique_ptr<ConstantPool> readConstantPool();
@@ -126,9 +116,9 @@ private:
   ClassFileStream& mStream;
 };
 
-}
+} // namespace
 
-std::unique_ptr<ClassFile> ClassFile::fromFile(const std::string &path)
+std::unique_ptr<ClassFile> ClassFile::fromFile(const std::string& path)
 {
   std::ifstream file(path, std::ios::binary);
   if (!file.is_open()) {
@@ -153,7 +143,7 @@ std::unique_ptr<ConstantPool> ClassFileReader::readConstantPool()
     auto tag = static_cast<ConstantPool::Tag>(mStream.readU1());
     auto entry = ConstantPool::Entry{tag};
 
-    switch(tag) {
+    switch (tag) {
       using enum geevm::ConstantPool::Tag;
       case CONSTANT_Class: {
         types::u2 nameIndex = mStream.readU2();
@@ -222,8 +212,7 @@ std::unique_ptr<ConstantPool> ClassFileReader::readConstantPool()
         entry.data.invokeDynamicInfo.nameAndTypeIndex = mStream.readU2();
         break;
       }
-      default:
-        throw ClassFileReadError(std::format("Invalid constant pool tag at position {}", i));
+      default: throw ClassFileReadError(std::format("Invalid constant pool tag at position {}", i));
     }
 
     entries.push_back(entry);
@@ -291,11 +280,10 @@ std::vector<MethodInfo> ClassFileReader::readMethods(const ConstantPool& constan
         std::vector<Code::ExceptionTableEntry> exceptionTable;
         for (types::u2 j = 0; j < exceptionTableLength; ++j) {
           exceptionTable.emplace_back(
-            /*startPc=*/mStream.readU2(),
-            /*endPc=*/mStream.readU2(),
-            /*handlerPc=*/mStream.readU2(),
-            /*catchType=*/mStream.readU2()
-          );
+              /*startPc=*/mStream.readU2(),
+              /*endPc=*/mStream.readU2(),
+              /*handlerPc=*/mStream.readU2(),
+              /*catchType=*/mStream.readU2());
         }
 
         // Code attributes

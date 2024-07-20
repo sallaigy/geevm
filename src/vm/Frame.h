@@ -1,7 +1,10 @@
 #ifndef GEEVM_VM_FRAME_H
 #define GEEVM_VM_FRAME_H
 
+#include "vm/Method.h"
 #include "common/JvmTypes.h"
+
+#include <cassert>
 
 namespace geevm
 {
@@ -41,21 +44,23 @@ private:
       JClass* mReference;
     } data;
   };
+
 private:
   explicit Value(Storage storage)
     : mStorage(storage)
-  {}
+  {
+  }
 
 public:
   Value(const Value& other) = default;
 
-#define GEEVM_VM_VALUE_CONSTRUCTOR(TYPE) \
+#define GEEVM_VM_VALUE_CONSTRUCTOR(TYPE)                   \
   static Value TYPE(decltype(Storage::data.m##TYPE) value) \
-  { \
-    Storage storage; \
-    storage.kind = Kind::TYPE; \
-    storage.data.m##TYPE = value; \
-    return Value(storage); \
+  {                                                        \
+    Storage storage;                                       \
+    storage.kind = Kind::TYPE;                             \
+    storage.data.m##TYPE = value;                          \
+    return Value(storage);                                 \
   }
 
   GEEVM_VM_VALUE_CONSTRUCTOR(Byte)
@@ -128,8 +133,6 @@ public:
     return popOperand();
   }
 
-
-
 private:
   std::vector<Value> mLocalVariables;
   std::vector<Value> mOperandStack;
@@ -137,7 +140,6 @@ private:
   JMethod* mMethod;
 };
 
+} // namespace geevm
 
-}
-
-#endif //GEEVM_VM_FRAME_H
+#endif // GEEVM_VM_FRAME_H

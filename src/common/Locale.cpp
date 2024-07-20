@@ -1,7 +1,7 @@
 #include "JvmTypes.h"
 
-#include <locale>
 #include <codecvt>
+#include <locale>
 
 std::string geevm::types::convertJString(const geevm::types::JString& str)
 {

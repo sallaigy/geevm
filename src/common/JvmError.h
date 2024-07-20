@@ -16,7 +16,8 @@ public:
 
   explicit VmError(types::JString message)
     : mMessage(std::move(message))
-  {}
+  {
+  }
 
   VmError(const VmError&) = default;
 
@@ -33,14 +34,12 @@ class NoClassDefFoundError : public VmError
 {
 };
 
-template<class T>
-using JvmExpected = std::expected<T, std::unique_ptr<VmError>>;
+template <class T> using JvmExpected = std::expected<T, std::unique_ptr<VmError>>;
 
-template<class T, class E, class... Args>
-JvmExpected<T> makeError(Args&& ... args)
+template <class T, class E, class... Args> JvmExpected<T> makeError(Args&&... args)
 {
   return std::unexpected(std::make_unique<E>(args...));
 }
 
-}
-#endif //GEEVM_COMMON_VMERROR_H
+} // namespace geevm
+#endif // GEEVM_COMMON_VMERROR_H

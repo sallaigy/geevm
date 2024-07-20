@@ -1,6 +1,7 @@
 #ifndef GEEVM_CLASS_FILE_ATTRIBUTES_H
 #define GEEVM_CLASS_FILE_ATTRIBUTES_H
 
+#include "common/JvmTypes.h"
 #include <vector>
 
 namespace geevm
@@ -28,15 +29,16 @@ public:
 
   // Constructors
   //==--------------------------------------------------------------------==//
-  Code(types::u2 maxStack, types::u2 maxLocals, std::vector<types::u1> bytes,
-       std::vector<ExceptionTableEntry> exceptionTable,
-       std::vector<LocalVariableTableEntry> localVariableTable,
-       std::vector<LocalVariableTableEntry> localVariableTypeTable)
-    : mMaxStack{maxStack}, mMaxLocals{maxLocals}, mBytes{std::move(bytes)},
+  Code(types::u2 maxStack, types::u2 maxLocals, std::vector<types::u1> bytes, std::vector<ExceptionTableEntry> exceptionTable,
+       std::vector<LocalVariableTableEntry> localVariableTable, std::vector<LocalVariableTableEntry> localVariableTypeTable)
+    : mMaxStack{maxStack},
+      mMaxLocals{maxLocals},
+      mBytes{std::move(bytes)},
       mExceptionTable{std::move(exceptionTable)},
       mLocalVariableTable{std::move(localVariableTable)},
       mLocalVariableTypeTable{std::move(localVariableTypeTable)}
-  {}
+  {
+  }
 
   Code(const Code&) = delete;
   Code(Code&&) = default;
@@ -80,6 +82,6 @@ private:
   std::vector<LocalVariableTableEntry> mLocalVariableTypeTable;
 };
 
-}
+} // namespace geevm
 
-#endif //GEEVM_CLASS_FILE_ATTRIBUTES_H
+#endif // GEEVM_CLASS_FILE_ATTRIBUTES_H

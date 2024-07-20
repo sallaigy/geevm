@@ -3,9 +3,9 @@
 
 #include "common/JvmTypes.h"
 
-#include <vector>
 #include <cassert>
 #include <optional>
+#include <vector>
 
 namespace geevm
 {
@@ -86,7 +86,9 @@ public:
         types::u2 nameAndTypeIndex;
       } invokeDynamicInfo;
       // Empty entry to represent indices reserved by long and double literals
-      struct {} empty;
+      struct
+      {
+      } empty;
     } data;
   };
 
@@ -94,7 +96,8 @@ public:
   //==--------------------------------------------------------------------==//
   ConstantPool(std::vector<Entry> entries, std::vector<types::JString> strings)
     : mEntries(std::move(entries)), mStrings(std::move(strings))
-  {}
+  {
+  }
 
   const Entry& getEntry(types::u2 index) const
   {
@@ -120,4 +123,4 @@ private:
 
 } // namespace geevm
 
-#endif //GEEVM_CLASS_FILE_CONSTANTPOOL_H
+#endif // GEEVM_CLASS_FILE_CONSTANTPOOL_H

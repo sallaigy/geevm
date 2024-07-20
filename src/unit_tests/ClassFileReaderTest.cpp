@@ -67,11 +67,11 @@ TEST_F(ClassFileReaderTest, read_hello_world)
   EXPECT_EQ(main.code().maxStack(), 2);
   EXPECT_EQ(main.code().maxLocals(), 1);
   EXPECT_EQ(main.code().bytes(), std::vector<types::u1>({
-    0xB2, 0x00, 0x02, // getstatic #2
-    0x12, 0x03,       // ldc #3
-    0xB6, 0x00, 0x04, // invokestatic #4
-    0xB1              // return
-  }));
+                                     0xB2, 0x00, 0x02, // getstatic #2
+                                     0x12, 0x03,       // ldc #3
+                                     0xB6, 0x00, 0x04, // invokestatic #4
+                                     0xB1              // return
+                                 }));
   EXPECT_TRUE(main.code().exceptionTable().empty());
 }
 

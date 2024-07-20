@@ -1,16 +1,15 @@
 #ifndef GEEVM_VM_VM_H
 #define GEEVM_VM_VM_H
 
-#include "common/JvmError.h"
+#include <unordered_map>
+#include <utility>
 
+#include "common/JvmError.h"
 #include "vm/Class.h"
-#include "vm/Method.h"
 #include "vm/ClassLoader.h"
 #include "vm/Frame.h"
 #include "vm/Interpreter.h"
-
-#include <unordered_map>
-#include <utility>
+#include "vm/Method.h"
 
 namespace geevm
 {
@@ -43,6 +42,6 @@ private:
   std::vector<CallFrame> mCallStack;
 };
 
-}
+} // namespace geevm
 
-#endif //GEEVM_VM_VM_H
+#endif // GEEVM_VM_VM_H

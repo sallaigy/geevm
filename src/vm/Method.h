@@ -20,7 +20,8 @@ class JMethod
 public:
   explicit JMethod(const MethodInfo& methodInfo, MethodDescriptor descriptor)
     : mMethodInfo(methodInfo), mDescriptor(descriptor)
-  {}
+  {
+  }
 
   const MethodInfo& getMethodInfo() const
   {
@@ -42,6 +43,6 @@ private:
   MethodDescriptor mDescriptor;
 };
 
-}
+} // namespace geevm
 
-#endif //GEEVM_VM_METHOD_H
+#endif // GEEVM_VM_METHOD_H

@@ -1,8 +1,8 @@
 #ifndef GEEVM_VM_CLASSLOADER_H
 #define GEEVM_VM_CLASSLOADER_H
 
-#include "common/JvmTypes.h"
 #include "common/JvmError.h"
+#include "common/JvmTypes.h"
 #include "vm/Class.h"
 
 namespace geevm
@@ -17,9 +17,10 @@ public:
     Jar
   };
 
-  ClassLocation(Kind kind, std::string  location)
+  ClassLocation(Kind kind, std::string location)
     : mKind(kind), mLocation(std::move(location))
-  {}
+  {
+  }
 
   bool isFile() const
   {
@@ -48,6 +49,6 @@ private:
   std::unordered_map<types::JString, std::unique_ptr<JClass>> mClasses;
 };
 
-}
+} // namespace geevm
 
-#endif //GEEVM_VM_CLASSLOADER_H
+#endif // GEEVM_VM_CLASSLOADER_H

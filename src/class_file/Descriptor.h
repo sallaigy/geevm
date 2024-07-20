@@ -3,9 +3,9 @@
 
 #include "common/JvmTypes.h"
 
-#include <variant>
-#include <optional>
 #include <memory>
+#include <optional>
+#include <variant>
 #include <vector>
 
 namespace geevm
@@ -28,11 +28,13 @@ class FieldType
 public:
   explicit FieldType(PrimitiveType primitiveType, int arrayDimensions = 0)
     : mVariant(primitiveType), mDimensions(arrayDimensions)
-  {}
+  {
+  }
 
   explicit FieldType(types::JString className, int arrayDimensions = 0)
     : mVariant(className), mDimensions(arrayDimensions)
-  {}
+  {
+  }
 
   static std::optional<FieldType> parse(types::JStringRef input);
 
@@ -68,15 +70,17 @@ private:
 class ReturnType
 {
   explicit ReturnType()
-  : mIsVoid(true), mType(PrimitiveType::Boolean)
-  {}
+    : mIsVoid(true), mType(PrimitiveType::Boolean)
+  {
+  }
 
 public:
   static ReturnType VoidType;
 
   explicit ReturnType(FieldType type)
     : mType(type)
-  {}
+  {
+  }
 
   bool operator==(const ReturnType&) const = default;
 
@@ -100,7 +104,8 @@ class MethodDescriptor
 public:
   MethodDescriptor(ReturnType returnType, std::vector<FieldType> parameters)
     : mReturnType(returnType), mParameterTypes(std::move(parameters))
-  {}
+  {
+  }
 
   static std::optional<MethodDescriptor> parse(types::JStringRef input);
 
@@ -116,6 +121,6 @@ private:
   std::vector<FieldType> mParameterTypes;
 };
 
-}
+} // namespace geevm
 
 #endif

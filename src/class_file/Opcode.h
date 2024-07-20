@@ -1,6 +1,8 @@
 #ifndef GEEVM_CLASS_FILE_OPCODE_H
 #define GEEVM_CLASS_FILE_OPCODE_H
 
+#include <string>
+
 namespace geevm
 {
 
@@ -14,6 +16,6 @@ enum class Opcode
 
 std::string opcodeToString(Opcode opcode);
 
-}
+} // namespace geevm
 
-#endif //GEEVM_CLASS_FILE_OPCODE_H
+#endif // GEEVM_CLASS_FILE_OPCODE_H

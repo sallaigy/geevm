@@ -1,11 +1,11 @@
 #ifndef GEEVM_VM_INTERPRETER_H
 #define GEEVM_VM_INTERPRETER_H
 
-#include <span>
 #include <memory>
+#include <span>
 
-#include "common/JvmTypes.h"
 #include "class_file/Attributes.h"
+#include "common/JvmTypes.h"
 
 namespace geevm
 {
@@ -21,6 +21,6 @@ public:
 
 std::unique_ptr<Interpreter> createDefaultInterpreter();
 
-}
+} // namespace geevm
 
-#endif //GEEVM_VM_INTERPRETER_H
+#endif // GEEVM_VM_INTERPRETER_H

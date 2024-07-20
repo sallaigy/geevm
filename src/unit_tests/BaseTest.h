@@ -5,8 +5,8 @@
 #error "GEEVM_UNIT_TEST_FIXTURES_DIR must be defined"
 #endif
 
-#include <gtest/gtest.h>
 #include <filesystem>
+#include <gtest/gtest.h>
 
 namespace fs = std::filesystem;
 
@@ -26,6 +26,6 @@ protected:
 private:
 };
 
-}
+} // namespace geevm::testing
 
-#endif //GEEVM_UNIT_TEST_BASETEST_H
+#endif // GEEVM_UNIT_TEST_BASETEST_H
