@@ -25,6 +25,12 @@ public:
 
   void execute(JClass* klass, JMethod* method);
 
+  void invoke(JClass* klass, JMethod* method);
+
+  void returnToCaller();
+
+  void returnToCaller(Value returnValue);
+
   JMethod* resolveStaticMethod(JClass* klass, const types::JString& name, const types::JString& descriptor);
 
   void raiseError(VmError& error);

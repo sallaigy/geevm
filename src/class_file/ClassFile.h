@@ -93,6 +93,15 @@ constexpr T operator|(T lhs, T rhs)
     );
 }
 
+template<AccessFlags T>
+constexpr T operator&(T lhs, T rhs)
+{
+  return static_cast<T>(
+    static_cast<std::underlying_type_t<T>>(static_cast<types::u2>(lhs) &
+    static_cast<std::underlying_type_t<T>>(rhs))
+  );
+}
+
 class FieldInfo
 {
 public:

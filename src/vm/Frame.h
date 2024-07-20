@@ -100,6 +100,7 @@ public:
   //==--------------------------------------------------------------------==//
   void storeValue(types::u2 index, Value value)
   {
+    assert(index < mLocalVariables.size());
     mLocalVariables[index] = value;
   }
 

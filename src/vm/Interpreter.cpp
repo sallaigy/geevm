@@ -332,9 +332,15 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::SWAP:
         notImplemented(opcode);
         break;
-      case Opcode::IADD:
-        notImplemented(opcode);
+      case Opcode::IADD: {
+        int32_t value2 = frame.popOperand().asInt();
+        int32_t value1 = frame.popOperand().asInt();
+
+        int32_t result = value2 + value1;
+
+        frame.pushOperand(Value::Int(result));
         break;
+      }
       case Opcode::LADD:
         notImplemented(opcode);
         break;
@@ -380,9 +386,15 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::DDIV:
         notImplemented(opcode);
         break;
-      case Opcode::IREM:
-        notImplemented(opcode);
+      case Opcode::IREM: {
+        int32_t value2 = frame.popOperand().asInt();
+        int32_t value1 = frame.popOperand().asInt();
+
+        int32_t result = value1 - (value1 / value2) * value2;
+
+        frame.pushOperand(Value::Int(result));
         break;
+      }
       case Opcode::LREM:
         notImplemented(opcode);
         break;
@@ -440,9 +452,14 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::LXOR:
         notImplemented(opcode);
         break;
-      case Opcode::IINC:
-        notImplemented(opcode);
+      case Opcode::IINC: {
+        types::u1 index = cursor.readU1();
+        auto constValue = static_cast<int32_t>(std::bit_cast<int8_t>(cursor.readU1()));
+
+        frame.storeValue(index, Value::Int(frame.loadValue(index).asInt() + constValue));
+
         break;
+      }
       case Opcode::LCMP:
         notImplemented(opcode);
         break;
@@ -461,9 +478,19 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::IFEQ:
         notImplemented(opcode);
         break;
-      case Opcode::IFNE:
-        notImplemented(opcode);
+      case Opcode::IFNE: {
+        auto opcodePos = cursor.position() - 1;
+
+        auto value = frame.popInt();
+
+        auto offset = std::bit_cast<int16_t>(cursor.readU2());
+
+        if (value.asInt() != 0) {
+          cursor.set(opcodePos + offset);
+        }
+
         break;
+      }
       case Opcode::IFLT:
         notImplemented(opcode);
         break;
@@ -488,8 +515,8 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::IF_ICMPGE: {
         auto opcodePos = cursor.position() - 1;
 
-        auto val1 = frame.popInt();
         auto val2 = frame.popInt();
+        auto val1 = frame.popInt();
 
         auto offset = std::bit_cast<int16_t>(cursor.readU2());
 
@@ -511,9 +538,13 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::IF_ACMPNE:
         notImplemented(opcode);
         break;
-      case Opcode::GOTO:
-        notImplemented(opcode);
+      case Opcode::GOTO: {
+        auto opcodePos = cursor.position() - 1;
+        auto offset = std::bit_cast<int16_t>(cursor.readU2());
+
+        cursor.set(opcodePos + offset);
         break;
+      }
       case Opcode::JSR:
         notImplemented(opcode);
         break;
@@ -527,8 +558,8 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         notImplemented(opcode);
         break;
       case Opcode::IRETURN:
-        notImplemented(opcode);
-        break;
+        vm.returnToCaller(frame.popOperand());
+        return;
       case Opcode::LRETURN:
         notImplemented(opcode);
         break;
@@ -542,8 +573,8 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         notImplemented(opcode);
         break;
       case Opcode::RETURN:
-        notImplemented(opcode);
-        break;
+        vm.returnToCaller();
+        return;
       case Opcode::GETSTATIC:
         notImplemented(opcode);
         break;
@@ -566,8 +597,14 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         auto index = cursor.readU2();
         auto methodRef = frame.currentClass()->getMethodRef(index);
 
-        JClass* klass = vm.resolveClass(methodRef.className);
-        vm.resolveStaticMethod(klass, methodRef.methodName, methodRef.methodDescriptor);
+        auto klass = vm.resolveClass(methodRef.className);
+        if (!klass) {
+          vm.raiseError(*klass.error());
+          // TODO: Abort frame
+        }
+
+        auto method = vm.resolveStaticMethod(*klass, methodRef.methodName, methodRef.methodDescriptor);
+        vm.invoke(*klass, method);
 
         break;
       }

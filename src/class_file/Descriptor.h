@@ -106,7 +106,10 @@ public:
 
   bool operator==(const MethodDescriptor&) const = default;
 
-  const std::vector<FieldType>& parameters() const;
+  const std::vector<FieldType>& parameters() const
+  {
+    return mParameterTypes;
+  }
 
 private:
   ReturnType mReturnType;

@@ -1,6 +1,8 @@
 #ifndef GEEVM_VM_METHOD_H
 #define GEEVM_VM_METHOD_H
 
+#include <class_file/Descriptor.h>
+
 #include "class_file/ClassFile.h"
 
 namespace geevm
@@ -8,15 +10,16 @@ namespace geevm
 
 struct MethodRef
 {
-  types::JStringRef className;
-  types::JStringRef methodName;
-  types::JStringRef methodDescriptor;
+  types::JString className;
+  types::JString methodName;
+  types::JString methodDescriptor;
 };
 
 class JMethod
 {
 public:
-  explicit JMethod(const MethodInfo& methodInfo) : mMethodInfo(methodInfo)
+  explicit JMethod(const MethodInfo& methodInfo, MethodDescriptor descriptor)
+    : mMethodInfo(methodInfo), mDescriptor(descriptor)
   {}
 
   const MethodInfo& getMethodInfo() const
@@ -29,8 +32,14 @@ public:
     return mMethodInfo.code();
   }
 
+  MethodDescriptor getDescriptor() const
+  {
+    return mDescriptor;
+  }
+
 private:
   const MethodInfo& mMethodInfo;
+  MethodDescriptor mDescriptor;
 };
 
 }

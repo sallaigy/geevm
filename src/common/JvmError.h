@@ -12,6 +12,18 @@ namespace geevm
 class VmError
 {
 public:
+  VmError() = default;
+
+  explicit VmError(types::JString message)
+    : mMessage(std::move(message))
+  {}
+
+  VmError(const VmError&) = default;
+
+  types::JString message() const
+  {
+    return mMessage;
+  }
 
 private:
   types::JString mMessage;

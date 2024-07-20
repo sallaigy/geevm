@@ -77,7 +77,7 @@ TEST_F(ClassFileReaderTest, read_hello_world)
 
 TEST_F(ClassFileReaderTest, read_fields)
 {
-this->readClassFile("class_file/org/geevm/tests/classfile/Fields.class");
+  this->readClassFile("class_file/org/geevm/tests/classfile/Fields.class");
 
   EXPECT_EQ(classFile->minorVersion(), 0);
   EXPECT_EQ(classFile->majorVersion(), 52);

@@ -9,11 +9,17 @@ JMethod* JClass::getMethod(const types::JString& name, const types::JString& des
     return it->second.get();
   }
 
+  auto parsedDescriptor = MethodDescriptor::parse(descriptor);
+  if (!parsedDescriptor) {
+    // FIXME: This should be a verification error
+    return nullptr;
+  }
+
   for (auto& method : mClassFile->methods()) {
     auto methodName = mClassFile->constantPool().getString(method.nameIndex());
     auto descriptorString = mClassFile->constantPool().getString(method.descriptorIndex());
     if (methodName == name && descriptorString == descriptor) {
-      auto r = mMethods.emplace(pair, std::make_unique<JMethod>(method));
+      auto r = mMethods.emplace(pair, std::make_unique<JMethod>(method, *parsedDescriptor));
       return r.first->second.get();
     }
   }
@@ -27,8 +33,8 @@ MethodRef JClass::getMethodRef(types::u2 index)
   auto& entry = mClassFile->constantPool().getEntry(index);
   assert(entry.tag == ConstantPool::Tag::CONSTANT_Methodref && "Can only fetch a method ref from a method ref entry!");
 
-  types::JStringRef className = mClassFile->constantPool().getClassName(entry.data.classAndNameRef.classIndex);
+  types::JString className{mClassFile->constantPool().getClassName(entry.data.classAndNameRef.classIndex)};
   auto [methodName, descriptor] = mClassFile->constantPool().getNameAndType(entry.data.classAndNameRef.nameAndTypeIndex);
 
-  return MethodRef{className, methodName, descriptor};
+  return MethodRef{className, types::JString{methodName}, types::JString{descriptor}};
 }
