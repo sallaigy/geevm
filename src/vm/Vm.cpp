@@ -10,6 +10,16 @@ JMethod* Vm::resolveStaticMethod(JClass* klass, const types::JString& name, cons
   return klass->getMethod(name, descriptor);
 }
 
+JvmExpected<JClass*> Vm::resolveClass(const types::JString& name)
+{
+  auto klass = mBootstrapClassLoader.loadClass(name);
+  if (klass) {
+    (*klass)->prepare();
+    (*klass)->initialize(*this);
+  }
+  return klass;
+}
+
 void Vm::execute(JClass* klass, JMethod* method)
 {
   mCallStack.emplace_back(klass, method);

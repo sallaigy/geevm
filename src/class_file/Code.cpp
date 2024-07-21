@@ -31,7 +31,7 @@ types::u4 CodeCursor::readU4()
   return value;
 }
 
-std::string geevm::opcodeToString(geevm::Opcode opcode)
+std::string geevm::opcodeToString(Opcode opcode)
 {
 #define GEEVM_HANDLE_OPCODE(MNEMONIC, OPCODE) \
   case Opcode::MNEMONIC: return #MNEMONIC;

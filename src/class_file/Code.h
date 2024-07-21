@@ -25,6 +25,7 @@ public:
   {
     return mPos;
   }
+
   void set(int64_t target)
   {
     // TODO: Check bounds

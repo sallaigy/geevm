@@ -26,3 +26,4 @@ IndentCaseLabels: true
 AlignEscapedNewlines: Left
 PointerAlignment: Left
 ReferenceAlignment: Left
+AlwaysBreakTemplateDeclarations: Yes

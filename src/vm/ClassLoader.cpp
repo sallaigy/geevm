@@ -25,11 +25,13 @@ JvmExpected<JClass*> ClassLoader::loadClass(const types::JString& name)
       return makeError<JClass*, NoClassDefFoundError>();
     }
 
-    auto r = mClasses.emplace(name, std::make_unique<JClass>(std::move(classFile)));
-    return r.first->second.get();
+    auto result = mClasses.emplace(name, std::make_unique<JClass>(std::move(classFile)));
+    JClass* classPtr = result.first->second.get();
+
+    return classPtr;
   }
 
-  return nullptr;
+  return makeError<JClass*, NoClassDefFoundError>();
 }
 
 std::optional<ClassLocation> ClassLoader::findClassLocation(types::JStringRef name) const

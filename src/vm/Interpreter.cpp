@@ -259,14 +259,43 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::RET: notImplemented(opcode); break;
       case Opcode::TABLESWITCH: notImplemented(opcode); break;
       case Opcode::LOOKUPSWITCH: notImplemented(opcode); break;
-      case Opcode::IRETURN: vm.returnToCaller(frame.popOperand()); return;
+      case Opcode::IRETURN: {
+        vm.returnToCaller(frame.popOperand());
+        return;
+      }
       case Opcode::LRETURN: notImplemented(opcode); break;
       case Opcode::FRETURN: notImplemented(opcode); break;
       case Opcode::DRETURN: notImplemented(opcode); break;
       case Opcode::ARETURN: notImplemented(opcode); break;
       case Opcode::RETURN: vm.returnToCaller(); return;
-      case Opcode::GETSTATIC: notImplemented(opcode); break;
-      case Opcode::PUTSTATIC: notImplemented(opcode); break;
+      case Opcode::GETSTATIC: {
+        auto index = cursor.readU2();
+        auto& fieldRef = frame.currentClass()->getFieldRef(index);
+
+        auto klass = vm.resolveClass(fieldRef.className);
+        if (!klass) {
+          vm.raiseError(*klass.error());
+          // TODO: Abort frame
+        }
+
+        Value value = (*klass)->getStaticField(fieldRef.fieldName);
+        frame.pushOperand(value);
+
+        break;
+      }
+      case Opcode::PUTSTATIC: {
+        auto index = cursor.readU2();
+        auto& fieldRef = frame.currentClass()->getFieldRef(index);
+
+        auto klass = vm.resolveClass(fieldRef.className);
+        if (!klass) {
+          vm.raiseError(*klass.error());
+          // TODO: Abort frame
+        }
+
+        (*klass)->storeStaticField(fieldRef.fieldName, frame.popOperand());
+        break;
+      }
       case Opcode::GETFIELD: notImplemented(opcode); break;
       case Opcode::PUTFIELD: notImplemented(opcode); break;
       case Opcode::INVOKEVIRTUAL: notImplemented(opcode); break;

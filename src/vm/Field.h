@@ -4,7 +4,14 @@
 namespace geevm
 {
 
-class FieldRef
+struct FieldRef
+{
+  types::JString className;
+  types::JString fieldName;
+  types::JString fieldDescriptor;
+};
+
+class JField
 {
 };
 

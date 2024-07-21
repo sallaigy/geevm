@@ -17,10 +17,7 @@ namespace geevm
 class Vm
 {
 public:
-  JvmExpected<JClass*> resolveClass(const types::JString& name)
-  {
-    return mBootstrapClassLoader.loadClass(name);
-  }
+  JvmExpected<JClass*> resolveClass(const types::JString& name);
 
   void execute(JClass* klass, JMethod* method);
 
@@ -40,6 +37,7 @@ private:
   ClassLoader mBootstrapClassLoader;
   std::unordered_map<types::JString, std::unique_ptr<JClass>> mLoadedClasses;
   std::vector<CallFrame> mCallStack;
+  // Method area
 };
 
 } // namespace geevm

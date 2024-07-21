@@ -78,21 +78,29 @@ template <class T>
 concept AccessFlags = std::is_same_v<T, ClassAccessFlags> || std::is_same_v<T, InnerClassAccessFlags> || std::is_same_v<T, FieldAccessFlags> ||
                       std::is_same_v<T, MethodAccessFlags> || std::is_same_v<T, MethodParameterAccessFlags>;
 
-template <AccessFlags T> constexpr T operator|(T lhs, T rhs)
+template <AccessFlags T>
+constexpr T operator|(T lhs, T rhs)
 {
   return static_cast<T>(static_cast<std::underlying_type_t<T>>(static_cast<types::u2>(lhs) | static_cast<std::underlying_type_t<T>>(rhs)));
 }
 
-template <AccessFlags T> constexpr T operator&(T lhs, T rhs)
+template <AccessFlags T>
+constexpr T operator&(T lhs, T rhs)
 {
   return static_cast<T>(static_cast<std::underlying_type_t<T>>(static_cast<types::u2>(lhs) & static_cast<std::underlying_type_t<T>>(rhs)));
+}
+
+template <AccessFlags T>
+bool hasAccessFlag(T flags, T rhs)
+{
+  return (flags & rhs) == rhs;
 }
 
 class FieldInfo
 {
 public:
-  FieldInfo(FieldAccessFlags accessFlags, types::u2 nameIndex, types::u2 descriptorIndex)
-    : mAccessFlags(accessFlags), mNameIndex(nameIndex), mDescriptorIndex(descriptorIndex)
+  FieldInfo(FieldAccessFlags accessFlags, types::u2 nameIndex, types::u2 descriptorIndex, std::optional<types::u2> constantValueIndex)
+    : mAccessFlags(accessFlags), mNameIndex(nameIndex), mDescriptorIndex(descriptorIndex), mConstantValue(constantValueIndex)
   {
   }
 
@@ -111,10 +119,17 @@ public:
     return mDescriptorIndex;
   }
 
+  std::optional<types::u2> constantValue() const
+  {
+    return mConstantValue;
+  }
+
 private:
   FieldAccessFlags mAccessFlags;
   types::u2 mNameIndex;
   types::u2 mDescriptorIndex;
+  // Attributes
+  std::optional<types::u2> mConstantValue;
 };
 
 class MethodInfo

@@ -37,7 +37,8 @@ public:
     return (chunks[0] << 24u) | (chunks[1] << 16u) | (chunks[2] << 8u) | chunks[3];
   }
 
-  template <size_t N> std::array<types::u1, N> readArray()
+  template <size_t N>
+  std::array<types::u1, N> readArray()
   {
     std::array<types::u1, N> result;
     mStream.read(reinterpret_cast<char*>(result.data()), N);
@@ -100,7 +101,7 @@ public:
       interfaces.push_back(mStream.readU2());
     }
 
-    std::vector<FieldInfo> fields = this->readFields();
+    std::vector<FieldInfo> fields = this->readFields(*constantPool);
     std::vector<MethodInfo> methods = this->readMethods(*constantPool);
 
     return std::make_unique<ClassFile>(minorVersion, majorVersion, std::move(constantPool), classAccessFlags, thisClass, superClass, interfaces, fields,
@@ -109,7 +110,7 @@ public:
 
   std::unique_ptr<ConstantPool> readConstantPool();
 
-  std::vector<FieldInfo> readFields();
+  std::vector<FieldInfo> readFields(const ConstantPool& constantPool);
   std::vector<MethodInfo> readMethods(const ConstantPool& constantPool);
 
 private:
@@ -227,7 +228,7 @@ std::unique_ptr<ConstantPool> ClassFileReader::readConstantPool()
   return std::make_unique<ConstantPool>(entries, strings);
 }
 
-std::vector<FieldInfo> ClassFileReader::readFields()
+std::vector<FieldInfo> ClassFileReader::readFields(const ConstantPool& constantPool)
 {
   types::u2 fieldsCount = mStream.readU2();
   std::vector<FieldInfo> fields;
@@ -236,15 +237,24 @@ std::vector<FieldInfo> ClassFileReader::readFields()
     auto accessFlags = static_cast<FieldAccessFlags>(mStream.readU2());
     types::u2 nameIndex = mStream.readU2();
     types::u2 descriptorIndex = mStream.readU2();
+    std::optional<types::u2> constantValueIndex;
+
     types::u2 attributesCount = mStream.readU2();
+
     for (types::u2 j = 0; j < attributesCount; ++j) {
-      // Skip the attributes
-      mStream.readU2();
+      types::u2 attrNameIndex = mStream.readU2();
       types::u4 attributeLength = mStream.readU4();
-      mStream.readVector(attributeLength);
+      auto attrName = constantPool.getString(attrNameIndex);
+
+      if (attrName == u"ConstantValue") {
+        constantValueIndex = mStream.readU2();
+      } else {
+        // Skip other attributes
+        mStream.readVector(attributeLength);
+      }
     }
 
-    fields.emplace_back(accessFlags, nameIndex, descriptorIndex);
+    fields.emplace_back(accessFlags, nameIndex, descriptorIndex, constantValueIndex);
   }
 
   return fields;
