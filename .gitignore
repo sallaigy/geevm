@@ -4,3 +4,7 @@
 cmake-build-*
 *.cache
 compile_commands.json
+
+
+# Python artifacts
+__pycache__

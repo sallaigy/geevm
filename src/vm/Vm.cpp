@@ -43,7 +43,7 @@ void Vm::invoke(JClass* klass, JMethod* method)
 
       auto typeToPrint = method->getDescriptor().parameters().at(0);
       if (typeToPrint == FieldType{PrimitiveType::Int}) {
-        std::cout << "__geevm_print(int): " << arguments[0].asInt() << std::endl;
+        std::cout << arguments[0].asInt() << std::endl;
       }
     }
   } else {

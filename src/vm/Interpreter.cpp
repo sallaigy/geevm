@@ -38,7 +38,7 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
     Opcode opcode = cursor.next();
     CallFrame& frame = vm.currentFrame();
 
-    std::cout << "#" << cursor.position() << " " << opcodeToString(opcode) << std::endl;
+    // std::cout << "#" << cursor.position() << " " << opcodeToString(opcode) << std::endl;
     switch (opcode) {
       case Opcode::NOP: notImplemented(opcode); break;
       case Opcode::ACONST_NULL: notImplemented(opcode); break;
