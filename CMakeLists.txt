@@ -6,24 +6,24 @@ set(CMAKE_CXX_STANDARD 23)
 include(FetchContent)
 
 file(GLOB_RECURSE
-        GEEVM_COMMON_SOURCES
-        src/common/*.cpp
+  GEEVM_COMMON_SOURCES
+  src/common/*.cpp
 )
 
 file(GLOB_RECURSE
-        GEEVM_CLASS_FILE_SOURCES
-        src/class_file/*.cpp
+  GEEVM_CLASS_FILE_SOURCES
+  src/class_file/*.cpp
 )
 
 file(GLOB_RECURSE
-        GEEVM_VM_SOURCES
-        src/vm/*.cpp
+  GEEVM_VM_SOURCES
+  src/vm/*.cpp
 )
 
 set(GEEVM_SOURCES
-        ${GEEVM_COMMON_SOURCES}
-        ${GEEVM_CLASS_FILE_SOURCES}
-        ${GEEVM_VM_SOURCES}
+  ${GEEVM_COMMON_SOURCES}
+  ${GEEVM_CLASS_FILE_SOURCES}
+  ${GEEVM_VM_SOURCES}
 )
 
 add_library(geevm ${GEEVM_SOURCES})
