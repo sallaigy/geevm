@@ -30,6 +30,7 @@ add_library(geevm ${GEEVM_SOURCES})
 
 target_include_directories(geevm PUBLIC src)
 
+enable_testing()
 add_subdirectory(src/unit_tests)
 
 add_executable(java src/bin/java.cpp)
