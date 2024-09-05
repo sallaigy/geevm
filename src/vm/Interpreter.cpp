@@ -12,11 +12,26 @@ using namespace geevm;
 namespace
 {
 
+enum class Predicate
+{
+  Eq,
+  NotEq,
+  Lt,
+  LtEq,
+  Gt,
+  GtEq
+};
+
 class DefaultInterpreter : public Interpreter
 {
 public:
   void execute(Vm& vm, const Code& code, std::size_t pc) override;
+
+private:
+  void integerComparison(Predicate predicate, CodeCursor& cursor, CallFrame& frame);
+  void integerComparisonToZero(Predicate predicate, CodeCursor& cursor, CallFrame& frame);
 };
+
 
 } // namespace
 
@@ -42,7 +57,7 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
     switch (opcode) {
       case Opcode::NOP: notImplemented(opcode); break;
       case Opcode::ACONST_NULL: notImplemented(opcode); break;
-      case Opcode::ICONST_M1: notImplemented(opcode); break;
+      case Opcode::ICONST_M1: frame.pushOperand(Value::Int(-1)); break;
       case Opcode::ICONST_0: frame.pushOperand(Value::Int(0)); break;
       case Opcode::ICONST_1: frame.pushOperand(Value::Int(1)); break;
       case Opcode::ICONST_2: frame.pushOperand(Value::Int(2)); break;
@@ -209,43 +224,18 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::FCMPG: notImplemented(opcode); break;
       case Opcode::DCMPL: notImplemented(opcode); break;
       case Opcode::DCMPG: notImplemented(opcode); break;
-      case Opcode::IFEQ: notImplemented(opcode); break;
-      case Opcode::IFNE: {
-        auto opcodePos = cursor.position() - 1;
-
-        auto value = frame.popInt();
-
-        auto offset = std::bit_cast<int16_t>(cursor.readU2());
-
-        if (value.asInt() != 0) {
-          cursor.set(opcodePos + offset);
-        }
-
-        break;
-      }
-      case Opcode::IFLT: notImplemented(opcode); break;
-      case Opcode::IFGE: notImplemented(opcode); break;
-      case Opcode::IFGT: notImplemented(opcode); break;
-      case Opcode::IFLE: notImplemented(opcode); break;
-      case Opcode::IF_ICMPEQ: notImplemented(opcode); break;
-      case Opcode::IF_ICMPNE: notImplemented(opcode); break;
-      case Opcode::IF_ICMPLT: notImplemented(opcode); break;
-      case Opcode::IF_ICMPGE: {
-        auto opcodePos = cursor.position() - 1;
-
-        auto val2 = frame.popInt();
-        auto val1 = frame.popInt();
-
-        auto offset = std::bit_cast<int16_t>(cursor.readU2());
-
-        if (val1.asInt() >= val2.asInt()) {
-          cursor.set(opcodePos + offset);
-        }
-
-        break;
-      }
-      case Opcode::IF_ICMPGT: notImplemented(opcode); break;
-      case Opcode::IF_ICMPLE: notImplemented(opcode); break;
+      case Opcode::IFEQ: integerComparisonToZero(Predicate::Eq, cursor, frame); break;
+      case Opcode::IFNE: integerComparisonToZero(Predicate::NotEq, cursor, frame); break;
+      case Opcode::IFLT: integerComparisonToZero(Predicate::Lt, cursor, frame); break;
+      case Opcode::IFGE: integerComparisonToZero(Predicate::GtEq, cursor, frame); break;
+      case Opcode::IFGT: integerComparisonToZero(Predicate::Gt, cursor, frame); break;
+      case Opcode::IFLE: integerComparisonToZero(Predicate::LtEq, cursor, frame); break;
+      case Opcode::IF_ICMPEQ: integerComparison(Predicate::Eq, cursor, frame); break;
+      case Opcode::IF_ICMPNE: integerComparison(Predicate::NotEq, cursor, frame); break;
+      case Opcode::IF_ICMPLT: integerComparison(Predicate::Lt, cursor, frame); break;
+      case Opcode::IF_ICMPGE: integerComparison(Predicate::GtEq, cursor, frame); break;
+      case Opcode::IF_ICMPGT: integerComparison(Predicate::Gt, cursor, frame); break;
+      case Opcode::IF_ICMPLE: integerComparison(Predicate::LtEq, cursor, frame); break;
       case Opcode::IF_ACMPEQ: notImplemented(opcode); break;
       case Opcode::IF_ACMPNE: notImplemented(opcode); break;
       case Opcode::GOTO: {
@@ -338,3 +328,45 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
     }
   }
 }
+
+static bool compareInt(Predicate predicate, Value val1, Value val2)
+{
+  switch (predicate) {
+    case Predicate::Eq: return val1.asInt() == val2.asInt();
+    case Predicate::NotEq: return val1.asInt() != val2.asInt();
+    case Predicate::Gt: return val1.asInt() > val2.asInt();
+    case Predicate::Lt: return val1.asInt() < val2.asInt();
+    case Predicate::GtEq: return val1.asInt() >= val2.asInt();
+    case Predicate::LtEq: return val1.asInt() <= val2.asInt();
+  }
+
+  std::unreachable();
+}
+
+void DefaultInterpreter::integerComparison(Predicate predicate, CodeCursor& cursor, CallFrame& frame)
+{
+  auto opcodePos = cursor.position() - 1;
+
+  auto val2 = frame.popInt();
+  auto val1 = frame.popInt();
+
+  auto offset = std::bit_cast<int16_t>(cursor.readU2());
+
+  if (compareInt(predicate, val1, val2)) {
+    cursor.set(opcodePos + offset);
+  }
+}
+
+void DefaultInterpreter::integerComparisonToZero(Predicate predicate, CodeCursor& cursor, CallFrame& frame)
+{
+  auto opcodePos = cursor.position() - 1;
+
+  auto val1 = frame.popInt();
+
+  auto offset = std::bit_cast<int16_t>(cursor.readU2());
+
+  if (compareInt(predicate, val1, Value::Int(0))) {
+    cursor.set(opcodePos + offset);
+  }
+}
+
