@@ -1,8 +1,8 @@
 #ifndef GEEVM_VM_FRAME_H
 #define GEEVM_VM_FRAME_H
 
-#include "vm/Method.h"
 #include "common/JvmTypes.h"
+#include "vm/Method.h"
 
 #include <cassert>
 
@@ -84,6 +84,12 @@ public:
     return mStorage.data.mInt;
   }
 
+  std::int64_t asLong() const
+  {
+    assert(mStorage.kind == Kind::Long);
+    return mStorage.data.mLong;
+  }
+
 private:
   Storage mStorage;
 };
@@ -109,6 +115,13 @@ public:
     mLocalVariables[index] = value;
   }
 
+  void storeLongValue(types::u2 index, Value value)
+  {
+    assert(value.kind() == Value::Kind::Long || value.kind() == Value::Kind::Double);
+    mLocalVariables[index] = value;
+    mLocalVariables[index + 1] = value;
+  }
+
   Value loadValue(types::u2 index)
   {
     return mLocalVariables[index];
@@ -131,6 +144,13 @@ public:
   Value popInt()
   {
     return popOperand();
+  }
+
+  Value popLong()
+  {
+    Value value = popOperand();
+    assert(value.kind() == Value::Kind::Long);
+    return value;
   }
 
 private:

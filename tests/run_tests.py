@@ -59,7 +59,8 @@ class JavaIntegrationTest:
             ('StaticCallsToAnotherClass', '15\n'),
             ('StaticFields', '540\n'),
             ('IntegerComparisons', '0\n3\n5\n1\n2\n5\n2\n3\n4\n'),
-            ('IntegerCompareZero', '1\n2\n5\n2\n3\n4\n0\n3\n5\n')
+            ('IntegerCompareZero', '1\n2\n5\n2\n3\n4\n0\n3\n5\n'),
+            ('StaticFieldsLong', '540\n')
         ]
 
         for class_name, expected in tests:

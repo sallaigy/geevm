@@ -32,7 +32,6 @@ private:
   void integerComparisonToZero(Predicate predicate, CodeCursor& cursor, CallFrame& frame);
 };
 
-
 } // namespace
 
 std::unique_ptr<Interpreter> geevm::createDefaultInterpreter()
@@ -64,8 +63,8 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::ICONST_3: frame.pushOperand(Value::Int(3)); break;
       case Opcode::ICONST_4: frame.pushOperand(Value::Int(4)); break;
       case Opcode::ICONST_5: frame.pushOperand(Value::Int(5)); break;
-      case Opcode::LCONST_0: notImplemented(opcode); break;
-      case Opcode::LCONST_1: notImplemented(opcode); break;
+      case Opcode::LCONST_0: frame.pushOperand(Value::Long(0)); break;
+      case Opcode::LCONST_1: frame.pushOperand(Value::Long(1)); break;
       case Opcode::FCONST_0: notImplemented(opcode); break;
       case Opcode::FCONST_1: notImplemented(opcode); break;
       case Opcode::FCONST_2: notImplemented(opcode); break;
@@ -79,7 +78,20 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::SIPUSH: notImplemented(opcode); break;
       case Opcode::LDC: notImplemented(opcode); break;
       case Opcode::LDC_W: notImplemented(opcode); break;
-      case Opcode::LDC2_W: notImplemented(opcode); break;
+      case Opcode::LDC2_W: {
+        types::u2 index = cursor.readU2();
+        auto& entry = frame.currentClass()->constantPool().getEntry(index);
+
+        if (entry.tag == ConstantPool::Tag::CONSTANT_Double) {
+          frame.pushOperand(Value::Double(entry.data.doubleFloat));
+        } else if (entry.tag == ConstantPool::Tag::CONSTANT_Long) {
+          frame.pushOperand(Value::Long(entry.data.doubleInteger));
+        } else {
+          assert(false && "ldc2_w target entry must be double or long");
+        }
+
+        break;
+      }
       case Opcode::ILOAD: frame.pushOperand(frame.loadValue(cursor.readU1())); break;
       case Opcode::LLOAD: notImplemented(opcode); break;
       case Opcode::FLOAD: notImplemented(opcode); break;
@@ -89,10 +101,10 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::ILOAD_1: frame.pushOperand(frame.loadValue(1)); break;
       case Opcode::ILOAD_2: frame.pushOperand(frame.loadValue(2)); break;
       case Opcode::ILOAD_3: frame.pushOperand(frame.loadValue(3)); break;
-      case Opcode::LLOAD_0: notImplemented(opcode); break;
-      case Opcode::LLOAD_1: notImplemented(opcode); break;
-      case Opcode::LLOAD_2: notImplemented(opcode); break;
-      case Opcode::LLOAD_3: notImplemented(opcode); break;
+      case Opcode::LLOAD_0: frame.pushOperand(frame.loadValue(0)); break;
+      case Opcode::LLOAD_1: frame.pushOperand(frame.loadValue(1)); break;
+      case Opcode::LLOAD_2: frame.pushOperand(frame.loadValue(2)); break;
+      case Opcode::LLOAD_3: frame.pushOperand(frame.loadValue(3)); break;
       case Opcode::FLOAD_0: notImplemented(opcode); break;
       case Opcode::FLOAD_1: notImplemented(opcode); break;
       case Opcode::FLOAD_2: notImplemented(opcode); break;
@@ -126,10 +138,10 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::ISTORE_1: frame.storeValue(1, frame.popInt()); break;
       case Opcode::ISTORE_2: frame.storeValue(2, frame.popInt()); break;
       case Opcode::ISTORE_3: frame.storeValue(3, frame.popInt()); break;
-      case Opcode::LSTORE_0: notImplemented(opcode); break;
-      case Opcode::LSTORE_1: notImplemented(opcode); break;
-      case Opcode::LSTORE_2: notImplemented(opcode); break;
-      case Opcode::LSTORE_3: notImplemented(opcode); break;
+      case Opcode::LSTORE_0: frame.storeLongValue(0, frame.popLong()); break;
+      case Opcode::LSTORE_1: frame.storeLongValue(1, frame.popLong()); break;
+      case Opcode::LSTORE_2: frame.storeLongValue(2, frame.popLong()); break;
+      case Opcode::LSTORE_3: frame.storeLongValue(3, frame.popLong()); break;
       case Opcode::FSTORE_0: notImplemented(opcode); break;
       case Opcode::FSTORE_1: notImplemented(opcode); break;
       case Opcode::FSTORE_2: notImplemented(opcode); break;
@@ -168,7 +180,13 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         frame.pushOperand(Value::Int(result));
         break;
       }
-      case Opcode::LADD: notImplemented(opcode); break;
+      case Opcode::LADD: {
+        int64_t value2 = frame.popOperand().asLong();
+        int64_t value1 = frame.popOperand().asLong();
+
+        frame.pushOperand(Value::Long(value1 + value2));
+        break;
+      }
       case Opcode::FADD: notImplemented(opcode); break;
       case Opcode::DADD: notImplemented(opcode); break;
       case Opcode::ISUB: notImplemented(opcode); break;
@@ -192,7 +210,15 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         frame.pushOperand(Value::Int(result));
         break;
       }
-      case Opcode::LREM: notImplemented(opcode); break;
+      case Opcode::LREM: {
+        int64_t value2 = frame.popOperand().asLong();
+        int64_t value1 = frame.popOperand().asLong();
+
+        int64_t result = value1 - (value1 / value2) * value2;
+
+        frame.pushOperand(Value::Long(result));
+        break;
+      }
       case Opcode::FREM: notImplemented(opcode); break;
       case Opcode::DREM: notImplemented(opcode); break;
       case Opcode::INEG: notImplemented(opcode); break;
@@ -219,7 +245,20 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
 
         break;
       }
-      case Opcode::LCMP: notImplemented(opcode); break;
+      case Opcode::LCMP: {
+        int64_t value2 = frame.popOperand().asLong();
+        int64_t value1 = frame.popOperand().asLong();
+
+        if (value1 > value2) {
+          frame.pushOperand(Value::Int(1));
+        } else if (value1 < value2) {
+          frame.pushOperand(Value::Int(-1));
+        } else {
+          frame.pushOperand(Value::Int(0));
+        }
+
+        break;
+      }
       case Opcode::FCMPL: notImplemented(opcode); break;
       case Opcode::FCMPG: notImplemented(opcode); break;
       case Opcode::DCMPL: notImplemented(opcode); break;
@@ -369,4 +408,3 @@ void DefaultInterpreter::integerComparisonToZero(Predicate predicate, CodeCursor
     cursor.set(opcodePos + offset);
   }
 }
-
