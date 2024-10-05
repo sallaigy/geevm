@@ -131,6 +131,23 @@ std::unique_ptr<ClassFile> ClassFile::fromFile(const std::string& path)
   return ClassFileReader(stream).parse();
 }
 
+struct MemoryBuffer : std::streambuf
+{
+  MemoryBuffer(char* begin, char* end)
+  {
+    this->setg(begin, begin, end);
+  }
+};
+
+std::unique_ptr<ClassFile> ClassFile::fromBytes(char* bytes, size_t size)
+{
+  MemoryBuffer buffer(bytes, bytes + size);
+  std::istream in{&buffer};
+  ClassFileStream stream{in};
+
+  return ClassFileReader(stream).parse();
+}
+
 std::unique_ptr<ConstantPool> ClassFileReader::readConstantPool()
 {
   types::u2 count = mStream.readU2();

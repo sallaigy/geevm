@@ -186,6 +186,8 @@ class ClassFile
 public:
   static std::unique_ptr<ClassFile> fromFile(const std::string& filename);
 
+  static std::unique_ptr<ClassFile> fromBytes(char* bytes, size_t size);
+
   // Constructor
   //==--------------------------------------------------------------------==//
 

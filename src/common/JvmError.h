@@ -32,13 +32,24 @@ private:
 
 class NoClassDefFoundError : public VmError
 {
+public:
+  NoClassDefFoundError() = default;
+  using VmError::VmError;
 };
 
-template <class T> using JvmExpected = std::expected<T, std::unique_ptr<VmError>>;
+template<class T>
+using JvmExpected = std::expected<T, std::unique_ptr<VmError>>;
 
-template <class T, class E, class... Args> JvmExpected<T> makeError(Args&&... args)
+template<class T, class E, class... Args>
+JvmExpected<T> makeError(Args&&... args)
 {
   return std::unexpected(std::make_unique<E>(args...));
+}
+
+template<class T>
+JvmExpected<T> makeError(std::unique_ptr<VmError> error)
+{
+  return std::unexpected(std::move(error));
 }
 
 } // namespace geevm

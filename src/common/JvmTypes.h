@@ -20,4 +20,11 @@ JString convertString(const std::string& str);
 
 } // namespace geevm::types
 
+namespace geevm
+{
+
+using NameAndDescriptor = std::pair<types::JString, types::JString>;
+
+} // namespace geevm
+
 #endif // GEEVM_JVMTYPES_H
