@@ -19,6 +19,8 @@ class Vm
 public:
   JvmExpected<JClass*> resolveClass(const types::JString& name);
 
+  void initialize();
+
   void execute(JClass* klass, JMethod* method);
 
   void invoke(JClass* klass, JMethod* method);
@@ -29,15 +31,22 @@ public:
 
   JMethod* resolveStaticMethod(JClass* klass, const types::JString& name, const types::JString& descriptor);
 
+  JMethod* resolveMethod(JClass* klass, const types::JString& name, const types::JString& descriptor);
+
   void raiseError(VmError& error);
 
   CallFrame& currentFrame();
 
+  Instance* newInstance(JClass* klass);
+
+  void loadNativeMethods();
+
 private:
-  ClassLoader mBootstrapClassLoader;
+  BootstrapClassLoader mBootstrapClassLoader;
   std::unordered_map<types::JString, std::unique_ptr<JClass>> mLoadedClasses;
   std::vector<CallFrame> mCallStack;
   // Method area
+  std::vector<std::unique_ptr<Instance>> mHeap;
 };
 
 } // namespace geevm

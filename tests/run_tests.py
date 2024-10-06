@@ -53,7 +53,7 @@ class JavaIntegrationTest:
         return subprocess.run(java_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=self.class_dir.name)
 
     def simple_math_programs(self):
-        tests = [
+        self.execute_tests('simple_math_programs', [
             ('Count', '10\n'),
             ('StaticCalls', '15\n'),
             ('StaticCallsToAnotherClass', '15\n'),
@@ -61,25 +61,33 @@ class JavaIntegrationTest:
             ('IntegerComparisons', '0\n3\n5\n1\n2\n5\n2\n3\n4\n'),
             ('IntegerCompareZero', '1\n2\n5\n2\n3\n4\n0\n3\n5\n'),
             ('StaticFieldsLong', '540\n')
-        ]
+        ])
 
+    def oop_programs(self):
+        self.execute_tests('oop_programs', [
+            ('Instance', '42\n')
+        ])
+
+    def run(self):
+        self.simple_math_programs()
+        self.oop_programs()
+
+    def execute_tests(self, test_suite_name, tests):
+        print(test_suite_name)
         for class_name, expected in tests:
             r = self.run_geevm_java(f'org.geevm.tests.basic.{class_name}')
             if r.returncode != 0:
-                print(f'[{Color.RED}ERROR{Color.RESET}] {class_name}')
-                print(f'{Color.RED}The geevm java command failed with status code {r.returncode}{Color.RESET}:')
+                print(f'  [{Color.RED}ERROR{Color.RESET}] {class_name}')
+                print(f'  {Color.RED}The geevm java command failed with status code {r.returncode}{Color.RESET}:')
                 print(r.stderr.decode())
                 continue
 
             actual = r.stdout.decode()
             if expected != actual:
-                print(f'[{Color.RED}FAIL{Color.RESET}] {class_name}')
+                print(f'  [{Color.RED}FAIL{Color.RESET}] {class_name}')
                 print(''.join(difflib.unified_diff(expected, actual, fromfile='expected', tofile='actual')))
             else:
-                print(f'[{Color.GREEN}PASS{Color.RESET}] {class_name}')
-
-    def run(self):
-        self.simple_math_programs()
+                print(f'  [{Color.GREEN}PASS{Color.RESET}] {class_name}')
 
 
 if __name__ == "__main__":

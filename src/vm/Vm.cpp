@@ -4,9 +4,18 @@
 
 using namespace geevm;
 
+void Vm::initialize()
+{
+}
+
 JMethod* Vm::resolveStaticMethod(JClass* klass, const types::JString& name, const types::JString& descriptor)
 {
   // TODO: Check superclasses
+  return klass->getMethod(name, descriptor);
+}
+
+JMethod* Vm::resolveMethod(JClass* klass, const types::JString& name, const types::JString& descriptor)
+{
   return klass->getMethod(name, descriptor);
 }
 
@@ -31,7 +40,7 @@ void Vm::invoke(JClass* klass, JMethod* method)
 {
   size_t numArgs = method->getDescriptor().parameters().size();
 
-  if ((method->getMethodInfo().accessFlags() & MethodAccessFlags::ACC_NATIVE) == MethodAccessFlags::ACC_NATIVE) {
+  if (hasAccessFlag(method->getMethodInfo().accessFlags(), MethodAccessFlags::ACC_NATIVE)) {
     auto methodName = klass->constantPool().getString(method->getMethodInfo().nameIndex());
     if (methodName == u"__geevm_print") {
       auto& prevFrame = mCallStack.back();
@@ -60,6 +69,14 @@ void Vm::invoke(JClass* klass, JMethod* method)
     auto interpreter = createDefaultInterpreter();
     interpreter->execute(*this, method->getCode(), 0);
   }
+}
+
+Instance* Vm::newInstance(JClass* klass)
+{
+  // TODO: Fields, etc.
+  auto& inserted = mHeap.emplace_back(std::make_unique<Instance>());
+
+  return inserted.get();
 }
 
 void Vm::returnToCaller()

@@ -113,10 +113,10 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::DLOAD_1: notImplemented(opcode); break;
       case Opcode::DLOAD_2: notImplemented(opcode); break;
       case Opcode::DLOAD_3: notImplemented(opcode); break;
-      case Opcode::ALOAD_0: notImplemented(opcode); break;
-      case Opcode::ALOAD_1: notImplemented(opcode); break;
-      case Opcode::ALOAD_2: notImplemented(opcode); break;
-      case Opcode::ALOAD_3: notImplemented(opcode); break;
+      case Opcode::ALOAD_0: frame.pushOperand(frame.loadValue(0)); break;
+      case Opcode::ALOAD_1: frame.pushOperand(frame.loadValue(1)); break;
+      case Opcode::ALOAD_2: frame.pushOperand(frame.loadValue(2)); break;
+      case Opcode::ALOAD_3: frame.pushOperand(frame.loadValue(3)); break;
       case Opcode::IALOAD: notImplemented(opcode); break;
       case Opcode::LALOAD: notImplemented(opcode); break;
       case Opcode::FALOAD: notImplemented(opcode); break;
@@ -150,10 +150,10 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::DSTORE_1: notImplemented(opcode); break;
       case Opcode::DSTORE_2: notImplemented(opcode); break;
       case Opcode::DSTORE_3: notImplemented(opcode); break;
-      case Opcode::ASTORE_0: notImplemented(opcode); break;
-      case Opcode::ASTORE_1: notImplemented(opcode); break;
-      case Opcode::ASTORE_2: notImplemented(opcode); break;
-      case Opcode::ASTORE_3: notImplemented(opcode); break;
+      case Opcode::ASTORE_0: frame.storeValue(0, frame.popOperand()); break;
+      case Opcode::ASTORE_1: frame.storeValue(1, frame.popOperand()); break;
+      case Opcode::ASTORE_2: frame.storeValue(2, frame.popOperand()); break;
+      case Opcode::ASTORE_3: frame.storeValue(3, frame.popOperand()); break;
       case Opcode::IASTORE: notImplemented(opcode); break;
       case Opcode::LASTORE: notImplemented(opcode); break;
       case Opcode::FASTORE: notImplemented(opcode); break;
@@ -164,7 +164,13 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::SASTORE: notImplemented(opcode); break;
       case Opcode::POP: notImplemented(opcode); break;
       case Opcode::POP2: notImplemented(opcode); break;
-      case Opcode::DUP: notImplemented(opcode); break;
+      case Opcode::DUP: {
+        // TOOD: Duplicate instead of pop / push
+        auto value = frame.popOperand();
+        frame.pushOperand(value);
+        frame.pushOperand(value);
+        break;
+      }
       case Opcode::DUP_X1: notImplemented(opcode); break;
       case Opcode::DUP_X2: notImplemented(opcode); break;
       case Opcode::DUP2: notImplemented(opcode); break;
@@ -328,7 +334,21 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::GETFIELD: notImplemented(opcode); break;
       case Opcode::PUTFIELD: notImplemented(opcode); break;
       case Opcode::INVOKEVIRTUAL: notImplemented(opcode); break;
-      case Opcode::INVOKESPECIAL: notImplemented(opcode); break;
+      case Opcode::INVOKESPECIAL: {
+        auto index = cursor.readU2();
+        auto methodRef = frame.currentClass()->getMethodRef(index);
+
+        auto klass = vm.resolveClass(methodRef.className);
+        if (!klass) {
+          // TODO: Abort frame
+          vm.raiseError(*klass.error());
+        }
+
+        auto method = vm.resolveMethod(*klass, methodRef.methodName, methodRef.methodDescriptor);
+        vm.invoke(*klass, method);
+
+        break;
+      }
       case Opcode::INVOKESTATIC: {
         auto index = cursor.readU2();
         auto methodRef = frame.currentClass()->getMethodRef(index);
@@ -346,7 +366,21 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       }
       case Opcode::INVOKEINTERFACE: notImplemented(opcode); break;
       case Opcode::INVOKEDYNAMIC: notImplemented(opcode); break;
-      case Opcode::NEW: notImplemented(opcode); break;
+      case Opcode::NEW: {
+        auto index = cursor.readU2();
+        auto className = frame.currentClass()->constantPool().getClassName(index);
+
+        auto klass = vm.resolveClass(types::JString{className});
+        if (!klass) {
+          vm.raiseError(*klass.error());
+          // TODO: Abort frame
+        }
+
+        Instance* instance = vm.newInstance(*klass);
+        frame.pushOperand(Value::Reference(instance));
+
+        break;
+      }
       case Opcode::NEWARRAY: notImplemented(opcode); break;
       case Opcode::ANEWARRAY: notImplemented(opcode); break;
       case Opcode::ARRAYLENGTH: notImplemented(opcode); break;

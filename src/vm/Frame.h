@@ -2,6 +2,7 @@
 #define GEEVM_VM_FRAME_H
 
 #include "common/JvmTypes.h"
+#include "vm/Instance.h"
 #include "vm/Method.h"
 
 #include <cassert>
@@ -41,7 +42,7 @@ private:
       float mFloat;
       double mDouble;
       std::uint32_t mReturnAddress;
-      JClass* mReference;
+      Instance* mReference;
     } data;
   };
 

@@ -6,6 +6,7 @@
 #include <unordered_map>
 
 #include "class_file/ClassFile.h"
+#include "common/Hash.h"
 #include "common/JvmTypes.h"
 #include "vm/Field.h"
 #include "vm/Method.h"
@@ -18,17 +19,6 @@ class Vm;
 class JClass
 {
   friend class Vm;
-  using NameAndDescriptor = std::pair<types::JString, types::JString>;
-
-  struct PairHash
-  {
-    std::size_t operator()(const NameAndDescriptor& pair) const
-    {
-      std::size_t hash = 17;
-      hash = hash * 31 + std::hash<types::JString>()(pair.first);
-      return hash * 31 + std::hash<types::JString>()(pair.second);
-    }
-  };
 
 public:
   explicit JClass(std::unique_ptr<ClassFile> classFile);
@@ -52,7 +42,6 @@ public:
 private:
   Value getInitialFieldValue(const FieldInfo& field);
 
-private:
   bool mIsPrepared = false;
   bool mIsInitialized = false;
   bool mIsUnderInitialization = false;

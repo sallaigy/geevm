@@ -14,6 +14,8 @@ int main(int argc, char* argv[])
   std::replace(mainClassName.begin(), mainClassName.end(), u'.', u'/');
 
   auto vm = std::make_unique<geevm::Vm>();
+  vm->initialize();
+
   auto mainClass = vm->resolveClass(mainClassName);
 
   if (!mainClass) {

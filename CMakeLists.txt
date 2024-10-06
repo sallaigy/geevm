@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 23)
 
 include(FetchContent)
 
+find_package(libzip CONFIG REQUIRED)
+
 file(GLOB_RECURSE
   GEEVM_COMMON_SOURCES
   src/common/*.cpp
@@ -29,6 +31,7 @@ set(GEEVM_SOURCES
 add_library(geevm ${GEEVM_SOURCES})
 
 target_include_directories(geevm PUBLIC src)
+target_link_libraries(geevm libzip::zip)
 
 enable_testing()
 add_subdirectory(src/unit_tests)
