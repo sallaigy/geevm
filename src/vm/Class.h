@@ -39,6 +39,9 @@ public:
     return mClassFile->constantPool();
   }
 
+  std::optional<types::JStringRef> superClass() const;
+  std::vector<types::JStringRef> interfaces() const;
+
 private:
   Value getInitialFieldValue(const FieldInfo& field);
 

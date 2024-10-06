@@ -65,7 +65,8 @@ class JavaIntegrationTest:
 
     def oop_programs(self):
         self.execute_tests('oop_programs', [
-            ('Instance', '42\n')
+            ('Instance', '42\n'),
+            ('Inheritance', '10\n20\n10\n40\n')
         ])
 
     def run(self):

@@ -10,6 +10,14 @@ types::JStringRef ConstantPool::getClassName(types::u2 index) const
   return getString(entry.data.classInfo.nameIndex);
 }
 
+std::optional<types::JStringRef> ConstantPool::getOptionalClassName(types::u2 index) const
+{
+  if (index == 0) {
+    return std::nullopt;
+  }
+  return this->getClassName(index);
+}
+
 types::JStringRef ConstantPool::getString(types::u2 index) const
 {
   const Entry& entry = this->getEntry(index);

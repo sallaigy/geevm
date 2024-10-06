@@ -23,6 +23,14 @@ JvmExpected<JClass*> Vm::resolveClass(const types::JString& name)
 {
   auto klass = mBootstrapClassLoader.loadClass(name);
   if (klass) {
+    if (auto superClass = (*klass)->superClass(); superClass) {
+      this->resolveClass(types::JString{*superClass});
+    }
+
+    for (types::JStringRef interfaceName : (*klass)->interfaces()) {
+      this->resolveClass(types::JString{interfaceName});
+    }
+
     (*klass)->prepare();
     (*klass)->initialize(*this);
   }
@@ -74,7 +82,7 @@ void Vm::invoke(JClass* klass, JMethod* method)
 Instance* Vm::newInstance(JClass* klass)
 {
   // TODO: Fields, etc.
-  auto& inserted = mHeap.emplace_back(std::make_unique<Instance>());
+  auto& inserted = mHeap.emplace_back(std::make_unique<Instance>(klass));
 
   return inserted.get();
 }

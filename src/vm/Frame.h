@@ -91,6 +91,12 @@ public:
     return mStorage.data.mLong;
   }
 
+  Instance* asReference() const
+  {
+    assert(mStorage.kind == Kind::Reference);
+    return mStorage.data.mReference;
+  }
+
 private:
   Storage mStorage;
 };
@@ -152,6 +158,13 @@ public:
     Value value = popOperand();
     assert(value.kind() == Value::Kind::Long);
     return value;
+  }
+
+  Value peek(int entry = 0)
+  {
+    int idx = mOperandStack.size() - 1 - entry;
+    assert(idx >= 0);
+    return mOperandStack[idx];
   }
 
 private:

@@ -4,8 +4,23 @@
 namespace geevm
 {
 
+class JClass;
+
 class Instance
 {
+public:
+  explicit Instance(JClass* klass)
+    : mClass(klass)
+  {
+  }
+
+  JClass* getClass() const
+  {
+    return mClass;
+  }
+
+private:
+  JClass* mClass;
 };
 
 } // namespace geevm

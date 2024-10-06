@@ -333,7 +333,37 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       }
       case Opcode::GETFIELD: notImplemented(opcode); break;
       case Opcode::PUTFIELD: notImplemented(opcode); break;
-      case Opcode::INVOKEVIRTUAL: notImplemented(opcode); break;
+      case Opcode::INVOKEVIRTUAL: {
+        auto index = cursor.readU2();
+        auto methodRef = frame.currentClass()->getMethodRef(index);
+
+        auto klass = vm.resolveClass(methodRef.className);
+        if (!klass) {
+          // TODO: Abort frame
+          vm.raiseError(*klass.error());
+        }
+
+        JMethod* baseMethod = (*klass)->getMethod(methodRef.methodName, methodRef.methodDescriptor);
+
+        int numArgs = baseMethod->getDescriptor().parameters().size();
+        Value objectRef = frame.peek(numArgs);
+
+        JClass* target = objectRef.asReference()->getClass();
+        JMethod* method = target->getMethod(methodRef.methodName, methodRef.methodDescriptor);
+        while (method == nullptr) {
+          if (auto parentName = target->superClass(); parentName.has_value()) {
+            target = *vm.resolveClass(types::JString{*parentName});
+            method = target->getMethod(methodRef.methodName, methodRef.methodDescriptor);
+          } else {
+            assert(false && "TODO: InvokeVirtual");
+          }
+        }
+
+        vm.invoke(target, method);
+        // TODO: signature method
+
+        break;
+      }
       case Opcode::INVOKESPECIAL: {
         auto index = cursor.readU2();
         auto methodRef = frame.currentClass()->getMethodRef(index);

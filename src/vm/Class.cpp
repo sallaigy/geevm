@@ -48,6 +48,17 @@ void JClass::prepare()
     }
   }
 
+  for (const MethodInfo& method : mClassFile->methods()) {
+    types::JStringRef name = mClassFile->constantPool().getString(method.nameIndex());
+    types::JStringRef descriptor = mClassFile->constantPool().getString(method.descriptorIndex());
+
+    auto parsedDescriptor = MethodDescriptor::parse(descriptor);
+    // TODO: Verification error
+    assert(parsedDescriptor.has_value() && "Cannot parse descriptor");
+
+    mMethods.try_emplace(NameAndDescriptor{name, descriptor}, std::make_unique<JMethod>(method, *parsedDescriptor));
+  }
+
   mIsPrepared = true;
 }
 
@@ -120,21 +131,6 @@ JMethod* JClass::getMethod(const types::JString& name, const types::JString& des
     return it->second.get();
   }
 
-  auto parsedDescriptor = MethodDescriptor::parse(descriptor);
-  if (!parsedDescriptor) {
-    // FIXME: This should be a verification error
-    return nullptr;
-  }
-
-  for (auto& method : mClassFile->methods()) {
-    auto methodName = mClassFile->constantPool().getString(method.nameIndex());
-    auto descriptorString = mClassFile->constantPool().getString(method.descriptorIndex());
-    if (methodName == name && descriptorString == descriptor) {
-      auto r = mMethods.emplace(pair, std::make_unique<JMethod>(method, *parsedDescriptor));
-      return r.first->second.get();
-    }
-  }
-
   // TODO: Return JvmExpected?
   return nullptr;
 }
@@ -165,6 +161,20 @@ const FieldRef& JClass::getFieldRef(types::u2 index)
   auto result = mFieldRefCache.emplace(index, FieldRef{className, types::JString{fieldName}, types::JString{descriptor}});
 
   return result.first->second;
+}
+
+std::optional<types::JStringRef> JClass::superClass() const
+{
+  return this->constantPool().getOptionalClassName(mClassFile->superClass());
+}
+
+std::vector<types::JStringRef> JClass::interfaces() const
+{
+  std::vector<types::JStringRef> result;
+  for (types::u2 interfaceIndex : mClassFile->interfaces()) {
+    result.push_back(this->constantPool().getClassName(interfaceIndex));
+  }
+  return result;
 }
 
 Value JClass::getStaticField(types::JStringRef name)
