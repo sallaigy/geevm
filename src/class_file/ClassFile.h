@@ -74,23 +74,23 @@ enum class MethodParameterAccessFlags : types::u2
   ACC_MANDATED = 0x8000
 };
 
-template <class T>
+template<class T>
 concept AccessFlags = std::is_same_v<T, ClassAccessFlags> || std::is_same_v<T, InnerClassAccessFlags> || std::is_same_v<T, FieldAccessFlags> ||
                       std::is_same_v<T, MethodAccessFlags> || std::is_same_v<T, MethodParameterAccessFlags>;
 
-template <AccessFlags T>
+template<AccessFlags T>
 constexpr T operator|(T lhs, T rhs)
 {
   return static_cast<T>(static_cast<std::underlying_type_t<T>>(static_cast<types::u2>(lhs) | static_cast<std::underlying_type_t<T>>(rhs)));
 }
 
-template <AccessFlags T>
+template<AccessFlags T>
 constexpr T operator&(T lhs, T rhs)
 {
   return static_cast<T>(static_cast<std::underlying_type_t<T>>(static_cast<types::u2>(lhs) & static_cast<std::underlying_type_t<T>>(rhs)));
 }
 
-template <AccessFlags T>
+template<AccessFlags T>
 bool hasAccessFlag(T flags, T rhs)
 {
   return (flags & rhs) == rhs;

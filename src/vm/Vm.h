@@ -2,7 +2,6 @@
 #define GEEVM_VM_VM_H
 
 #include <unordered_map>
-#include <utility>
 
 #include "common/JvmError.h"
 #include "vm/Class.h"
@@ -10,6 +9,7 @@
 #include "vm/Frame.h"
 #include "vm/Interpreter.h"
 #include "vm/Method.h"
+#include "vm/StringHeap.h"
 
 namespace geevm
 {
@@ -17,7 +17,13 @@ namespace geevm
 class Vm
 {
 public:
+  explicit Vm()
+    : mInternedStrings(*this), mBootstrapClassLoader(*this)
+  {
+  }
+
   JvmExpected<JClass*> resolveClass(const types::JString& name);
+  JvmExpected<ArrayClass*> resolveArrayClass(const types::JString& name);
 
   void initialize();
 
@@ -38,8 +44,12 @@ public:
   CallFrame& currentFrame();
 
   Instance* newInstance(JClass* klass);
+  ArrayInstance* newArrayInstance(ArrayClass* arrayClass, size_t size);
 
-  void loadNativeMethods();
+  StringHeap& internedStrings()
+  {
+    return mInternedStrings;
+  }
 
 private:
   BootstrapClassLoader mBootstrapClassLoader;
@@ -47,6 +57,7 @@ private:
   std::vector<CallFrame> mCallStack;
   // Method area
   std::vector<std::unique_ptr<Instance>> mHeap;
+  StringHeap mInternedStrings;
 };
 
 } // namespace geevm

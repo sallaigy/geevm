@@ -37,6 +37,13 @@ public:
   using VmError::VmError;
 };
 
+// TODO: Move this
+class ArrayIndexOutOfBoundsException : public VmError
+{
+public:
+  using VmError::VmError;
+};
+
 template<class T>
 using JvmExpected = std::expected<T, std::unique_ptr<VmError>>;
 

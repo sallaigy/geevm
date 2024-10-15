@@ -1,5 +1,7 @@
 #include "vm/ClassLoader.h"
 
+#include "Vm.h"
+
 #include <algorithm>
 #include <filesystem>
 #include <utility>
@@ -25,21 +27,56 @@ JvmExpected<JClass*> BootstrapClassLoader::loadClass(const types::JString& name)
     return it->second.get();
   }
 
-  JvmExpected<std::unique_ptr<JClass>> klass;
-  if (name.starts_with(u"java/lang")) {
+  JvmExpected<std::unique_ptr<JClass>> loadResult;
+  if (name.starts_with(u"java/")) {
     // TODO: replace
     JarLocation location{std::getenv("RT_JAR_PATH"), classNameToPath(name)};
-    klass = location.resolve();
+    loadResult = location.resolve();
   } else {
-    klass = mNextClassLoader->loadClass(name);
+    loadResult = mNextClassLoader->loadClass(name);
   }
 
-  if (!klass) {
-    return makeError<JClass*>(std::move(klass.error()));
+  if (!loadResult) {
+    return makeError<JClass*>(std::move(loadResult.error()));
   }
 
-  auto [result, _] = mClasses.try_emplace(name, std::move(*klass));
+  auto [result, _] = mClasses.try_emplace(name, std::move(*loadResult));
+
+  auto* klass = result->second.get();
+
+  if (auto superClass = klass->superClass(); superClass) {
+    this->loadClass(types::JString{*superClass});
+  }
+
+  for (types::JStringRef interfaceName : klass->interfaces()) {
+    this->loadClass(types::JString{interfaceName});
+  }
+
+  klass->initializeRuntimeConstantPool(mVm.internedStrings(), *this);
+  klass->prepare();
+  klass->initialize(mVm);
+
   return result->second.get();
+}
+
+JvmExpected<ArrayClass*> BootstrapClassLoader::loadArrayClass(const types::JString& name)
+{
+  if (auto it = mArrayClasses.find(name); it != mArrayClasses.end()) {
+    return it->second.get();
+  }
+
+  auto arrayType = FieldType::parse(name);
+  assert(arrayType.has_value() && "An array class descriptor should be parseable!");
+
+  if (auto referenceType = arrayType->asObjectName(); referenceType.has_value()) {
+    auto elementClass = this->loadClass(*referenceType);
+    if (!elementClass) {
+      return makeError<ArrayClass*>(std::move(elementClass.error()));
+    }
+  }
+
+  auto [res, _] = mArrayClasses.try_emplace(name, std::make_unique<ArrayClass>(*arrayType));
+  return res->second.get();
 }
 
 JvmExpected<std::unique_ptr<JClass>> BaseClassLoader::loadClass(const types::JString& name)
@@ -100,7 +137,7 @@ JvmExpected<std::unique_ptr<JClass>> JarLocation::resolve()
   return std::make_unique<JClass>(std::move(classFile));
 }
 
-BootstrapClassLoader::BootstrapClassLoader()
-  : mNextClassLoader(std::make_unique<BaseClassLoader>())
+BootstrapClassLoader::BootstrapClassLoader(Vm& vm)
+  : mVm(vm), mNextClassLoader(std::make_unique<BaseClassLoader>())
 {
 }

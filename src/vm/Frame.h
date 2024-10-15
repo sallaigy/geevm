@@ -2,7 +2,6 @@
 #define GEEVM_VM_FRAME_H
 
 #include "common/JvmTypes.h"
-#include "vm/Instance.h"
 #include "vm/Method.h"
 
 #include <cassert>
@@ -11,6 +10,7 @@ namespace geevm
 {
 
 class JClass;
+class Instance;
 
 class Value
 {
@@ -91,10 +91,36 @@ public:
     return mStorage.data.mLong;
   }
 
+  char16_t asChar() const
+  {
+    assert(mStorage.kind == Kind::Char);
+    return mStorage.data.mChar;
+  }
+
   Instance* asReference() const
   {
     assert(mStorage.kind == Kind::Reference);
     return mStorage.data.mReference;
+  }
+
+  static Value defaultValue(const FieldType& fieldType)
+  {
+    if (auto primitiveType = fieldType.asPrimitive(); primitiveType) {
+      switch (*primitiveType) {
+        case PrimitiveType::Byte: return Value::Byte(0);
+        case PrimitiveType::Char: return Value::Char(0);
+        case PrimitiveType::Double: return Value::Double(0);
+        case PrimitiveType::Float: return Value::Float(0);
+        case PrimitiveType::Int: return Value::Int(0);
+        case PrimitiveType::Long: return Value::Long(0);
+        case PrimitiveType::Short: return Value::Short(0);
+        case PrimitiveType::Boolean: return Value::Int(0);
+      }
+    } else if (fieldType.asObjectName().has_value()) {
+      return Value::Reference(nullptr);
+    }
+
+    assert(false && "Unknown field type!");
   }
 
 private:
