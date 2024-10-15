@@ -6,6 +6,9 @@ using namespace geevm;
 
 void Vm::initialize()
 {
+  this->resolveClass(u"java/lang/Object");
+  this->resolveClass(u"java/lang/String");
+  this->resolveClass(u"java/lang/System");
 }
 
 JMethod* Vm::resolveStaticMethod(JClass* klass, const types::JString& name, const types::JString& descriptor)
@@ -21,20 +24,12 @@ JMethod* Vm::resolveMethod(JClass* klass, const types::JString& name, const type
 
 JvmExpected<JClass*> Vm::resolveClass(const types::JString& name)
 {
-  auto klass = mBootstrapClassLoader.loadClass(name);
-  if (klass) {
-    if (auto superClass = (*klass)->superClass(); superClass) {
-      this->resolveClass(types::JString{*superClass});
-    }
+  return mBootstrapClassLoader.loadClass(name);
+}
 
-    for (types::JStringRef interfaceName : (*klass)->interfaces()) {
-      this->resolveClass(types::JString{interfaceName});
-    }
-
-    (*klass)->prepare();
-    (*klass)->initialize(*this);
-  }
-  return klass;
+JvmExpected<ArrayClass*> Vm::resolveArrayClass(const types::JString& name)
+{
+  return mBootstrapClassLoader.loadArrayClass(name);
 }
 
 void Vm::execute(JClass* klass, JMethod* method)
@@ -63,6 +58,14 @@ void Vm::invoke(JClass* klass, JMethod* method)
         std::cout << arguments[0].asInt() << std::endl;
       } else if (typeToPrint == FieldType{PrimitiveType::Long}) {
         std::cout << arguments[0].asLong() << std::endl;
+      } else if (typeToPrint == FieldType{u"java/lang/String"}) {
+        Value value = arguments[0].asReference()->getFieldValue(u"value");
+        auto& vec = value.asReference()->asArrayInstance()->contents();
+        types::JString out;
+        for (Value v : vec) {
+          out += v.asChar();
+        }
+        std::cout << types::convertJString(out) << std::endl;
       }
     }
   } else {
@@ -87,6 +90,12 @@ Instance* Vm::newInstance(JClass* klass)
   return inserted.get();
 }
 
+ArrayInstance* Vm::newArrayInstance(ArrayClass* arrayClass, size_t length)
+{
+  auto& inserted = mHeap.emplace_back(std::make_unique<ArrayInstance>(arrayClass, length));
+  return static_cast<ArrayInstance*>(inserted.get());
+}
+
 void Vm::returnToCaller()
 {
   mCallStack.pop_back();
@@ -101,6 +110,7 @@ void Vm::returnToCaller(Value returnValue)
 void Vm::raiseError(VmError& error)
 {
   std::cerr << "Exception caught: " << types::convertJString(error.message()) << std::endl;
+  throw std::logic_error("aa");
 }
 
 CallFrame& Vm::currentFrame()

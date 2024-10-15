@@ -69,8 +69,14 @@ class JavaIntegrationTest:
             ('Inheritance', '10\n20\n10\n40\n')
         ])
 
+    def strings(self):
+        self.execute_tests('strings', [
+            ('HelloWorld', 'Hello World!\n')
+        ])
+
     def run(self):
         self.simple_math_programs()
+        self.strings()
         self.oop_programs()
 
     def execute_tests(self, test_suite_name, tests):

@@ -51,11 +51,12 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
   while (cursor.hasNext()) {
     Opcode opcode = cursor.next();
     CallFrame& frame = vm.currentFrame();
+    RuntimeConstantPool& runtimeConstantPool = frame.currentClass()->runtimeConstantPool();
 
     // std::cout << "#" << cursor.position() << " " << opcodeToString(opcode) << std::endl;
     switch (opcode) {
       case Opcode::NOP: notImplemented(opcode); break;
-      case Opcode::ACONST_NULL: notImplemented(opcode); break;
+      case Opcode::ACONST_NULL: frame.pushOperand(Value::Reference(nullptr)); break;
       case Opcode::ICONST_M1: frame.pushOperand(Value::Int(-1)); break;
       case Opcode::ICONST_0: frame.pushOperand(Value::Int(0)); break;
       case Opcode::ICONST_1: frame.pushOperand(Value::Int(1)); break;
@@ -76,7 +77,19 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         break;
       }
       case Opcode::SIPUSH: notImplemented(opcode); break;
-      case Opcode::LDC: notImplemented(opcode); break;
+      case Opcode::LDC: {
+        types::u1 index = cursor.readU1();
+        auto entry = frame.currentClass()->constantPool().getEntry(index);
+
+        if (entry.tag == ConstantPool::Tag::CONSTANT_Integer) {
+          frame.pushOperand(Value::Int(entry.data.singleInteger));
+        } else if (entry.tag == ConstantPool::Tag::CONSTANT_Float) {
+          frame.pushOperand(Value::Float(entry.data.singleFloat));
+        } else if (entry.tag == ConstantPool::Tag::CONSTANT_String) {
+          frame.pushOperand(Value::Reference(runtimeConstantPool.getString(index)));
+        }
+        break;
+      }
       case Opcode::LDC_W: notImplemented(opcode); break;
       case Opcode::LDC2_W: {
         types::u2 index = cursor.readU2();
@@ -305,7 +318,7 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::RETURN: vm.returnToCaller(); return;
       case Opcode::GETSTATIC: {
         auto index = cursor.readU2();
-        auto& fieldRef = frame.currentClass()->getFieldRef(index);
+        auto& fieldRef = runtimeConstantPool.getFieldRef(index);
 
         auto klass = vm.resolveClass(fieldRef.className);
         if (!klass) {
@@ -320,7 +333,7 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       }
       case Opcode::PUTSTATIC: {
         auto index = cursor.readU2();
-        auto& fieldRef = frame.currentClass()->getFieldRef(index);
+        auto& fieldRef = runtimeConstantPool.getFieldRef(index);
 
         auto klass = vm.resolveClass(fieldRef.className);
         if (!klass) {
@@ -335,7 +348,7 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::PUTFIELD: notImplemented(opcode); break;
       case Opcode::INVOKEVIRTUAL: {
         auto index = cursor.readU2();
-        auto methodRef = frame.currentClass()->getMethodRef(index);
+        auto methodRef = runtimeConstantPool.getMethodRef(index);
 
         auto klass = vm.resolveClass(methodRef.className);
         if (!klass) {
@@ -366,7 +379,7 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       }
       case Opcode::INVOKESPECIAL: {
         auto index = cursor.readU2();
-        auto methodRef = frame.currentClass()->getMethodRef(index);
+        auto& methodRef = runtimeConstantPool.getMethodRef(index);
 
         auto klass = vm.resolveClass(methodRef.className);
         if (!klass) {
@@ -381,7 +394,7 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       }
       case Opcode::INVOKESTATIC: {
         auto index = cursor.readU2();
-        auto methodRef = frame.currentClass()->getMethodRef(index);
+        auto& methodRef = runtimeConstantPool.getMethodRef(index);
 
         auto klass = vm.resolveClass(methodRef.className);
         if (!klass) {
@@ -412,7 +425,24 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         break;
       }
       case Opcode::NEWARRAY: notImplemented(opcode); break;
-      case Opcode::ANEWARRAY: notImplemented(opcode); break;
+      case Opcode::ANEWARRAY: {
+        auto index = cursor.readU2();
+        int32_t count = frame.popOperand().asInt();
+
+        auto klass = runtimeConstantPool.getClass(index);
+        if (!klass) {
+          vm.raiseError(*klass.error());
+        }
+
+        auto arrayClass = vm.resolveArrayClass(u"[L" + types::JString{(*klass)->getName()} + u";");
+        assert(arrayClass.has_value());
+
+        ArrayInstance* array = vm.newArrayInstance(*arrayClass, count);
+        frame.pushOperand(Value::Reference(array));
+        // TODO: if count is less than zero, the anewarray instruction throws a NegativeArraySizeException.
+
+        break;
+      }
       case Opcode::ARRAYLENGTH: notImplemented(opcode); break;
       case Opcode::ATHROW: notImplemented(opcode); break;
       case Opcode::CHECKCAST: notImplemented(opcode); break;

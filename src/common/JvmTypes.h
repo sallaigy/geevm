@@ -12,6 +12,8 @@ using u2 = std::uint16_t;
 using u4 = std::uint32_t;
 using u8 = std::uint64_t;
 
+using jchar = char16_t;
+
 using JString = std::u16string;
 using JStringRef = std::u16string_view;
 

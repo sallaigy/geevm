@@ -59,14 +59,17 @@ protected:
 class BootstrapClassLoader
 {
 public:
-  BootstrapClassLoader();
+  explicit BootstrapClassLoader(Vm& vm);
 
   JvmExpected<JClass*> loadClass(const types::JString& name);
+  JvmExpected<ArrayClass*> loadArrayClass(const types::JString& name);
 
 private:
+  Vm& mVm;
   std::string mBootstrapClassPath;
   std::unique_ptr<ClassLoader> mNextClassLoader;
   std::unordered_map<types::JString, std::unique_ptr<JClass>> mClasses;
+  std::unordered_map<types::JString, std::unique_ptr<ArrayClass>> mArrayClasses;
 };
 
 class BaseClassLoader : public ClassLoader

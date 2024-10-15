@@ -19,33 +19,17 @@ void JClass::prepare()
 
   // Initialize the static fields map
   for (const FieldInfo& field : mClassFile->fields()) {
+    auto fieldName = mClassFile->constantPool().getString(field.nameIndex());
+    auto descriptor = mClassFile->constantPool().getString(field.descriptorIndex());
+    auto fieldType = FieldType::parse(descriptor);
+    assert(fieldType.has_value());
+
     if (hasAccessFlag(field.accessFlags(), FieldAccessFlags::ACC_STATIC)) {
-      auto fieldName = mClassFile->constantPool().getString(field.nameIndex());
-      auto initialValue =
-          FieldType::parse(mClassFile->constantPool().getString(field.descriptorIndex())).and_then([this](const FieldType& fieldType) -> std::optional<Value> {
-            if (auto primitiveType = fieldType.asPrimitive(); primitiveType.has_value()) {
-              switch (*primitiveType) {
-                case PrimitiveType::Int: return Value::Int(0);
-                case PrimitiveType::Char: return Value::Char(0);
-                case PrimitiveType::Byte: return Value::Byte(0);
-                case PrimitiveType::Short: return Value::Short(0);
-                case PrimitiveType::Boolean: return Value::Int(0);
-                case PrimitiveType::Float: return Value::Float(0);
-                case PrimitiveType::Long: return Value::Long(0);
-                case PrimitiveType::Double: return Value::Double(0);
-              }
-            }
-
-            return std::nullopt;
-          });
-
-      if (initialValue.has_value()) {
-        mStaticFields.try_emplace(fieldName, *initialValue);
-      } else {
-        // Should always be present
-        std::unreachable();
-      }
+      Value initialValue = Value::defaultValue(*fieldType);
+      mStaticFields.try_emplace(fieldName, initialValue);
     }
+
+    mFields.try_emplace(NameAndDescriptor{fieldName, descriptor}, std::make_unique<JField>(field, *fieldType));
   }
 
   for (const MethodInfo& method : mClassFile->methods()) {
@@ -72,7 +56,8 @@ void JClass::initialize(Vm& vm)
   // TODO: Initialize superclass, superinterfaces
 
   for (const FieldInfo& field : mClassFile->fields()) {
-    if (hasAccessFlag(field.accessFlags(), FieldAccessFlags::ACC_STATIC) && hasAccessFlag(field.accessFlags(), FieldAccessFlags::ACC_FINAL)) {
+    if (hasAccessFlag(field.accessFlags(), FieldAccessFlags::ACC_STATIC) && hasAccessFlag(field.accessFlags(), FieldAccessFlags::ACC_FINAL) &&
+        field.constantValue().has_value()) {
       auto fieldName = mClassFile->constantPool().getString(field.nameIndex());
       mStaticFields.emplace(fieldName, getInitialFieldValue(field));
     }
@@ -85,6 +70,11 @@ void JClass::initialize(Vm& vm)
 
   mIsInitialized = true;
   mIsUnderInitialization = false;
+}
+
+types::JStringRef JClass::getName() const
+{
+  return constantPool().getClassName(mClassFile->thisClass());
 }
 
 Value JClass::getInitialFieldValue(const FieldInfo& field)
@@ -135,34 +125,6 @@ JMethod* JClass::getMethod(const types::JString& name, const types::JString& des
   return nullptr;
 }
 
-MethodRef JClass::getMethodRef(types::u2 index)
-{
-  auto& entry = mClassFile->constantPool().getEntry(index);
-  assert(entry.tag == ConstantPool::Tag::CONSTANT_Methodref && "Can only fetch a method ref from a method ref entry!");
-
-  types::JString className{mClassFile->constantPool().getClassName(entry.data.classAndNameRef.classIndex)};
-  auto [methodName, descriptor] = mClassFile->constantPool().getNameAndType(entry.data.classAndNameRef.nameAndTypeIndex);
-
-  return MethodRef{className, types::JString{methodName}, types::JString{descriptor}};
-}
-
-const FieldRef& JClass::getFieldRef(types::u2 index)
-{
-  if (auto it = mFieldRefCache.find(index); it != mFieldRefCache.end()) {
-    return it->second;
-  }
-
-  auto& entry = mClassFile->constantPool().getEntry(index);
-  assert(entry.tag == ConstantPool::Tag::CONSTANT_Fieldref && "Can only fetch a method ref from a method ref entry!");
-
-  types::JString className{mClassFile->constantPool().getClassName(entry.data.classAndNameRef.classIndex)};
-  auto [fieldName, descriptor] = mClassFile->constantPool().getNameAndType(entry.data.classAndNameRef.nameAndTypeIndex);
-
-  auto result = mFieldRefCache.emplace(index, FieldRef{className, types::JString{fieldName}, types::JString{descriptor}});
-
-  return result.first->second;
-}
-
 std::optional<types::JStringRef> JClass::superClass() const
 {
   return this->constantPool().getOptionalClassName(mClassFile->superClass());
@@ -185,4 +147,11 @@ Value JClass::getStaticField(types::JStringRef name)
 void JClass::storeStaticField(types::JStringRef name, Value value)
 {
   mStaticFields.at(name) = value;
+}
+
+void JClass::initializeRuntimeConstantPool(StringHeap& stringHeap, BootstrapClassLoader& classLoader)
+{
+  if (mRuntimeConstantPool == nullptr) {
+    mRuntimeConstantPool = std::make_unique<RuntimeConstantPool>(mClassFile->constantPool(), stringHeap, classLoader);
+  }
 }

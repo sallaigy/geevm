@@ -37,7 +37,7 @@ public:
     return (chunks[0] << 24u) | (chunks[1] << 16u) | (chunks[2] << 8u) | chunks[3];
   }
 
-  template <size_t N>
+  template<size_t N>
   std::array<types::u1, N> readArray()
   {
     std::array<types::u1, N> result;
@@ -228,6 +228,10 @@ std::unique_ptr<ConstantPool> ClassFileReader::readConstantPool()
       case CONSTANT_InvokeDynamic: {
         entry.data.invokeDynamicInfo.bootstrapAddrIndex = mStream.readU2();
         entry.data.invokeDynamicInfo.nameAndTypeIndex = mStream.readU2();
+        break;
+      }
+      case CONSTANT_MethodType: {
+        entry.data.methodType.descriptorIndex = mStream.readU2();
         break;
       }
       default: throw ClassFileReadError(std::format("Invalid constant pool tag at position {}", i));
