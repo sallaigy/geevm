@@ -9,15 +9,36 @@ using namespace geevm;
 JClass::JClass(std::unique_ptr<ClassFile> classFile)
   : mClassFile(std::move(classFile))
 {
+  if (mClassFile != nullptr) {
+    mClassName = constantPool().getClassName(mClassFile->thisClass());
+  }
 }
 
-void JClass::prepare()
+void JClass::prepare(BootstrapClassLoader& classLoader)
 {
   if (mIsPrepared) {
     return;
   }
 
-  // Initialize the static fields map
+  if (auto superClass = this->superClass(); superClass) {
+    // TODO: Check errors
+    auto loaded = classLoader.loadClass(types::JString{*superClass});
+    assert(loaded);
+
+    mSuperClass = *loaded;
+  }
+
+  for (types::JStringRef interfaceName : this->interfaces()) {
+    // TODO: Check errors
+    mSuperInterfaces.push_back(*classLoader.loadClass(types::JString{interfaceName}));
+  }
+
+  if (mSuperClass != nullptr) {
+    for (auto& [name, value] : mSuperClass->fields()) {
+      mFields.try_emplace(name, std::make_unique<JField>(value->fieldInfo(), value->fieldType()));
+    }
+  }
+
   for (const FieldInfo& field : mClassFile->fields()) {
     auto fieldName = mClassFile->constantPool().getString(field.nameIndex());
     auto descriptor = mClassFile->constantPool().getString(field.descriptorIndex());
@@ -27,9 +48,9 @@ void JClass::prepare()
     if (hasAccessFlag(field.accessFlags(), FieldAccessFlags::ACC_STATIC)) {
       Value initialValue = Value::defaultValue(*fieldType);
       mStaticFields.try_emplace(fieldName, initialValue);
+    } else {
+      mFields.try_emplace(NameAndDescriptor{fieldName, descriptor}, std::make_unique<JField>(field, *fieldType));
     }
-
-    mFields.try_emplace(NameAndDescriptor{fieldName, descriptor}, std::make_unique<JField>(field, *fieldType));
   }
 
   for (const MethodInfo& method : mClassFile->methods()) {
@@ -40,8 +61,12 @@ void JClass::prepare()
     // TODO: Verification error
     assert(parsedDescriptor.has_value() && "Cannot parse descriptor");
 
-    mMethods.try_emplace(NameAndDescriptor{name, descriptor}, std::make_unique<JMethod>(method, *parsedDescriptor));
+    mMethods.try_emplace(NameAndDescriptor{name, descriptor},
+                         std::make_unique<JMethod>(method, types::JString{name}, types::JString{descriptor}, *parsedDescriptor));
   }
+
+  auto classClass = classLoader.loadClass(u"java/lang/Class");
+  mClassInstance = std::make_unique<Instance>(*classClass);
 
   mIsPrepared = true;
 }
@@ -63,9 +88,9 @@ void JClass::initialize(Vm& vm)
     }
   }
 
-  auto clsInit = getMethod(u"<clinit>", u"()V");
-  if (clsInit != nullptr) {
-    vm.execute(this, clsInit);
+  auto clsInit = mMethods.find(NameAndDescriptor{u"<clinit>", u"()V"});
+  if (clsInit != mMethods.end()) {
+    vm.execute(this, clsInit->second.get());
   }
 
   mIsInitialized = true;
@@ -99,8 +124,10 @@ Value JClass::getInitialFieldValue(const FieldInfo& field)
       std::unreachable();
     }
 
-    if (auto objectName = descriptor->asObjectName(); objectName && *objectName == u"Ljava/lang/String;") {
+    if (auto objectName = descriptor->asObjectName(); objectName && *objectName == u"java/lang/String") {
+      return Value::Reference(mRuntimeConstantPool->getString(cvIndex));
       // TODO: Handle String types
+      assert(false && "TODO strings");
     }
 
     return std::nullopt;
@@ -110,19 +137,31 @@ Value JClass::getInitialFieldValue(const FieldInfo& field)
     return *value;
   }
 
-  assert("There should a ConstantValue attribute for a static field!");
+  assert(false && "There should a ConstantValue attribute for a static field!");
   std::unreachable();
 }
 
-JMethod* JClass::getMethod(const types::JString& name, const types::JString& descriptor)
+std::optional<ClassAndMethod> JClass::getMethod(const types::JString& name, const types::JString& descriptor)
 {
   NameAndDescriptor pair{name, descriptor};
   if (auto it = mMethods.find(pair); it != mMethods.end()) {
-    return it->second.get();
+    return ClassAndMethod{this, it->second.get()};
+  }
+
+  if (mSuperClass != nullptr) {
+    if (auto superClassMethod = mSuperClass->getMethod(name, descriptor); superClassMethod) {
+      return superClassMethod;
+    }
+  }
+
+  for (JClass* superInterface : mSuperInterfaces) {
+    if (auto superClassMethod = superInterface->getMethod(name, descriptor); superClassMethod) {
+      return superClassMethod;
+    }
   }
 
   // TODO: Return JvmExpected?
-  return nullptr;
+  return std::nullopt;
 }
 
 std::optional<types::JStringRef> JClass::superClass() const
@@ -154,4 +193,21 @@ void JClass::initializeRuntimeConstantPool(StringHeap& stringHeap, BootstrapClas
   if (mRuntimeConstantPool == nullptr) {
     mRuntimeConstantPool = std::make_unique<RuntimeConstantPool>(mClassFile->constantPool(), stringHeap, classLoader);
   }
+}
+
+bool JClass::isSubClassOf(JClass* other) const
+{
+  if (this == other) {
+    return true;
+  }
+
+  JClass* superClass = mSuperClass;
+  while (superClass != nullptr) {
+    if (superClass == other) {
+      return true;
+    }
+    superClass = superClass->mSuperClass;
+  }
+
+  return false;
 }

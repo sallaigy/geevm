@@ -21,6 +21,11 @@ public:
   {
   }
 
+  const FieldInfo& fieldInfo() const
+  {
+    return mFieldInfo;
+  }
+
   const FieldType& fieldType() const
   {
     return mFieldType;

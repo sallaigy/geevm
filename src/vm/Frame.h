@@ -97,6 +97,18 @@ public:
     return mStorage.data.mChar;
   }
 
+  float asFloat() const
+  {
+    assert(mStorage.kind == Kind::Float);
+    return mStorage.data.mFloat;
+  }
+
+  double asDouble() const
+  {
+    assert(mStorage.kind == Kind::Double);
+    return mStorage.data.mDouble;
+  }
+
   Instance* asReference() const
   {
     assert(mStorage.kind == Kind::Reference);

@@ -23,12 +23,16 @@ static std::filesystem::path classNameToPath(types::JStringRef name)
 
 JvmExpected<JClass*> BootstrapClassLoader::loadClass(const types::JString& name)
 {
+  if (name.starts_with(u"[")) {
+    return this->loadArrayClass(name);
+  }
+
   if (auto it = mClasses.find(name); it != mClasses.end()) {
     return it->second.get();
   }
 
   JvmExpected<std::unique_ptr<JClass>> loadResult;
-  if (name.starts_with(u"java/")) {
+  if (name.starts_with(u"java/") || name.starts_with(u"sun/")) {
     // TODO: replace
     JarLocation location{std::getenv("RT_JAR_PATH"), classNameToPath(name)};
     loadResult = location.resolve();
@@ -44,16 +48,8 @@ JvmExpected<JClass*> BootstrapClassLoader::loadClass(const types::JString& name)
 
   auto* klass = result->second.get();
 
-  if (auto superClass = klass->superClass(); superClass) {
-    this->loadClass(types::JString{*superClass});
-  }
-
-  for (types::JStringRef interfaceName : klass->interfaces()) {
-    this->loadClass(types::JString{interfaceName});
-  }
-
   klass->initializeRuntimeConstantPool(mVm.internedStrings(), *this);
-  klass->prepare();
+  klass->prepare(*this);
   klass->initialize(mVm);
 
   return result->second.get();

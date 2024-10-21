@@ -66,9 +66,9 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::ICONST_5: frame.pushOperand(Value::Int(5)); break;
       case Opcode::LCONST_0: frame.pushOperand(Value::Long(0)); break;
       case Opcode::LCONST_1: frame.pushOperand(Value::Long(1)); break;
-      case Opcode::FCONST_0: notImplemented(opcode); break;
-      case Opcode::FCONST_1: notImplemented(opcode); break;
-      case Opcode::FCONST_2: notImplemented(opcode); break;
+      case Opcode::FCONST_0: frame.pushOperand(Value::Float(0.0f)); break;
+      case Opcode::FCONST_1: frame.pushOperand(Value::Float(1.0f)); break;
+      case Opcode::FCONST_2: frame.pushOperand(Value::Float(2.0f)); break;
       case Opcode::DCONST_0: notImplemented(opcode); break;
       case Opcode::DCONST_1: notImplemented(opcode); break;
       case Opcode::BIPUSH: {
@@ -76,7 +76,11 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         frame.pushOperand(Value::Int(static_cast<int32_t>(byte)));
         break;
       }
-      case Opcode::SIPUSH: notImplemented(opcode); break;
+      case Opcode::SIPUSH: {
+        auto value = static_cast<int32_t>(std::bit_cast<int16_t>(cursor.readU2()));
+        frame.pushOperand(Value::Int(value));
+        break;
+      }
       case Opcode::LDC: {
         types::u1 index = cursor.readU1();
         auto entry = frame.currentClass()->constantPool().getEntry(index);
@@ -87,6 +91,12 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
           frame.pushOperand(Value::Float(entry.data.singleFloat));
         } else if (entry.tag == ConstantPool::Tag::CONSTANT_String) {
           frame.pushOperand(Value::Reference(runtimeConstantPool.getString(index)));
+        } else if (entry.tag == ConstantPool::Tag::CONSTANT_Class) {
+          auto klass = runtimeConstantPool.getClass(index);
+          // TODO: Check if class is loaded
+          frame.pushOperand(Value::Reference((*klass)->classInstance()));
+        } else {
+          assert(false && "Unknown LDC type!");
         }
         break;
       }
@@ -109,7 +119,7 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::LLOAD: notImplemented(opcode); break;
       case Opcode::FLOAD: notImplemented(opcode); break;
       case Opcode::DLOAD: notImplemented(opcode); break;
-      case Opcode::ALOAD: notImplemented(opcode); break;
+      case Opcode::ALOAD: frame.pushOperand(frame.loadValue(cursor.readU1())); break;
       case Opcode::ILOAD_0: frame.pushOperand(frame.loadValue(0)); break;
       case Opcode::ILOAD_1: frame.pushOperand(frame.loadValue(1)); break;
       case Opcode::ILOAD_2: frame.pushOperand(frame.loadValue(2)); break;
@@ -118,10 +128,10 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::LLOAD_1: frame.pushOperand(frame.loadValue(1)); break;
       case Opcode::LLOAD_2: frame.pushOperand(frame.loadValue(2)); break;
       case Opcode::LLOAD_3: frame.pushOperand(frame.loadValue(3)); break;
-      case Opcode::FLOAD_0: notImplemented(opcode); break;
-      case Opcode::FLOAD_1: notImplemented(opcode); break;
-      case Opcode::FLOAD_2: notImplemented(opcode); break;
-      case Opcode::FLOAD_3: notImplemented(opcode); break;
+      case Opcode::FLOAD_0: frame.pushOperand(frame.loadValue(0)); break;
+      case Opcode::FLOAD_1: frame.pushOperand(frame.loadValue(1)); break;
+      case Opcode::FLOAD_2: frame.pushOperand(frame.loadValue(2)); break;
+      case Opcode::FLOAD_3: frame.pushOperand(frame.loadValue(3)); break;
       case Opcode::DLOAD_0: notImplemented(opcode); break;
       case Opcode::DLOAD_1: notImplemented(opcode); break;
       case Opcode::DLOAD_2: notImplemented(opcode); break;
@@ -134,7 +144,15 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::LALOAD: notImplemented(opcode); break;
       case Opcode::FALOAD: notImplemented(opcode); break;
       case Opcode::DALOAD: notImplemented(opcode); break;
-      case Opcode::AALOAD: notImplemented(opcode); break;
+      case Opcode::AALOAD: {
+        int32_t index = frame.popOperand().asInt();
+        ArrayInstance* arrayRef = frame.popOperand().asReference()->asArrayInstance();
+
+        frame.pushOperand(*arrayRef->getArrayElement(index));
+        // TODO: Check and throw exceptions
+
+        break;
+      }
       case Opcode::BALOAD: notImplemented(opcode); break;
       case Opcode::CALOAD: notImplemented(opcode); break;
       case Opcode::SALOAD: notImplemented(opcode); break;
@@ -143,10 +161,18 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         frame.storeValue(index, frame.popInt());
         break;
       }
-      case Opcode::LSTORE: notImplemented(opcode); break;
+      case Opcode::LSTORE: {
+        auto index = cursor.readU1();
+        frame.storeLongValue(index, frame.popOperand());
+        break;
+      }
       case Opcode::FSTORE: notImplemented(opcode); break;
       case Opcode::DSTORE: notImplemented(opcode); break;
-      case Opcode::ASTORE: notImplemented(opcode); break;
+      case Opcode::ASTORE: {
+        auto index = cursor.readU1();
+        frame.storeValue(index, frame.popOperand());
+        break;
+      }
       case Opcode::ISTORE_0: notImplemented(opcode); break;
       case Opcode::ISTORE_1: frame.storeValue(1, frame.popInt()); break;
       case Opcode::ISTORE_2: frame.storeValue(2, frame.popInt()); break;
@@ -167,15 +193,46 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::ASTORE_1: frame.storeValue(1, frame.popOperand()); break;
       case Opcode::ASTORE_2: frame.storeValue(2, frame.popOperand()); break;
       case Opcode::ASTORE_3: frame.storeValue(3, frame.popOperand()); break;
-      case Opcode::IASTORE: notImplemented(opcode); break;
+      case Opcode::IASTORE: {
+        Value value = frame.popOperand();
+        int32_t index = frame.popOperand().asInt();
+        ArrayInstance* arrayRef = frame.popOperand().asReference()->asArrayInstance();
+
+        arrayRef->setArrayElement(index, value);
+        // TODO: null-check, bounds check, type checks
+
+        break;
+      }
       case Opcode::LASTORE: notImplemented(opcode); break;
       case Opcode::FASTORE: notImplemented(opcode); break;
       case Opcode::DASTORE: notImplemented(opcode); break;
-      case Opcode::AASTORE: notImplemented(opcode); break;
+      case Opcode::AASTORE: {
+        Value value = frame.popOperand();
+        int32_t index = frame.popOperand().asInt();
+        ArrayInstance* arrayRef = frame.popOperand().asReference()->asArrayInstance();
+
+        arrayRef->setArrayElement(index, value);
+
+        // TODO: null-check, bounds check, type checks
+        break;
+      }
       case Opcode::BASTORE: notImplemented(opcode); break;
-      case Opcode::CASTORE: notImplemented(opcode); break;
+      case Opcode::CASTORE: {
+        int32_t value = frame.popOperand().asInt();
+        int32_t index = frame.popOperand().asInt();
+        ArrayInstance* arrayRef = frame.popOperand().asReference()->asArrayInstance();
+
+        // FIXME: Explicitly truncate
+        // TODO: Null check, exceptions
+        arrayRef->setArrayElement(index, Value::Char(static_cast<char16_t>(value)));
+
+        break;
+      }
       case Opcode::SASTORE: notImplemented(opcode); break;
-      case Opcode::POP: notImplemented(opcode); break;
+      case Opcode::POP: {
+        frame.popOperand();
+        break;
+      }
       case Opcode::POP2: notImplemented(opcode); break;
       case Opcode::DUP: {
         // TOOD: Duplicate instead of pop / push
@@ -184,7 +241,16 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         frame.pushOperand(value);
         break;
       }
-      case Opcode::DUP_X1: notImplemented(opcode); break;
+      case Opcode::DUP_X1: {
+        Value value1 = frame.popOperand();
+        Value value2 = frame.popOperand();
+
+        frame.pushOperand(value1);
+        frame.pushOperand(value2);
+        frame.pushOperand(value1);
+
+        break;
+      }
       case Opcode::DUP_X2: notImplemented(opcode); break;
       case Opcode::DUP2: notImplemented(opcode); break;
       case Opcode::DUP2_X1: notImplemented(opcode); break;
@@ -208,13 +274,27 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       }
       case Opcode::FADD: notImplemented(opcode); break;
       case Opcode::DADD: notImplemented(opcode); break;
-      case Opcode::ISUB: notImplemented(opcode); break;
+      case Opcode::ISUB: {
+        int32_t value2 = frame.popOperand().asInt();
+        int32_t value1 = frame.popOperand().asInt();
+
+        int32_t result = value1 - value2;
+
+        frame.pushOperand(Value::Int(result));
+        break;
+      }
       case Opcode::LSUB: notImplemented(opcode); break;
       case Opcode::FSUB: notImplemented(opcode); break;
       case Opcode::DSUB: notImplemented(opcode); break;
       case Opcode::IMUL: notImplemented(opcode); break;
       case Opcode::LMUL: notImplemented(opcode); break;
-      case Opcode::FMUL: notImplemented(opcode); break;
+      case Opcode::FMUL: {
+        float value2 = frame.popOperand().asFloat();
+        float value1 = frame.popOperand().asFloat();
+        frame.pushOperand(Value::Float(value1 * value2));
+
+        break;
+      }
       case Opcode::DMUL: notImplemented(opcode); break;
       case Opcode::IDIV: notImplemented(opcode); break;
       case Opcode::LDIV: notImplemented(opcode); break;
@@ -245,16 +325,53 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::FNEG: notImplemented(opcode); break;
       case Opcode::DNEG: notImplemented(opcode); break;
       case Opcode::ISHL: notImplemented(opcode); break;
-      case Opcode::LSHL: notImplemented(opcode); break;
+      case Opcode::LSHL: {
+        int32_t value2 = frame.popOperand().asInt();
+        int64_t value1 = frame.popOperand().asLong();
+
+        uint32_t offset = std::bit_cast<uint32_t>(value2) & 0x0000003F;
+
+        frame.pushOperand(Value::Long(value1 << offset));
+
+        break;
+      }
       case Opcode::ISHR: notImplemented(opcode); break;
       case Opcode::LSHR: notImplemented(opcode); break;
-      case Opcode::IUSHR: notImplemented(opcode); break;
+      case Opcode::IUSHR: {
+        int32_t value2 = frame.popOperand().asInt();
+        int32_t value1 = frame.popOperand().asInt();
+
+        uint32_t offset = std::bit_cast<uint32_t>(value2) & 0x0000001F;
+
+        // TODO: Is this working according to spec?
+        frame.pushOperand(Value::Int(value1 >> offset));
+        break;
+      }
       case Opcode::LUSHR: notImplemented(opcode); break;
-      case Opcode::IAND: notImplemented(opcode); break;
-      case Opcode::LAND: notImplemented(opcode); break;
+      case Opcode::IAND: {
+        int32_t value2 = frame.popOperand().asInt();
+        int32_t value1 = frame.popOperand().asInt();
+
+        frame.pushOperand(Value::Int(value1 & value2));
+        break;
+      }
+      case Opcode::LAND: {
+        int64_t value2 = frame.popOperand().asLong();
+        int64_t value1 = frame.popOperand().asLong();
+
+        frame.pushOperand(Value::Long(value1 & value2));
+        break;
+      }
       case Opcode::IOR: notImplemented(opcode); break;
       case Opcode::LOR: notImplemented(opcode); break;
-      case Opcode::IXOR: notImplemented(opcode); break;
+      case Opcode::IXOR: {
+        int32_t value2 = frame.popOperand().asInt();
+        int32_t value1 = frame.popOperand().asInt();
+
+        frame.pushOperand(Value::Int(value1 ^ value2));
+
+        break;
+      }
       case Opcode::LXOR: notImplemented(opcode); break;
       case Opcode::IINC: {
         types::u1 index = cursor.readU1();
@@ -264,6 +381,35 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
 
         break;
       }
+      case Opcode::I2L: {
+        int32_t value = frame.popOperand().asInt();
+        frame.pushOperand(Value::Long(static_cast<int64_t>(value)));
+        break;
+      }
+      case Opcode::I2F: {
+        int32_t value = frame.popOperand().asInt();
+        frame.pushOperand(Value::Float(static_cast<float>(value)));
+        break;
+      }
+      case Opcode::I2D: notImplemented(opcode); break;
+      case Opcode::L2I: notImplemented(opcode); break;
+      case Opcode::L2F: notImplemented(opcode); break;
+      case Opcode::L2D: notImplemented(opcode); break;
+      case Opcode::F2I: {
+        // TODO: Is this ok according to spec?
+        float value = frame.popOperand().asFloat();
+        frame.pushOperand(Value::Int(static_cast<int32_t>(value)));
+        break;
+      }
+      case Opcode::F2L: notImplemented(opcode); break;
+      case Opcode::F2D: notImplemented(opcode); break;
+      case Opcode::D2I: notImplemented(opcode); break;
+      case Opcode::D2L: notImplemented(opcode); break;
+      case Opcode::D2F: notImplemented(opcode); break;
+      case Opcode::I2B: notImplemented(opcode); break;
+      case Opcode::I2C: notImplemented(opcode); break;
+      case Opcode::I2S: notImplemented(opcode); break;
+
       case Opcode::LCMP: {
         int64_t value2 = frame.popOperand().asLong();
         int64_t value1 = frame.popOperand().asLong();
@@ -278,8 +424,39 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
 
         break;
       }
-      case Opcode::FCMPL: notImplemented(opcode); break;
-      case Opcode::FCMPG: notImplemented(opcode); break;
+      case Opcode::FCMPL: {
+        float value2 = frame.popOperand().asFloat();
+        float value1 = frame.popOperand().asFloat();
+
+        if (value1 > value2) {
+          frame.pushOperand(Value::Int(1));
+        } else if (value1 == value2) {
+          // TODO: Is this IEE equality?
+          frame.pushOperand(Value::Int(0));
+        } else if (value1 < value2) {
+          frame.pushOperand(Value::Int(-1));
+        } else {
+          frame.pushOperand(Value::Int(-1));
+        }
+        break;
+      }
+      case Opcode::FCMPG: {
+        float value2 = frame.popOperand().asFloat();
+        float value1 = frame.popOperand().asFloat();
+
+        if (value1 > value2) {
+          frame.pushOperand(Value::Int(1));
+        } else if (value1 == value2) {
+          // TODO: Is this IEE equality?
+          frame.pushOperand(Value::Int(0));
+        } else if (value1 < value2) {
+          frame.pushOperand(Value::Int(-1));
+        } else {
+          frame.pushOperand(Value::Int(1));
+        }
+
+        break;
+      }
       case Opcode::DCMPL: notImplemented(opcode); break;
       case Opcode::DCMPG: notImplemented(opcode); break;
       case Opcode::IFEQ: integerComparisonToZero(Predicate::Eq, cursor, frame); break;
@@ -312,9 +489,15 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         return;
       }
       case Opcode::LRETURN: notImplemented(opcode); break;
-      case Opcode::FRETURN: notImplemented(opcode); break;
-      case Opcode::DRETURN: notImplemented(opcode); break;
-      case Opcode::ARETURN: notImplemented(opcode); break;
+      case Opcode::FRETURN: {
+        vm.returnToCaller(Value::Float(frame.popOperand().asFloat()));
+        return;
+      }
+      case Opcode::DRETURN: {
+        vm.returnToCaller(Value::Double(frame.popOperand().asDouble()));
+        return;
+      }
+      case Opcode::ARETURN: vm.returnToCaller(frame.popOperand()); return;
       case Opcode::RETURN: vm.returnToCaller(); return;
       case Opcode::GETSTATIC: {
         auto index = cursor.readU2();
@@ -344,8 +527,27 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         (*klass)->storeStaticField(fieldRef.fieldName, frame.popOperand());
         break;
       }
-      case Opcode::GETFIELD: notImplemented(opcode); break;
-      case Opcode::PUTFIELD: notImplemented(opcode); break;
+      case Opcode::GETFIELD: {
+        types::u2 index = cursor.readU2();
+        auto field = runtimeConstantPool.getFieldRef(index);
+        Instance* objectRef = frame.popOperand().asReference();
+
+        // TODO: Null check
+
+        frame.pushOperand(objectRef->getFieldValue(field.fieldName));
+        break;
+      }
+      case Opcode::PUTFIELD: {
+        auto index = cursor.readU2();
+        auto field = runtimeConstantPool.getFieldRef(index);
+
+        Value value = frame.popOperand();
+        Instance* objectRef = frame.popOperand().asReference();
+
+        objectRef->setFieldValue(field.fieldName, value);
+
+        break;
+      }
       case Opcode::INVOKEVIRTUAL: {
         auto index = cursor.readU2();
         auto methodRef = runtimeConstantPool.getMethodRef(index);
@@ -356,23 +558,15 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
           vm.raiseError(*klass.error());
         }
 
-        JMethod* baseMethod = (*klass)->getMethod(methodRef.methodName, methodRef.methodDescriptor);
+        JMethod* baseMethod = (*klass)->getMethod(methodRef.methodName, methodRef.methodDescriptor)->method;
 
-        int numArgs = baseMethod->getDescriptor().parameters().size();
+        int numArgs = baseMethod->descriptor().parameters().size();
         Value objectRef = frame.peek(numArgs);
 
         JClass* target = objectRef.asReference()->getClass();
-        JMethod* method = target->getMethod(methodRef.methodName, methodRef.methodDescriptor);
-        while (method == nullptr) {
-          if (auto parentName = target->superClass(); parentName.has_value()) {
-            target = *vm.resolveClass(types::JString{*parentName});
-            method = target->getMethod(methodRef.methodName, methodRef.methodDescriptor);
-          } else {
-            assert(false && "TODO: InvokeVirtual");
-          }
-        }
+        auto classAndMethod = target->getMethod(methodRef.methodName, methodRef.methodDescriptor);
 
-        vm.invoke(target, method);
+        vm.invoke(classAndMethod->klass, classAndMethod->method);
         // TODO: signature method
 
         break;
@@ -403,11 +597,34 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         }
 
         auto method = vm.resolveStaticMethod(*klass, methodRef.methodName, methodRef.methodDescriptor);
-        vm.invoke(*klass, method);
+        vm.invokeStatic(*klass, method);
 
         break;
       }
-      case Opcode::INVOKEINTERFACE: notImplemented(opcode); break;
+      case Opcode::INVOKEINTERFACE: {
+        auto index = cursor.readU2();
+        auto methodRef = runtimeConstantPool.getMethodRef(index);
+
+        // Consume 'count'
+        cursor.readU1();
+        // Consume '0'
+        cursor.readU1();
+
+        auto klass = vm.resolveClass(methodRef.className);
+        if (!klass) {
+          vm.raiseError(*klass.error());
+          // TODO: Abort frame
+        }
+
+        int numArgs = MethodDescriptor::parse(methodRef.methodDescriptor)->parameters().size();
+        Value objectRef = frame.peek(numArgs);
+
+        JClass* target = objectRef.asReference()->getClass();
+        auto classAndMethod = target->getMethod(methodRef.methodName, methodRef.methodDescriptor);
+
+        vm.invoke(classAndMethod->klass, classAndMethod->method);
+        break;
+      }
       case Opcode::INVOKEDYNAMIC: notImplemented(opcode); break;
       case Opcode::NEW: {
         auto index = cursor.readU2();
@@ -424,7 +641,46 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
 
         break;
       }
-      case Opcode::NEWARRAY: notImplemented(opcode); break;
+      case Opcode::NEWARRAY: {
+        enum class ArrayType
+        {
+          T_BOOLEAN = 4,
+          T_CHAR = 5,
+          T_FLOAT = 6,
+          T_DOUBLE = 7,
+          T_BYTE = 8,
+          T_SHORT = 9,
+          T_INT = 10,
+          T_LONG = 11,
+        };
+
+        auto atype = static_cast<ArrayType>(cursor.readU1());
+        int32_t count = frame.popOperand().asInt();
+
+        types::JString arrayClsName;
+
+        switch (atype) {
+          case ArrayType::T_BOOLEAN: arrayClsName = u"[Z"; break;
+          case ArrayType::T_CHAR: arrayClsName = u"[C"; break;
+          case ArrayType::T_FLOAT: arrayClsName = u"[F"; break;
+          case ArrayType::T_DOUBLE: arrayClsName = u"[D"; break;
+          case ArrayType::T_BYTE: arrayClsName = u"[B"; break;
+          case ArrayType::T_SHORT: arrayClsName = u"[S"; break;
+          case ArrayType::T_INT: arrayClsName = u"[I"; break;
+          case ArrayType::T_LONG: arrayClsName = u"[L"; break;
+          default: assert(false && "impossible"); break;
+        }
+
+        auto arrayClass = vm.resolveArrayClass(arrayClsName);
+        if (!arrayClass) {
+          vm.raiseError(*arrayClass.error());
+        }
+
+        ArrayInstance* newInstance = vm.newArrayInstance(*arrayClass, count);
+        frame.pushOperand(Value::Reference(newInstance));
+
+        break;
+      }
       case Opcode::ANEWARRAY: {
         auto index = cursor.readU2();
         int32_t count = frame.popOperand().asInt();
@@ -443,21 +699,77 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
 
         break;
       }
-      case Opcode::ARRAYLENGTH: notImplemented(opcode); break;
+      case Opcode::ARRAYLENGTH: {
+        ArrayInstance* arrayRef = frame.popOperand().asReference()->asArrayInstance();
+        frame.pushOperand(Value::Int(arrayRef->length()));
+        break;
+      }
       case Opcode::ATHROW: notImplemented(opcode); break;
-      case Opcode::CHECKCAST: notImplemented(opcode); break;
-      case Opcode::INSTANCEOF: notImplemented(opcode); break;
+      case Opcode::CHECKCAST: {
+        types::u2 index = cursor.readU2();
+        auto klass = runtimeConstantPool.getClass(index);
+        if (!klass) {
+          vm.raiseError(*klass.error());
+        }
+
+        // TODO: Implement check!
+        // notImplemented(opcode);
+        break;
+      }
+      case Opcode::INSTANCEOF: {
+        // auto index = cursor.readU2();
+        // Instance* objectRef = frame.popOperand().asReference();
+        // if (objectRef == nullptr) {
+        //   frame.pushOperand(Value::Int(0));
+        // } else {
+        //   auto klass = runtimeConstantPool.getClass(index);
+        //   if (!klass) {
+        //     vm.raiseError(*klass.error());
+        //   }
+        //
+        //   JClass* classToCheck = objectRef->getClass();
+        //   // If S is an ordinary (nonarray) class, then:
+        //   // if (classToCheck->isClass()) {
+        //   // If T is a class type, then S must be the same class as T, or S must be a subclass of T;
+        //   classToCheck->isSubClassOf(*klass);
+        //   //}
+        // }
+
+        notImplemented(opcode);
+        break;
+      }
       case Opcode::MONITORENTER: notImplemented(opcode); break;
       case Opcode::MONITOREXIT: notImplemented(opcode); break;
       case Opcode::WIDE: notImplemented(opcode); break;
       case Opcode::MULTIANEWARRAY: notImplemented(opcode); break;
-      case Opcode::IFNULL: notImplemented(opcode); break;
-      case Opcode::IFNONNULL: notImplemented(opcode); break;
+      case Opcode::IFNULL: {
+        auto opcodePos = cursor.position() - 1;
+        auto offset = std::bit_cast<int16_t>(cursor.readU2());
+
+        Instance* value = frame.popOperand().asReference();
+        if (value == nullptr) {
+          cursor.set(opcodePos + offset);
+        }
+
+        break;
+      }
+      case Opcode::IFNONNULL: {
+        auto opcodePos = cursor.position() - 1;
+        auto offset = std::bit_cast<int16_t>(cursor.readU2());
+
+        Instance* value = frame.popOperand().asReference();
+        if (value != nullptr) {
+          cursor.set(opcodePos + offset);
+        }
+
+        break;
+      }
       case Opcode::GOTO_W: notImplemented(opcode); break;
       case Opcode::JSR_W: notImplemented(opcode); break;
       case Opcode::BREAKPOINT: notImplemented(opcode); break;
       case Opcode::IMPDEP1: notImplemented(opcode); break;
       case Opcode::IMPDEP2: notImplemented(opcode); break;
+      default: assert(false && "Unknown opcode!");
     }
   }
 }
