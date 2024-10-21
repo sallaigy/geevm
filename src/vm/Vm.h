@@ -9,6 +9,7 @@
 #include "vm/Frame.h"
 #include "vm/Interpreter.h"
 #include "vm/Method.h"
+#include "vm/NativeMethods.h"
 #include "vm/StringHeap.h"
 
 namespace geevm
@@ -27,9 +28,11 @@ public:
 
   void initialize();
 
-  void execute(JClass* klass, JMethod* method);
+  void execute(JClass* klass, JMethod* method, const std::vector<Value>& args = {});
+  void executeNative(JClass* klass, JMethod* method, const std::vector<Value>& args);
 
   void invoke(JClass* klass, JMethod* method);
+  void invokeStatic(JClass* klass, JMethod* method);
 
   void returnToCaller();
 
@@ -51,9 +54,19 @@ public:
     return mInternedStrings;
   }
 
+  NativeMethodRegistry& nativeMethods()
+  {
+    return mNativeMethods;
+  }
+
+private:
+  void registerNatives();
+
 private:
   BootstrapClassLoader mBootstrapClassLoader;
   std::unordered_map<types::JString, std::unique_ptr<JClass>> mLoadedClasses;
+  NativeMethodRegistry mNativeMethods;
+  // Stack
   std::vector<CallFrame> mCallStack;
   // Method area
   std::vector<std::unique_ptr<Instance>> mHeap;

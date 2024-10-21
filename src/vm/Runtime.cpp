@@ -16,7 +16,8 @@ const MethodRef& RuntimeConstantPool::getMethodRef(types::u2 index)
   }
 
   auto& entry = mConstantPool.getEntry(index);
-  assert(entry.tag == ConstantPool::Tag::CONSTANT_Methodref && "Can only fetch a method ref from a method ref entry!");
+  assert((entry.tag == ConstantPool::Tag::CONSTANT_Methodref || entry.tag == ConstantPool::Tag::CONSTANT_InterfaceMethodref) &&
+         "Can only fetch a method ref from a method ref entry!");
 
   types::JString className{mConstantPool.getClassName(entry.data.classAndNameRef.classIndex)};
   auto [methodName, descriptor] = mConstantPool.getNameAndType(entry.data.classAndNameRef.nameAndTypeIndex);

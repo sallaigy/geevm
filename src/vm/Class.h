@@ -16,27 +16,37 @@ namespace geevm
 {
 class Vm;
 class StringHeap;
+class JClass;
+class JMethod;
 
-class AbstractClass
+// using ClassAndMethod = std::pair<JClass*,JMethod*>;
+
+struct ClassAndMethod
 {
-public:
-private:
+  JClass* const klass;
+  JMethod* const method;
 };
 
-class JClass : public AbstractClass
+class JClass
 {
   friend class Vm;
   friend class BootstrapClassLoader;
 
+  enum class Kind
+  {
+    Instance,
+    Array
+  };
+
 public:
   explicit JClass(std::unique_ptr<ClassFile> classFile);
 
-  void prepare();
+  void prepare(BootstrapClassLoader& classLoader);
   void initialize(Vm& vm);
 
   types::JStringRef getName() const;
 
-  JMethod* getMethod(const types::JString& name, const types::JString& descriptor);
+  std::optional<ClassAndMethod> getMethod(const types::JString& name, const types::JString& descriptor);
 
   std::optional<types::JStringRef> superClass() const;
   std::vector<types::JStringRef> interfaces() const;
@@ -59,6 +69,18 @@ public:
     return *mRuntimeConstantPool;
   }
 
+  const types::JString& className() const
+  {
+    return mClassName;
+  }
+
+  Instance* classInstance() const
+  {
+    return mClassInstance.get();
+  }
+
+  bool isSubClassOf(JClass* other) const;
+
 private:
   void initializeRuntimeConstantPool(StringHeap& stringHeap, BootstrapClassLoader& classLoader);
   Value getInitialFieldValue(const FieldInfo& field);
@@ -67,10 +89,16 @@ private:
   bool mIsInitialized = false;
   bool mIsUnderInitialization = false;
   std::unique_ptr<ClassFile> mClassFile;
+
+  types::JString mClassName;
+  JClass* mSuperClass = nullptr;
+  std::vector<JClass*> mSuperInterfaces;
+
   std::unique_ptr<RuntimeConstantPool> mRuntimeConstantPool;
   std::unordered_map<NameAndDescriptor, std::unique_ptr<JMethod>, PairHash> mMethods;
   std::unordered_map<NameAndDescriptor, std::unique_ptr<JField>, PairHash> mFields;
   std::unordered_map<types::JStringRef, Value> mStaticFields;
+  std::unique_ptr<Instance> mClassInstance;
 };
 
 class ArrayClass : public JClass
