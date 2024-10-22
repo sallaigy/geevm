@@ -16,40 +16,71 @@ namespace geevm
 {
 class Vm;
 class StringHeap;
-class JClass;
+class InstanceClass;
+class ArrayClass;
 class JMethod;
 
 // using ClassAndMethod = std::pair<JClass*,JMethod*>;
 
 struct ClassAndMethod
 {
-  JClass* const klass;
+  InstanceClass* const klass;
   JMethod* const method;
 };
 
 class JClass
 {
-  friend class Vm;
   friend class BootstrapClassLoader;
 
+public:
   enum class Kind
   {
     Instance,
     Array
   };
 
+  enum class Status
+  {
+    Allocated,
+    Loaded,
+    Prepared,
+    UnderInitialization,
+    Initialized
+  };
+
+protected:
+  JClass(Kind kind, types::JString className)
+    : mKind(kind), mStatus(Status::Allocated), mClassName(std::move(className))
+  {
+  }
+
 public:
-  explicit JClass(std::unique_ptr<ClassFile> classFile);
+  // Basic class metadata
+  //==----------------------------------------------------------------------==//
 
-  void prepare(BootstrapClassLoader& classLoader);
-  void initialize(Vm& vm);
+  const types::JString& className() const
+  {
+    return mClassName;
+  }
 
-  types::JStringRef getName() const;
+  JClass* superClass() const
+  {
+    return mSuperClass;
+  }
 
+  const std::vector<JClass*>& superInterfaces() const
+  {
+    return mSuperInterfaces;
+  }
+
+  Instance* classInstance() const
+  {
+    return mClassInstance.get();
+  }
+
+  // Methods and fields
+  //==----------------------------------------------------------------------==//
   std::optional<ClassAndMethod> getMethod(const types::JString& name, const types::JString& descriptor);
-
-  std::optional<types::JStringRef> superClass() const;
-  std::vector<types::JStringRef> interfaces() const;
 
   Value getStaticField(types::JStringRef name);
   void storeStaticField(types::JStringRef name, Value);
@@ -58,6 +89,46 @@ public:
   {
     return mFields;
   }
+
+  // Static polymorphism
+  //==----------------------------------------------------------------------==//
+  InstanceClass* asInstanceClass();
+  ArrayClass* asArrayClass();
+
+  // Linking and initialization
+  //==----------------------------------------------------------------------==//
+  void prepare(BootstrapClassLoader& classLoader);
+  void initialize(Vm& vm);
+
+private:
+  void linkSuperClass(types::JStringRef className, BootstrapClassLoader& classLoader);
+  void linkSuperInterfaces(const std::vector<types::JStringRef>& interfaces, BootstrapClassLoader& classLoader);
+
+protected:
+  const Kind mKind;
+  Status mStatus;
+
+protected:
+  std::unordered_map<NameAndDescriptor, std::unique_ptr<JMethod>, PairHash> mMethods;
+  std::unordered_map<NameAndDescriptor, std::unique_ptr<JField>, PairHash> mFields;
+  std::unordered_map<types::JStringRef, Value> mStaticFields;
+
+private:
+  types::JString mClassName;
+  JClass* mSuperClass = nullptr;
+  std::vector<JClass*> mSuperInterfaces;
+
+  std::unique_ptr<Instance> mClassInstance;
+};
+
+class InstanceClass : public JClass
+{
+  friend class Vm;
+  friend class BootstrapClassLoader;
+  friend class JClass;
+
+public:
+  explicit InstanceClass(std::unique_ptr<ClassFile> classFile);
 
   const ConstantPool& constantPool() const
   {
@@ -69,43 +140,27 @@ public:
     return *mRuntimeConstantPool;
   }
 
-  const types::JString& className() const
-  {
-    return mClassName;
-  }
-
-  Instance* classInstance() const
-  {
-    return mClassInstance.get();
-  }
-
-  bool isSubClassOf(JClass* other) const;
+  bool isSubClassOf(InstanceClass* other) const;
 
 private:
   void initializeRuntimeConstantPool(StringHeap& stringHeap, BootstrapClassLoader& classLoader);
-  Value getInitialFieldValue(const FieldInfo& field);
+  Value getInitialFieldValue(const FieldType& fieldType, types::u2 cvIndex);
+  void prepareMethods();
 
-  bool mIsPrepared = false;
-  bool mIsInitialized = false;
-  bool mIsUnderInitialization = false;
+protected:
+  void linkFields();
+  void initializeFields();
+
+private:
   std::unique_ptr<ClassFile> mClassFile;
-
-  types::JString mClassName;
-  JClass* mSuperClass = nullptr;
-  std::vector<JClass*> mSuperInterfaces;
-
   std::unique_ptr<RuntimeConstantPool> mRuntimeConstantPool;
-  std::unordered_map<NameAndDescriptor, std::unique_ptr<JMethod>, PairHash> mMethods;
-  std::unordered_map<NameAndDescriptor, std::unique_ptr<JField>, PairHash> mFields;
-  std::unordered_map<types::JStringRef, Value> mStaticFields;
-  std::unique_ptr<Instance> mClassInstance;
 };
 
 class ArrayClass : public JClass
 {
 public:
-  explicit ArrayClass(FieldType type)
-    : JClass(nullptr), mType(std::move(type))
+  explicit ArrayClass(types::JString className, FieldType type)
+    : JClass(Kind::Array, std::move(className)), mType(std::move(type))
   {
     // FIXME
   }

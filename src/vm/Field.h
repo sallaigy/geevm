@@ -36,6 +36,16 @@ public:
     return mFieldInfo.accessFlags();
   }
 
+  bool isStatic() const
+  {
+    return hasAccessFlag(mFieldInfo.accessFlags(), FieldAccessFlags::ACC_STATIC);
+  }
+
+  bool isFinal() const
+  {
+    return hasAccessFlag(mFieldInfo.accessFlags(), FieldAccessFlags::ACC_FINAL);
+  }
+
 private:
   const FieldInfo& mFieldInfo;
   FieldType mFieldType;

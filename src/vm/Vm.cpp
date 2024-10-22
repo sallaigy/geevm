@@ -19,16 +19,16 @@ void Vm::initialize()
 
   (*systemCls)->storeStaticField(u"lineSeparator", Value::Reference(mInternedStrings.intern(u"\n")));
 
-  // auto fisCls = this->resolveClass(u"java/io/FileInputStream");
+  auto fisCls = this->resolveClass(u"java/io/FileInputStream");
   auto fosCls = this->resolveClass(u"java/io/FileOutputStream");
   auto printStreamCls = this->resolveClass(u"java/io/FileOutputStream");
 
   auto fdCls = this->resolveClass(u"java/io/FileDescriptor");
 
   auto fosCtor = (*fosCls)->getMethod(u"<init>", u"(I)V");
-  auto outFos = this->newInstance(*fosCls);
+  auto outFos = this->newInstance((*fosCls)->asInstanceClass());
 
-  this->execute(*fosCls, fosCtor->method, std::vector<Value>{Value::Reference(outFos), Value::Int(1)});
+  this->execute((*fosCls)->asInstanceClass(), fosCtor->method, std::vector<Value>{Value::Reference(outFos), Value::Int(1)});
 
   // this->execute(*systemCls, initMethod);
 }
@@ -49,12 +49,7 @@ JvmExpected<JClass*> Vm::resolveClass(const types::JString& name)
   return mBootstrapClassLoader.loadClass(name);
 }
 
-JvmExpected<ArrayClass*> Vm::resolveArrayClass(const types::JString& name)
-{
-  return mBootstrapClassLoader.loadArrayClass(name);
-}
-
-void Vm::execute(JClass* klass, JMethod* method, const std::vector<Value>& args)
+void Vm::execute(InstanceClass* klass, JMethod* method, const std::vector<Value>& args)
 {
   CallFrame& frame = mCallStack.emplace_back(klass, method);
   for (int i = 0; i < args.size(); ++i) {
@@ -65,7 +60,7 @@ void Vm::execute(JClass* klass, JMethod* method, const std::vector<Value>& args)
   interpreter->execute(*this, method->getCode(), 0);
 }
 
-void Vm::executeNative(JClass* klass, JMethod* method, const std::vector<Value>& args)
+void Vm::executeNative(InstanceClass* klass, JMethod* method, const std::vector<Value>& args)
 {
   auto nativeMethod = mNativeMethods.get(ClassNameAndDescriptor{klass->className(), method->name(), method->rawDescriptor()});
   if (nativeMethod) {
@@ -82,7 +77,7 @@ void Vm::executeNative(JClass* klass, JMethod* method, const std::vector<Value>&
   }
 }
 
-void Vm::invoke(JClass* klass, JMethod* method)
+void Vm::invoke(InstanceClass* klass, JMethod* method)
 {
   size_t numArgs = method->descriptor().parameters().size();
 
@@ -109,10 +104,10 @@ void Vm::invoke(JClass* klass, JMethod* method)
   }
 }
 
-void Vm::invokeStatic(JClass* klass, JMethod* method)
+void Vm::invokeStatic(InstanceClass* klass, JMethod* method)
 {
   size_t numArgs = method->descriptor().parameters().size();
-  auto methodName = klass->constantPool().getString(method->getMethodInfo().nameIndex());
+  auto methodName = method->name();
   if (method->isNative() && methodName == u"__geevm_print") {
     auto& prevFrame = mCallStack.back();
     std::vector<Value> arguments;
@@ -155,12 +150,9 @@ void Vm::invokeStatic(JClass* klass, JMethod* method)
   }
 }
 
-Instance* Vm::newInstance(JClass* klass)
+Instance* Vm::newInstance(InstanceClass* klass)
 {
-  // TODO: Fields, etc.
-  auto& inserted = mHeap.emplace_back(std::make_unique<Instance>(klass));
-
-  return inserted.get();
+  return mHeap.emplace_back(std::make_unique<Instance>(klass)).get();
 }
 
 ArrayInstance* Vm::newArrayInstance(ArrayClass* arrayClass, size_t length)

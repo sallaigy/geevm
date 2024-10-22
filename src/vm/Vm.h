@@ -24,15 +24,14 @@ public:
   }
 
   JvmExpected<JClass*> resolveClass(const types::JString& name);
-  JvmExpected<ArrayClass*> resolveArrayClass(const types::JString& name);
 
   void initialize();
 
-  void execute(JClass* klass, JMethod* method, const std::vector<Value>& args = {});
-  void executeNative(JClass* klass, JMethod* method, const std::vector<Value>& args);
+  void execute(InstanceClass* klass, JMethod* method, const std::vector<Value>& args = {});
+  void executeNative(InstanceClass* klass, JMethod* method, const std::vector<Value>& args);
 
-  void invoke(JClass* klass, JMethod* method);
-  void invokeStatic(JClass* klass, JMethod* method);
+  void invoke(InstanceClass* klass, JMethod* method);
+  void invokeStatic(InstanceClass* klass, JMethod* method);
 
   void returnToCaller();
 
@@ -46,7 +45,7 @@ public:
 
   CallFrame& currentFrame();
 
-  Instance* newInstance(JClass* klass);
+  Instance* newInstance(InstanceClass* klass);
   ArrayInstance* newArrayInstance(ArrayClass* arrayClass, size_t size);
 
   StringHeap& internedStrings()

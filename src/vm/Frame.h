@@ -8,6 +8,10 @@
 
 namespace geevm
 {
+class InstanceClass;
+}
+namespace geevm
+{
 
 class JClass;
 class Instance;
@@ -142,12 +146,12 @@ private:
 class CallFrame
 {
 public:
-  explicit CallFrame(JClass* klass, JMethod* method)
+  explicit CallFrame(InstanceClass* klass, JMethod* method)
     : mClass(klass), mMethod(method), mLocalVariables(method->getCode().maxLocals(), Value::Int(0))
   {
   }
 
-  JClass* currentClass()
+  InstanceClass* currentClass()
   {
     return mClass;
   }
@@ -208,7 +212,7 @@ public:
 private:
   std::vector<Value> mLocalVariables;
   std::vector<Value> mOperandStack;
-  JClass* mClass;
+  InstanceClass* mClass;
   JMethod* mMethod;
 };
 

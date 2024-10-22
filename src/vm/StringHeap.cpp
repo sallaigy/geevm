@@ -14,17 +14,17 @@ Instance* StringHeap::intern(types::JStringRef utf8)
     mVm.raiseError(*stringClass.error());
   }
 
-  auto charArrayClass = mVm.resolveArrayClass(u"[C");
+  auto charArrayClass = mVm.resolveClass(u"[C");
   if (!charArrayClass) {
     mVm.raiseError(*charArrayClass.error());
   }
 
-  ArrayInstance* stringContents = mVm.newArrayInstance(*charArrayClass, utf8.size());
+  ArrayInstance* stringContents = mVm.newArrayInstance((*charArrayClass)->asArrayClass(), utf8.size());
   for (int32_t i = 0; i < utf8.size(); ++i) {
     stringContents->setArrayElement(i, Value::Char(utf8[i]));
   }
 
-  Instance* newInstance = mVm.newInstance(*stringClass);
+  Instance* newInstance = mVm.newInstance((*stringClass)->asInstanceClass());
   newInstance->setFieldValue(u"value", Value::Reference(stringContents));
 
   auto [res, _] = mInternedStrings.try_emplace(utf8, newInstance);

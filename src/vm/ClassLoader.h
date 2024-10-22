@@ -13,7 +13,7 @@ namespace geevm
 class ClassLocation
 {
 public:
-  virtual JvmExpected<std::unique_ptr<JClass>> resolve() = 0;
+  virtual JvmExpected<std::unique_ptr<InstanceClass>> resolve() = 0;
   virtual ~ClassLocation() = default;
 };
 
@@ -25,7 +25,7 @@ public:
   {
   }
 
-  JvmExpected<std::unique_ptr<JClass>> resolve() override;
+  JvmExpected<std::unique_ptr<InstanceClass>> resolve() override;
 
 private:
   std::string mFileName;
@@ -39,7 +39,7 @@ public:
   {
   }
 
-  JvmExpected<std::unique_ptr<JClass>> resolve() override;
+  JvmExpected<std::unique_ptr<InstanceClass>> resolve() override;
 
 private:
   std::string mArchiveLocation;
@@ -49,11 +49,11 @@ private:
 class ClassLoader
 {
 public:
-  virtual JvmExpected<std::unique_ptr<JClass>> loadClass(const types::JString& name) = 0;
+  virtual JvmExpected<std::unique_ptr<InstanceClass>> loadClass(const types::JString& name) = 0;
   virtual ~ClassLoader() = default;
 
 protected:
-  JvmExpected<std::unique_ptr<JClass>> resolveClassLocation(const ClassLocation& location);
+  JvmExpected<std::unique_ptr<InstanceClass>> resolveClassLocation(const ClassLocation& location);
 };
 
 class BootstrapClassLoader
@@ -62,6 +62,8 @@ public:
   explicit BootstrapClassLoader(Vm& vm);
 
   JvmExpected<JClass*> loadClass(const types::JString& name);
+
+private:
   JvmExpected<ArrayClass*> loadArrayClass(const types::JString& name);
 
 private:
@@ -69,13 +71,12 @@ private:
   std::string mBootstrapClassPath;
   std::unique_ptr<ClassLoader> mNextClassLoader;
   std::unordered_map<types::JString, std::unique_ptr<JClass>> mClasses;
-  std::unordered_map<types::JString, std::unique_ptr<ArrayClass>> mArrayClasses;
 };
 
 class BaseClassLoader : public ClassLoader
 {
 public:
-  JvmExpected<std::unique_ptr<JClass>> loadClass(const types::JString& name) override;
+  JvmExpected<std::unique_ptr<InstanceClass>> loadClass(const types::JString& name) override;
 
 private:
   std::optional<ClassLocation> findClassLocation(types::JStringRef name) const;
