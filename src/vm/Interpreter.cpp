@@ -566,7 +566,7 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         JClass* target = objectRef.asReference()->getClass();
         auto classAndMethod = target->getMethod(methodRef.methodName, methodRef.methodDescriptor);
 
-        vm.invoke(classAndMethod->klass, classAndMethod->method);
+        vm.invoke(classAndMethod->klass->asInstanceClass(), classAndMethod->method);
         // TODO: signature method
 
         break;
@@ -582,7 +582,7 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         }
 
         auto method = vm.resolveMethod(*klass, methodRef.methodName, methodRef.methodDescriptor);
-        vm.invoke(*klass, method);
+        vm.invoke((*klass)->asInstanceClass(), method);
 
         break;
       }
@@ -597,7 +597,7 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         }
 
         auto method = vm.resolveStaticMethod(*klass, methodRef.methodName, methodRef.methodDescriptor);
-        vm.invokeStatic(*klass, method);
+        vm.invokeStatic((*klass)->asInstanceClass(), method);
 
         break;
       }
@@ -636,8 +636,12 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
           // TODO: Abort frame
         }
 
-        Instance* instance = vm.newInstance(*klass);
-        frame.pushOperand(Value::Reference(instance));
+        if (auto instanceClass = (*klass)->asInstanceClass(); instanceClass != nullptr) {
+          Instance* instance = vm.newInstance(instanceClass);
+          frame.pushOperand(Value::Reference(instance));
+        } else {
+          assert(false && "TODO new with array class");
+        }
 
         break;
       }
@@ -671,12 +675,12 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
           default: assert(false && "impossible"); break;
         }
 
-        auto arrayClass = vm.resolveArrayClass(arrayClsName);
+        auto arrayClass = vm.resolveClass(arrayClsName);
         if (!arrayClass) {
           vm.raiseError(*arrayClass.error());
         }
 
-        ArrayInstance* newInstance = vm.newArrayInstance(*arrayClass, count);
+        ArrayInstance* newInstance = vm.newArrayInstance((*arrayClass)->asArrayClass(), count);
         frame.pushOperand(Value::Reference(newInstance));
 
         break;
@@ -690,10 +694,10 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
           vm.raiseError(*klass.error());
         }
 
-        auto arrayClass = vm.resolveArrayClass(u"[L" + types::JString{(*klass)->getName()} + u";");
+        auto arrayClass = vm.resolveClass(u"[L" + types::JString{(*klass)->className()} + u";");
         assert(arrayClass.has_value());
 
-        ArrayInstance* array = vm.newArrayInstance(*arrayClass, count);
+        ArrayInstance* array = vm.newArrayInstance((*arrayClass)->asArrayClass(), count);
         frame.pushOperand(Value::Reference(array));
         // TODO: if count is less than zero, the anewarray instruction throws a NegativeArraySizeException.
 

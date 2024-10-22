@@ -29,7 +29,7 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  vm->execute(*mainClass, mainMethod);
+  vm->execute((*mainClass)->asInstanceClass(), mainMethod);
 
   return 0;
 }
