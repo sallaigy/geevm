@@ -53,6 +53,49 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
     CallFrame& frame = vm.currentFrame();
     RuntimeConstantPool& runtimeConstantPool = frame.currentClass()->runtimeConstantPool();
 
+#if 0
+    std::cout << cursor.position() << " " << types::convertJString(frame.currentClass()->className() + u"#" + frame.currentMethod()->name() + u": ")
+              << opcodeToString(opcode) << "     ";
+    std::cout << "Locals=[";
+    for (size_t i = 0; i < frame.locals().size(); ++i) {
+      auto& entry = frame.locals()[i];
+      std::cout << i << ": ";
+      switch (entry.kind()) {
+        case Value::Kind::Byte: std::cout << "Byte(" << entry.asInt() << ")"; break;
+        case Value::Kind::Short: std::cout << "Short(" << entry.asInt() << ")"; break;
+        case Value::Kind::Int: std::cout << "Int(" << entry.asInt() << ")"; break;
+        case Value::Kind::Long: std::cout << "Long(" << entry.asLong() << ")"; break;
+        case Value::Kind::Char: std::cout << "Char(" << types::convertJString(types::JString{entry.asChar()}) << ")"; break;
+        case Value::Kind::Float: std::cout << "Float(" << entry.asFloat() << ")"; break;
+        case Value::Kind::Double: std::cout << "Double(" << entry.asDouble() << ")"; break;
+        case Value::Kind::ReturnAddress: std::cout << "ReturnAddress(" << entry.asInt() << ")"; break;
+        case Value::Kind::Reference:
+          std::cout << "Reference(" << (entry.asReference() != nullptr ? types::convertJString(entry.asReference()->getClass()->className()) : "null") << ")";
+          break;
+      }
+      std::cout << " ";
+    }
+    std::cout << "] ";
+    std::cout << "Stack=[";
+    for (auto& entry : frame.operandStack()) {
+      switch (entry.kind()) {
+        case Value::Kind::Byte: std::cout << "Byte(" << entry.asInt() << ")"; break;
+        case Value::Kind::Short: std::cout << "Short(" << entry.asInt() << ")"; break;
+        case Value::Kind::Int: std::cout << "Int(" << entry.asInt() << ")"; break;
+        case Value::Kind::Long: std::cout << "Long(" << entry.asLong() << ")"; break;
+        case Value::Kind::Char: std::cout << "Char(" << types::convertJString(types::JString{entry.asChar()}) << ")"; break;
+        case Value::Kind::Float: std::cout << "Float(" << entry.asFloat() << ")"; break;
+        case Value::Kind::Double: std::cout << "Double(" << entry.asDouble() << ")"; break;
+        case Value::Kind::ReturnAddress: std::cout << "ReturnAddress(" << entry.asInt() << ")"; break;
+        case Value::Kind::Reference:
+          std::cout << "Reference(" << (entry.asReference() != nullptr ? types::convertJString(entry.asReference()->getClass()->className()) : "null") << ")";
+          break;
+      }
+      std::cout << " ";
+    }
+    std::cout << "]" << std::endl;
+#endif
+
     // std::cout << "#" << cursor.position() << " " << opcodeToString(opcode) << std::endl;
     switch (opcode) {
       case Opcode::NOP: notImplemented(opcode); break;
@@ -100,7 +143,25 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         }
         break;
       }
-      case Opcode::LDC_W: notImplemented(opcode); break;
+      case Opcode::LDC_W: {
+        types::u2 index = cursor.readU2();
+        auto& entry = frame.currentClass()->constantPool().getEntry(index);
+
+        if (entry.tag == ConstantPool::Tag::CONSTANT_Integer) {
+          frame.pushOperand(Value::Int(entry.data.singleInteger));
+        } else if (entry.tag == ConstantPool::Tag::CONSTANT_Float) {
+          frame.pushOperand(Value::Float(entry.data.singleFloat));
+        } else if (entry.tag == ConstantPool::Tag::CONSTANT_String) {
+          frame.pushOperand(Value::Reference(runtimeConstantPool.getString(index)));
+        } else if (entry.tag == ConstantPool::Tag::CONSTANT_Class) {
+          auto klass = runtimeConstantPool.getClass(index);
+          // TODO: Check if class is loaded
+          frame.pushOperand(Value::Reference((*klass)->classInstance()));
+        } else {
+          assert(false && "Unknown LDC_W type!");
+        }
+        break;
+      }
       case Opcode::LDC2_W: {
         types::u2 index = cursor.readU2();
         auto& entry = frame.currentClass()->constantPool().getEntry(index);
@@ -116,7 +177,11 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         break;
       }
       case Opcode::ILOAD: frame.pushOperand(frame.loadValue(cursor.readU1())); break;
-      case Opcode::LLOAD: notImplemented(opcode); break;
+      case Opcode::LLOAD: {
+        auto index = cursor.readU1();
+        frame.pushOperand(frame.loadValue(index));
+        break;
+      }
       case Opcode::FLOAD: notImplemented(opcode); break;
       case Opcode::DLOAD: notImplemented(opcode); break;
       case Opcode::ALOAD: frame.pushOperand(frame.loadValue(cursor.readU1())); break;
@@ -154,7 +219,16 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         break;
       }
       case Opcode::BALOAD: notImplemented(opcode); break;
-      case Opcode::CALOAD: notImplemented(opcode); break;
+      case Opcode::CALOAD: {
+        int32_t index = frame.popOperand().asInt();
+        ArrayInstance* arrayRef = frame.popOperand().asReference()->asArrayInstance();
+
+        char16_t value = arrayRef->getArrayElement(index)->asChar();
+        frame.pushOperand(Value::Int(static_cast<int32_t>(value)));
+        // TODO: Check and throw exceptions
+
+        break;
+      }
       case Opcode::SALOAD: notImplemented(opcode); break;
       case Opcode::ISTORE: {
         auto index = cursor.readU1();
@@ -252,7 +326,10 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         break;
       }
       case Opcode::DUP_X2: notImplemented(opcode); break;
-      case Opcode::DUP2: notImplemented(opcode); break;
+      case Opcode::DUP2: {
+        notImplemented(opcode);
+        break;
+      }
       case Opcode::DUP2_X1: notImplemented(opcode); break;
       case Opcode::DUP2_X2: notImplemented(opcode); break;
       case Opcode::SWAP: notImplemented(opcode); break;
@@ -286,7 +363,13 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::LSUB: notImplemented(opcode); break;
       case Opcode::FSUB: notImplemented(opcode); break;
       case Opcode::DSUB: notImplemented(opcode); break;
-      case Opcode::IMUL: notImplemented(opcode); break;
+      case Opcode::IMUL: {
+        int32_t value2 = frame.popOperand().asInt();
+        int32_t value1 = frame.popOperand().asInt();
+        frame.pushOperand(Value::Int(value1 * value2));
+
+        break;
+      }
       case Opcode::LMUL: notImplemented(opcode); break;
       case Opcode::FMUL: {
         float value2 = frame.popOperand().asFloat();
@@ -324,7 +407,16 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::LNEG: notImplemented(opcode); break;
       case Opcode::FNEG: notImplemented(opcode); break;
       case Opcode::DNEG: notImplemented(opcode); break;
-      case Opcode::ISHL: notImplemented(opcode); break;
+      case Opcode::ISHL: {
+        int32_t value2 = frame.popOperand().asInt();
+        int32_t value1 = frame.popOperand().asInt();
+
+        uint32_t offset = std::bit_cast<uint32_t>(value2) & 0x0000001F;
+
+        frame.pushOperand(Value::Int(value1 << offset));
+
+        break;
+      }
       case Opcode::LSHL: {
         int32_t value2 = frame.popOperand().asInt();
         int64_t value1 = frame.popOperand().asLong();
@@ -471,8 +563,34 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::IF_ICMPGE: integerComparison(Predicate::GtEq, cursor, frame); break;
       case Opcode::IF_ICMPGT: integerComparison(Predicate::Gt, cursor, frame); break;
       case Opcode::IF_ICMPLE: integerComparison(Predicate::LtEq, cursor, frame); break;
-      case Opcode::IF_ACMPEQ: notImplemented(opcode); break;
-      case Opcode::IF_ACMPNE: notImplemented(opcode); break;
+      case Opcode::IF_ACMPEQ: {
+        auto opcodePos = cursor.position() - 1;
+
+        Instance* value2 = frame.popOperand().asReference();
+        Instance* value1 = frame.popOperand().asReference();
+
+        auto offset = std::bit_cast<int16_t>(cursor.readU2());
+
+        if (value1 == value2) {
+          cursor.set(opcodePos + offset);
+        }
+
+        break;
+      }
+      case Opcode::IF_ACMPNE: {
+        auto opcodePos = cursor.position() - 1;
+
+        Instance* value2 = frame.popOperand().asReference();
+        Instance* value1 = frame.popOperand().asReference();
+
+        auto offset = std::bit_cast<int16_t>(cursor.readU2());
+
+        if (value1 != value2) {
+          cursor.set(opcodePos + offset);
+        }
+
+        break;
+      }
       case Opcode::GOTO: {
         auto opcodePos = cursor.position() - 1;
         auto offset = std::bit_cast<int16_t>(cursor.readU2());
@@ -497,19 +615,13 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         vm.returnToCaller(Value::Double(frame.popOperand().asDouble()));
         return;
       }
-      case Opcode::ARETURN: vm.returnToCaller(frame.popOperand()); return;
+      case Opcode::ARETURN: vm.returnToCaller(Value::Reference(frame.popOperand().asReference())); return;
       case Opcode::RETURN: vm.returnToCaller(); return;
       case Opcode::GETSTATIC: {
         auto index = cursor.readU2();
         auto& fieldRef = runtimeConstantPool.getFieldRef(index);
 
-        auto klass = vm.resolveClass(fieldRef.className);
-        if (!klass) {
-          vm.raiseError(*klass.error());
-          // TODO: Abort frame
-        }
-
-        Value value = (*klass)->getStaticField(fieldRef.fieldName);
+        Value value = fieldRef.klass->getStaticField(fieldRef.fieldName);
         frame.pushOperand(value);
 
         break;
@@ -518,13 +630,7 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         auto index = cursor.readU2();
         auto& fieldRef = runtimeConstantPool.getFieldRef(index);
 
-        auto klass = vm.resolveClass(fieldRef.className);
-        if (!klass) {
-          vm.raiseError(*klass.error());
-          // TODO: Abort frame
-        }
-
-        (*klass)->storeStaticField(fieldRef.fieldName, frame.popOperand());
+        fieldRef.klass->storeStaticField(fieldRef.fieldName, frame.popOperand());
         break;
       }
       case Opcode::GETFIELD: {
@@ -534,6 +640,7 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
 
         // TODO: Null check
 
+        assert(objectRef->getClass()->isInstanceOf(field.klass));
         frame.pushOperand(objectRef->getFieldValue(field.fieldName));
         break;
       }
@@ -543,6 +650,7 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
 
         Value value = frame.popOperand();
         Instance* objectRef = frame.popOperand().asReference();
+        assert(objectRef->getClass()->isInstanceOf(field.klass));
 
         objectRef->setFieldValue(field.fieldName, value);
 
@@ -562,9 +670,15 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
 
         int numArgs = baseMethod->descriptor().parameters().size();
         Value objectRef = frame.peek(numArgs);
+        if (objectRef.asReference() == nullptr) {
+          vm.raiseError(u"java/lang/NullPointerException");
+          break;
+        }
 
         JClass* target = objectRef.asReference()->getClass();
         auto classAndMethod = target->getMethod(methodRef.methodName, methodRef.methodDescriptor);
+
+        assert(classAndMethod.has_value());
 
         vm.invoke(classAndMethod->klass->asInstanceClass(), classAndMethod->method);
         // TODO: signature method
@@ -708,42 +822,66 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         frame.pushOperand(Value::Int(arrayRef->length()));
         break;
       }
-      case Opcode::ATHROW: notImplemented(opcode); break;
+      case Opcode::ATHROW: {
+        auto exception = frame.popOperand().asReference();
+        frame.clearOperandStack();
+        frame.pushOperand(Value::Reference(exception));
+        frame.throwException(exception);
+        break;
+      }
       case Opcode::CHECKCAST: {
         types::u2 index = cursor.readU2();
-        auto klass = runtimeConstantPool.getClass(index);
-        if (!klass) {
-          vm.raiseError(*klass.error());
+        auto objectRef = frame.popOperand().asReference();
+        if (objectRef == nullptr) {
+          frame.pushOperand(Value::Reference(objectRef));
+        } else {
+          auto klass = runtimeConstantPool.getClass(index);
+          if (!klass) {
+            vm.raiseError(*klass.error());
+          }
+
+          JClass* classToCheck = objectRef->getClass();
+          if (!classToCheck->isInstanceOf(*klass)) {
+            assert(false && "TODO throw execption");
+          } else {
+            frame.pushOperand(Value::Reference(objectRef));
+          }
         }
 
-        // TODO: Implement check!
-        // notImplemented(opcode);
         break;
       }
       case Opcode::INSTANCEOF: {
-        // auto index = cursor.readU2();
-        // Instance* objectRef = frame.popOperand().asReference();
-        // if (objectRef == nullptr) {
-        //   frame.pushOperand(Value::Int(0));
-        // } else {
-        //   auto klass = runtimeConstantPool.getClass(index);
-        //   if (!klass) {
-        //     vm.raiseError(*klass.error());
-        //   }
-        //
-        //   JClass* classToCheck = objectRef->getClass();
-        //   // If S is an ordinary (nonarray) class, then:
-        //   // if (classToCheck->isClass()) {
-        //   // If T is a class type, then S must be the same class as T, or S must be a subclass of T;
-        //   classToCheck->isSubClassOf(*klass);
-        //   //}
-        // }
+        auto index = cursor.readU2();
+        Instance* objectRef = frame.popOperand().asReference();
+        if (objectRef == nullptr) {
+          frame.pushOperand(Value::Int(0));
+        } else {
+          auto klass = runtimeConstantPool.getClass(index);
+          if (!klass) {
+            vm.raiseError(*klass.error());
+          }
 
-        notImplemented(opcode);
+          JClass* classToCheck = objectRef->getClass();
+          if (classToCheck->isInstanceOf(*klass)) {
+            frame.pushOperand(Value::Int(1));
+          } else {
+            frame.pushOperand(Value::Int(0));
+          }
+        }
+
         break;
       }
-      case Opcode::MONITORENTER: notImplemented(opcode); break;
-      case Opcode::MONITOREXIT: notImplemented(opcode); break;
+      case Opcode::MONITORENTER: {
+        // FIXME
+        frame.popOperand();
+        break;
+      }
+      case Opcode::MONITOREXIT: {
+        // FIXME
+        frame.popOperand();
+        break;
+      }
+
       case Opcode::WIDE: notImplemented(opcode); break;
       case Opcode::MULTIANEWARRAY: notImplemented(opcode); break;
       case Opcode::IFNULL: {
@@ -774,6 +912,43 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::IMPDEP1: notImplemented(opcode); break;
       case Opcode::IMPDEP2: notImplemented(opcode); break;
       default: assert(false && "Unknown opcode!");
+    }
+
+    // Handle exception
+    if (auto exception = frame.currentException(); exception != nullptr) {
+      size_t pc = cursor.position() - 1;
+
+      bool handled = false;
+      for (auto& entry : code.exceptionTable()) {
+        if (pc < entry.startPc || pc >= entry.endPc) {
+          // The exception handler is not active
+          continue;
+        }
+
+        bool caught = false;
+        if (entry.catchType != 0) {
+          auto exceptionClass = runtimeConstantPool.getClass(entry.catchType);
+          assert(exceptionClass.has_value());
+          if (exception->getClass()->isInstanceOf(*exceptionClass)) {
+            caught = true;
+          }
+        } else {
+          caught = true;
+        }
+
+        if (caught) {
+          handled = true;
+          cursor.set(entry.handlerPc);
+          break;
+        }
+      }
+
+      if (!handled) {
+        vm.unwindToCaller(exception);
+        return;
+      } else {
+        frame.clearException();
+      }
     }
   }
 }

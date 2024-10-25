@@ -8,7 +8,7 @@ namespace geevm
 
 struct FieldRef
 {
-  types::JString className;
+  JClass* klass;
   types::JString fieldName;
   types::JString fieldDescriptor;
 };

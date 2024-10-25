@@ -11,9 +11,7 @@ public class StaticCallsToAnotherClass {
         }
 
         // Should print 15
-        __geevm_print(sum);
+        Printer.println(sum);
     }
-
-    public static native void __geevm_print(int value);
 
 }

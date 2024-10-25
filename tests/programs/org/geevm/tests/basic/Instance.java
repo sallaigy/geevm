@@ -10,13 +10,11 @@ public class Instance {
         int sum = instance.getNumber();
 
         // Should print 42
-        __geevm_print(sum);
+        Printer.println(sum);
     }
 
     private final int getNumber() {
         return 42;
     }
-
-    public static native void __geevm_print(int value);
 
 }

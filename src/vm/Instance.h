@@ -53,8 +53,8 @@ protected:
 class ArrayInstance : public Instance
 {
 public:
-  explicit ArrayInstance(JClass* arrayClass, size_t length)
-    : Instance(Kind::Array, arrayClass), mContents(length, Value::defaultValue(static_cast<ArrayClass*>(arrayClass)->getType()))
+  explicit ArrayInstance(ArrayClass* arrayClass, size_t length)
+    : Instance(Kind::Array, arrayClass), mContents(length, Value::defaultValue(arrayClass->elementType()))
   {
   }
 

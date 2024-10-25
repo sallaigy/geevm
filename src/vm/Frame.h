@@ -119,6 +119,11 @@ public:
     return mStorage.data.mReference;
   }
 
+  bool isCategoryTwo() const
+  {
+    return mStorage.kind == Kind::Double || mStorage.kind == Kind::Long;
+  }
+
   static Value defaultValue(const FieldType& fieldType)
   {
     if (auto primitiveType = fieldType.asPrimitive(); primitiveType) {
@@ -146,14 +151,19 @@ private:
 class CallFrame
 {
 public:
-  explicit CallFrame(InstanceClass* klass, JMethod* method)
-    : mClass(klass), mMethod(method), mLocalVariables(method->getCode().maxLocals(), Value::Int(0))
+  explicit CallFrame(InstanceClass* klass, JMethod* method, CallFrame* previous)
+    : mClass(klass), mMethod(method), mLocalVariables(method->getCode().maxLocals(), Value::Int(0)), mPrevious(previous)
   {
   }
 
   InstanceClass* currentClass()
   {
     return mClass;
+  }
+
+  JMethod* currentMethod()
+  {
+    return mMethod;
   }
 
   // Local variable manipulation
@@ -185,6 +195,7 @@ public:
 
   Value popOperand()
   {
+    assert(!mOperandStack.empty() && "Cannot pop from an empty operand stack!");
     Value value = mOperandStack.back();
     mOperandStack.pop_back();
     return value;
@@ -209,11 +220,49 @@ public:
     return mOperandStack[idx];
   }
 
+  const std::vector<Value>& operandStack() const
+  {
+    return mOperandStack;
+  }
+
+  const std::vector<Value>& locals() const
+  {
+    return mLocalVariables;
+  }
+
+  CallFrame* previous() const
+  {
+    return mPrevious;
+  }
+
+  Instance* currentException() const
+  {
+    return mCurrentException;
+  }
+
+  void throwException(Instance* exception)
+  {
+    assert(mCurrentException == nullptr);
+    mCurrentException = exception;
+  }
+
+  void clearException()
+  {
+    mCurrentException = nullptr;
+  }
+
+  void clearOperandStack()
+  {
+    mOperandStack.clear();
+  }
+
 private:
   std::vector<Value> mLocalVariables;
   std::vector<Value> mOperandStack;
   InstanceClass* mClass;
   JMethod* mMethod;
+  CallFrame* mPrevious;
+  Instance* mCurrentException = nullptr;
 };
 
 } // namespace geevm
