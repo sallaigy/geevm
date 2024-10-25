@@ -89,7 +89,9 @@ class JavaIntegrationTest:
     def exceptions(self):
         self.execute_tests('exceptions', [
             TestCase('exceptions.SimpleException',
-                     stdout='Caught exception: Exception thrown and caught in the same method.\n')
+                     stdout='Caught exception: Exception thrown and caught in the same method.\n'),
+            TestCase('exceptions.ExceptionInCallee',
+                     stdout='Caught exception: Exception thrown in callee.\n')
         ])
 
     def run(self):

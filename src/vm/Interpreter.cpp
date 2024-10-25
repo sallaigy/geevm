@@ -824,8 +824,6 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       }
       case Opcode::ATHROW: {
         auto exception = frame.popOperand().asReference();
-        frame.clearOperandStack();
-        frame.pushOperand(Value::Reference(exception));
         frame.throwException(exception);
         break;
       }

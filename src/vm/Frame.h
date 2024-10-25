@@ -244,6 +244,8 @@ public:
   {
     assert(mCurrentException == nullptr);
     mCurrentException = exception;
+    mOperandStack.clear();
+    mOperandStack.push_back(Value::Reference(exception));
   }
 
   void clearException()
