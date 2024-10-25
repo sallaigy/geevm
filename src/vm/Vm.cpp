@@ -14,23 +14,49 @@ void Vm::initialize()
   this->resolveClass(u"java/lang/Class");
   this->resolveClass(u"java/lang/String");
 
-  auto systemCls = this->resolveClass(u"java/lang/System");
-  auto initMethod = (*systemCls)->getMethod(u"initializeSystemClass", u"()V");
+  // auto threadCls = this->resolveClass(u"java/lang/Thread");
+  // auto threadGroupCls = this->resolveClass(u"java/lang/ThreadGroup");
+  //
+  // mCurrentThread = std::make_unique<Instance>(*threadCls);
+  // mCurrentThread->setFieldValue(u"priority", Value::Int(1));
+  //
+  // auto mainThreadGroup = this->newInstance((*threadGroupCls)->asInstanceClass());
+  // auto threadGroupCtor = (*threadGroupCls)->getMethod(u"<init>", u"(Ljava/lang/String;)V");
+  // // this->execute(threadGroupCtor->klass, threadGroupCtor->method, {Value::Reference(mainThreadGroup), Value::Reference(mInternedStrings.intern(u"main"))});
+  //
+  // auto threadCtor = (*threadCls)->getMethod(u"<init>", u"(Ljava/lang/ThreadGroup;Ljava/lang/String;)V");
+  // this->execute(threadCtor->klass, threadCtor->method,
+  //               {Value::Reference(mCurrentThread.get()), Value::Reference(mainThreadGroup), Value::Reference(mInternedStrings.intern(u"init"))});
+  //
+  // auto systemCls = this->resolveClass(u"java/lang/System");
+  // auto initMethod = (*systemCls)->getMethod(u"initializeSystemClass", u"()V");
+  //
+  // (*systemCls)->storeStaticField(u"lineSeparator", Value::Reference(mInternedStrings.intern(u"\n")));
+  //
+  // auto fisCls = this->resolveClass(u"java/io/FileInputStream");
+  // auto fosCls = this->resolveClass(u"java/io/FileOutputStream");
+  // auto printStreamCls = this->resolveClass(u"java/io/PrintStream");
+  //
+  // auto fdCls = this->resolveClass(u"java/io/FileDescriptor");
+  //
+  // auto fdCtor = (*fdCls)->getMethod(u"<init>", u"(I)V");
+  // auto outFd = this->newInstance((*fdCls)->asInstanceClass());
+  //
+  // this->execute((*fdCls)->asInstanceClass(), fdCtor->method, std::vector<Value>{Value::Reference(outFd), Value::Int(1)});
+  //
+  // auto fosCtor = (*fosCls)->getMethod(u"<init>", u"(I)V");
+  // auto outFos = this->newInstance((*fosCls)->asInstanceClass());
+  //
+  // this->execute(fosCtor->klass, fosCtor->method, {Value::Reference(outFos), Value::Reference(outFd)});
+  //
+  // auto outPs = this->newInstance((*printStreamCls)->asInstanceClass());
+  // auto outPsCtor = (*printStreamCls)->getMethod(u"<init>", u"(Ljava/io/OutputStream;Z)V");
+  //
+  // this->execute(outPsCtor->klass, outPsCtor->method, {Value::Reference(outPs), Value::Reference(outFos), Value::Int(1)});
+  //
+  // (*systemCls)->storeStaticField(u"out", Value::Reference(outPs));
 
-  (*systemCls)->storeStaticField(u"lineSeparator", Value::Reference(mInternedStrings.intern(u"\n")));
-
-  auto fisCls = this->resolveClass(u"java/io/FileInputStream");
-  auto fosCls = this->resolveClass(u"java/io/FileOutputStream");
-  auto printStreamCls = this->resolveClass(u"java/io/FileOutputStream");
-
-  auto fdCls = this->resolveClass(u"java/io/FileDescriptor");
-
-  auto fosCtor = (*fosCls)->getMethod(u"<init>", u"(I)V");
-  auto outFos = this->newInstance((*fosCls)->asInstanceClass());
-
-  this->execute((*fosCls)->asInstanceClass(), fosCtor->method, std::vector<Value>{Value::Reference(outFos), Value::Int(1)});
-
-  // this->execute(*systemCls, initMethod);
+  // this->execute((*systemCls)->asInstanceClass(), initMethod->method);
 }
 
 JMethod* Vm::resolveStaticMethod(JClass* klass, const types::JString& name, const types::JString& descriptor)
@@ -51,7 +77,8 @@ JvmExpected<JClass*> Vm::resolveClass(const types::JString& name)
 
 void Vm::execute(InstanceClass* klass, JMethod* method, const std::vector<Value>& args)
 {
-  CallFrame& frame = mCallStack.emplace_back(klass, method);
+  CallFrame* current = mCallStack.empty() ? nullptr : &mCallStack.back();
+  CallFrame& frame = mCallStack.emplace_back(klass, method, current);
   for (int i = 0; i < args.size(); ++i) {
     frame.storeValue(i, args[i]);
   }
@@ -64,9 +91,11 @@ void Vm::executeNative(InstanceClass* klass, JMethod* method, const std::vector<
 {
   auto nativeMethod = mNativeMethods.get(ClassNameAndDescriptor{klass->className(), method->name(), method->rawDescriptor()});
   if (nativeMethod) {
-    auto& newFrame = mCallStack.emplace_back(klass, method);
+    CallFrame* current = mCallStack.empty() ? nullptr : &mCallStack.back();
+    auto& newFrame = mCallStack.emplace_back(klass, method, current);
     auto retVal = (*nativeMethod)(*this, newFrame, args);
     mCallStack.pop_back();
+    assert(retVal.has_value() || method->descriptor().returnType().isVoid());
     if (retVal.has_value()) {
       mCallStack.back().pushOperand(*retVal);
     }
@@ -83,19 +112,17 @@ void Vm::invoke(InstanceClass* klass, JMethod* method)
 
   auto& prevFrame = mCallStack.back();
 
-  int opsToPop = numArgs;
-  int varIdx = opsToPop;
-  std::vector<Value> args{numArgs + 1, Value::Int(0)};
-  while (opsToPop > 0) {
+  std::vector<Value> args;
+  for (int i = 0; i < numArgs; i++) {
     Value value = prevFrame.popOperand();
-    args[varIdx] = value;
-    opsToPop -= 1;
-    varIdx -= 1;
+    args.push_back(value);
+    if (value.isCategoryTwo()) {
+      args.push_back(value);
+    }
   }
-  assert(varIdx == 0);
 
-  Value objectRef = prevFrame.popOperand();
-  args[0] = objectRef;
+  args.push_back(prevFrame.popOperand());
+  std::reverse(args.begin(), args.end());
 
   if (method->isNative()) {
     this->executeNative(klass, method, args);
@@ -172,13 +199,35 @@ void Vm::returnToCaller(Value returnValue)
   currentFrame().pushOperand(returnValue);
 }
 
+void Vm::unwindToCaller(Instance* instance)
+{
+  mCallStack.pop_back();
+  if (mCallStack.empty()) {
+    std::cerr << "Uncaught exception of type " << types::convertJString(instance->getClass()->className()) << std::endl;
+    return;
+  }
+
+  currentFrame().throwException(instance);
+}
+
 void Vm::raiseError(VmError& error)
 {
-  std::cerr << "Exception caught: " << types::convertJString(error.message()) << std::endl;
-  throw std::logic_error("aa");
+  // TODO
+  throw std::logic_error("Exception caught: " + types::convertJString(error.message()));
+}
+
+void Vm::raiseError(const types::JString& className)
+{
+  // TODO
+  throw std::logic_error("Exception caught: " + types::convertJString(className));
 }
 
 CallFrame& Vm::currentFrame()
 {
   return mCallStack.back();
+}
+
+Instance* Vm::currentThread()
+{
+  return mCurrentThread.get();
 }

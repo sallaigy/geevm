@@ -35,10 +35,11 @@ const FieldRef& RuntimeConstantPool::getFieldRef(types::u2 index)
   auto& entry = mConstantPool.getEntry(index);
   assert(entry.tag == ConstantPool::Tag::CONSTANT_Fieldref && "Can only fetch a method ref from a method ref entry!");
 
-  types::JString className{mConstantPool.getClassName(entry.data.classAndNameRef.classIndex)};
+  auto klass = this->getClass(entry.data.classAndNameRef.classIndex);
+  assert(klass.has_value() && "TODO: Return error if resolution fails.");
   auto [fieldName, descriptor] = mConstantPool.getNameAndType(entry.data.classAndNameRef.nameAndTypeIndex);
 
-  auto [it, _] = mFieldRefs.try_emplace(index, className, types::JString{fieldName}, types::JString{descriptor});
+  auto [it, _] = mFieldRefs.try_emplace(index, (*klass), types::JString{fieldName}, types::JString{descriptor});
   return it->second;
 }
 

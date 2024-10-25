@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <filesystem>
+#include <iostream>
 #include <utility>
 #include <zip.h>
 
@@ -32,7 +33,7 @@ JvmExpected<JClass*> BootstrapClassLoader::loadClass(const types::JString& name)
   }
 
   JvmExpected<std::unique_ptr<InstanceClass>> loadResult;
-  if (name.starts_with(u"java/") || name.starts_with(u"sun/")) {
+  if (name.starts_with(u"java/") || name.starts_with(u"sun/") || name.starts_with(u"jdk/")) {
     // TODO: replace
     JarLocation location{std::getenv("RT_JAR_PATH"), classNameToPath(name)};
     loadResult = location.resolve();
@@ -66,8 +67,13 @@ JvmExpected<ArrayClass*> BootstrapClassLoader::loadArrayClass(const types::JStri
     }
   }
 
-  auto [res, _] = mClasses.try_emplace(name, std::make_unique<ArrayClass>(name, *arrayType));
-  return res->second->asArrayClass();
+  auto [result, _] = mClasses.try_emplace(name, std::make_unique<ArrayClass>(name, *arrayType));
+  auto* klass = result->second->asArrayClass();
+
+  klass->prepare(*this);
+  klass->initialize(mVm);
+
+  return klass;
 }
 
 JvmExpected<std::unique_ptr<InstanceClass>> BaseClassLoader::loadClass(const types::JString& name)

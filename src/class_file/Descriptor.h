@@ -117,6 +117,11 @@ public:
     return mParameterTypes;
   }
 
+  const ReturnType& returnType() const
+  {
+    return mReturnType;
+  }
+
 private:
   ReturnType mReturnType;
   std::vector<FieldType> mParameterTypes;

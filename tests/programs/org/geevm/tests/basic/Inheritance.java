@@ -8,17 +8,15 @@ public class Inheritance {
     public static void main(String[] args) {
         Base base = new Base();
         // Should print '10'
-        __geevm_print(base.first());
+        Printer.println(base.first());
         // Should print '20'
-        __geevm_print(base.second());
+        Printer.println(base.second());
 
         Base derived = new Derived();
         // Should print '10'
-        __geevm_print(derived.first());
+        Printer.println(derived.first());
         // Should print '40'
-        __geevm_print(derived.second());
+        Printer.println(derived.second());
     }
-
-    public static native void __geevm_print(int value);
 
 }

@@ -10,25 +10,23 @@ public class IntegerCompareZero {
 
     private static void compare(int a) {
         if (a < 0) {
-            __geevm_print(0);
+            Printer.println(0);
         }
         if (a > 0) {
-            __geevm_print(1);
+            Printer.println(1);
         }
         if (a >= 0) {
-            __geevm_print(2);
+            Printer.println(2);
         }
         if (a <= 0) {
-            __geevm_print(3);
+            Printer.println(3);
         }
         if (a == 0) {
-            __geevm_print(4);
+            Printer.println(4);
         }
         if (a != 0) {
-            __geevm_print(5);
+            Printer.println(5);
         }
     }
-
-    public static native void __geevm_print(int value);
 
 }

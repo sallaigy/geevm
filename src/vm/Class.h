@@ -93,12 +93,25 @@ public:
   // Static polymorphism
   //==----------------------------------------------------------------------==//
   InstanceClass* asInstanceClass();
+  const InstanceClass* asInstanceClass() const;
   ArrayClass* asArrayClass();
+  const ArrayClass* asArrayClass() const;
 
   // Linking and initialization
   //==----------------------------------------------------------------------==//
   void prepare(BootstrapClassLoader& classLoader);
   void initialize(Vm& vm);
+
+  // Query methods
+  //==----------------------------------------------------------------------==//
+
+  /// Returns true iff this class represent an ordinary (nonarray) class that is not an interface.
+  bool isClassType() const;
+  bool isArrayType() const;
+  bool isInterface() const;
+
+  bool isInstanceOf(const JClass* other) const;
+  bool hasSuperInterface(const JClass* other) const;
 
 private:
   void linkSuperClass(types::JStringRef className, BootstrapClassLoader& classLoader);
@@ -158,20 +171,27 @@ private:
 
 class ArrayClass : public JClass
 {
+  friend class JClass;
+
 public:
   explicit ArrayClass(types::JString className, FieldType type)
     : JClass(Kind::Array, std::move(className)), mType(std::move(type))
   {
-    // FIXME
   }
 
-  const FieldType& getType() const
+  const FieldType& elementType() const
   {
     return mType;
   }
 
+  std::optional<JClass*> elementClass() const
+  {
+    return mElementClass;
+  }
+
 private:
   FieldType mType;
+  std::optional<JClass*> mElementClass = std::nullopt;
 };
 
 } // namespace geevm

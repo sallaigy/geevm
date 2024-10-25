@@ -5,6 +5,8 @@ import subprocess
 import tempfile
 import difflib
 
+from typing import List
+
 TESTS_DIRECTORY = pathlib.Path('org').absolute()
 
 
@@ -21,6 +23,14 @@ def run_javac(file: str, destdir: str):
     result = subprocess.run(javac_command, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
     if result.returncode != 0:
         raise RuntimeError("javac failed: " + result.stderr.decode())
+
+
+class TestCase:
+    def __init__(self, name, stdout=None, stderr=None):
+        assert (stdout != None or stderr != None)
+        self.name = name
+        self.expected_stdout = stdout
+        self.expected_stderr = stderr
 
 
 class JavaIntegrationTest:
@@ -54,35 +64,48 @@ class JavaIntegrationTest:
 
     def simple_math_programs(self):
         self.execute_tests('simple_math_programs', [
-            ('Count', '10\n'),
-            ('StaticCalls', '15\n'),
-            ('StaticCallsToAnotherClass', '15\n'),
-            ('StaticFields', '540\n'),
-            ('IntegerComparisons', '0\n3\n5\n1\n2\n5\n2\n3\n4\n'),
-            ('IntegerCompareZero', '1\n2\n5\n2\n3\n4\n0\n3\n5\n'),
-            ('StaticFieldsLong', '540\n')
+            TestCase('Count', '10\n'),
+            TestCase('StaticCalls', '15\n'),
+            TestCase('StaticCallsToAnotherClass', '15\n'),
+            TestCase('StaticFields', '540\n'),
+            TestCase('IntegerComparisons', '0\n3\n5\n1\n2\n5\n2\n3\n4\n'),
+            TestCase('IntegerCompareZero', '1\n2\n5\n2\n3\n4\n0\n3\n5\n'),
+            TestCase('StaticFieldsLong', '540\n')
         ])
 
     def oop_programs(self):
         self.execute_tests('oop_programs', [
-            ('Instance', '42\n'),
-            ('Inheritance', '10\n20\n10\n40\n'),
-            ('InheritanceFields', '10\n10\n10\n40\n')
+            TestCase('Instance', '42\n'),
+            TestCase('Inheritance', '10\n20\n10\n40\n'),
+            TestCase('InheritanceFields', '10\n10\n10\n40\n')
         ])
 
     def strings(self):
         self.execute_tests('strings', [
-            ('HelloWorld', 'Hello World!\n')
+            TestCase('strings.HelloWorld', 'Hello World!\n'),
+            TestCase('strings.StringEquals', 'true\nfalse\nfalse\ntrue\ntrue\nfalse\ntrue\nfalse\n')
+        ])
+
+    def exceptions(self):
+        self.execute_tests('exceptions', [
+            TestCase('exceptions.SimpleException',
+                     stdout='Caught exception: Exception thrown and caught in the same method.\n')
         ])
 
     def run(self):
         self.simple_math_programs()
         self.strings()
         self.oop_programs()
+        self.exceptions()
 
-    def execute_tests(self, test_suite_name, tests):
+    def execute_tests(self, test_suite_name, tests: List[TestCase]):
+        success: bool = True
         print(test_suite_name)
-        for class_name, expected in tests:
+        for test_case in tests:
+            class_name = test_case.name
+            expected_stdout = test_case.expected_stdout
+            expected_stderr = test_case.expected_stderr
+
             r = self.run_geevm_java(f'org.geevm.tests.basic.{class_name}')
             if r.returncode != 0:
                 print(f'  [{Color.RED}ERROR{Color.RESET}] {class_name}')
@@ -90,12 +113,22 @@ class JavaIntegrationTest:
                 print(r.stderr.decode())
                 continue
 
-            actual = r.stdout.decode()
-            if expected != actual:
-                print(f'  [{Color.RED}FAIL{Color.RESET}] {class_name}')
-                print(''.join(difflib.unified_diff(expected, actual, fromfile='expected', tofile='actual')))
-            else:
-                print(f'  [{Color.GREEN}PASS{Color.RESET}] {class_name}')
+            if expected_stdout is not None:
+                actual = r.stdout.decode()
+                success = self.compare(class_name, 'stdout', expected_stdout, actual) and success
+            if expected_stderr is not None:
+                actual = r.stdout.decode()
+                success = self.compare(class_name, 'stderr', expected_stderr, actual) and success
+
+    def compare(self, name, comparing, expected, actual) -> bool:
+        if expected != actual:
+            print(f'  [{Color.RED}FAIL{Color.RESET}] {name}')
+            print(f'actual {comparing} is different than expected')
+            print(''.join(difflib.context_diff(expected, actual, fromfile='expected', tofile='actual')))
+            return False
+        else:
+            print(f'  [{Color.GREEN}PASS{Color.RESET}] {name}')
+            return True
 
 
 if __name__ == "__main__":

@@ -10,25 +10,23 @@ public class IntegerComparisons {
 
     private static void compare(int a, int b) {
         if (a < b) {
-            __geevm_print(0);
+            Printer.println(0);
         }
         if (a > b) {
-            __geevm_print(1);
+            Printer.println(1);
         }
         if (a >= b) {
-            __geevm_print(2);
+            Printer.println(2);
         }
         if (a <= b) {
-            __geevm_print(3);
+            Printer.println(3);
         }
         if (a == b) {
-            __geevm_print(4);
+            Printer.println(4);
         }
         if (a != b) {
-            __geevm_print(5);
+            Printer.println(5);
         }
     }
-
-    public static native void __geevm_print(int value);
 
 }

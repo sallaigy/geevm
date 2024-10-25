@@ -14,10 +14,26 @@ ArrayClass* JClass::asArrayClass()
   return nullptr;
 }
 
+const ArrayClass* JClass::asArrayClass() const
+{
+  if (mKind == Kind::Array) {
+    return static_cast<const ArrayClass*>(this);
+  }
+  return nullptr;
+}
+
 InstanceClass* JClass::asInstanceClass()
 {
   if (mKind == Kind::Instance) {
     return static_cast<InstanceClass*>(this);
+  }
+  return nullptr;
+}
+
+const InstanceClass* JClass::asInstanceClass() const
+{
+  if (mKind == Kind::Instance) {
+    return static_cast<const InstanceClass*>(this);
   }
   return nullptr;
 }
@@ -35,7 +51,21 @@ void JClass::prepare(BootstrapClassLoader& classLoader)
 
   if (auto arrayClass = this->asArrayClass(); arrayClass != nullptr) {
     this->linkSuperClass(u"java/lang/Object", classLoader);
-    this->linkSuperInterfaces({u"java/lang/Cloneable", u"java/lang/Serializable"}, classLoader);
+    this->linkSuperInterfaces({u"java/lang/Cloneable", u"java/io/Serializable"}, classLoader);
+
+    auto& elementType = arrayClass->elementType();
+    if (auto primitiveType = elementType.asPrimitive(); primitiveType) {
+      if (elementType.dimensions() != 1) {
+        assert(false && "TODO");
+      }
+    } else if (auto objectName = elementType.asObjectName(); objectName) {
+      auto loaded = classLoader.loadClass(*objectName);
+      if (!loaded) {
+        // FIXME
+        assert(false);
+      }
+      arrayClass->mElementClass = *loaded;
+    }
   } else if (auto instanceClass = this->asInstanceClass(); instanceClass != nullptr) {
     if (auto superClass = instanceClass->constantPool().getOptionalClassName(instanceClass->mClassFile->superClass())) {
       this->linkSuperClass(*superClass, classLoader);
@@ -88,6 +118,10 @@ void JClass::initialize(Vm& vm)
     return;
   }
 
+  JClass* classClass = mClassInstance->getClass();
+  auto clsInstanceInit = vm.resolveMethod(classClass, u"<init>", u"()V");
+  vm.execute(classClass->asInstanceClass(), clsInstanceInit, {});
+
   if (auto instanceClass = this->asInstanceClass(); instanceClass != nullptr) {
     instanceClass->initializeFields();
 
@@ -114,11 +148,12 @@ void InstanceClass::linkFields()
     auto fieldType = FieldType::parse(descriptor);
     assert(fieldType.has_value());
 
-    mFields.try_emplace(NameAndDescriptor{fieldName, descriptor}, std::make_unique<JField>(field, *fieldType));
-
     if (hasAccessFlag(field.accessFlags(), FieldAccessFlags::ACC_STATIC)) {
       Value initialValue = Value::defaultValue(*fieldType);
       mStaticFields.try_emplace(fieldName, initialValue);
+    } else {
+      auto jfield = std::make_unique<JField>(field, *fieldType);
+      mFields.insert_or_assign(NameAndDescriptor{fieldName, descriptor}, std::move(jfield));
     }
   }
 }
@@ -205,6 +240,111 @@ Value JClass::getStaticField(types::JStringRef name)
 void JClass::storeStaticField(types::JStringRef name, Value value)
 {
   mStaticFields.at(name) = value;
+}
+
+bool JClass::isInstanceOf(const JClass* other) const
+{
+  // If S is 'this' and T is 'other':
+
+  // If S is an ordinary (nonarray) class, then:
+  if (this->isClassType()) {
+    // If T is a class type, then S must be the same class as T, or S must be a subclass of T;
+    if (other->isClassType()) {
+      auto superClass = this;
+      while (superClass != nullptr) {
+        if (superClass == other) {
+          return true;
+        }
+        superClass = superClass->superClass();
+      }
+      return false;
+    }
+
+    // If T is an interface type, then S must implement interface T.
+    if (other->isInterface()) {
+      return this->hasSuperInterface(other);
+    }
+
+    return false;
+  }
+
+  // If S is an interface type, then:
+  if (this->isInterface()) {
+    // If T is a class type, then T must be Object.
+    if (other->isClassType()) {
+      return other->className() == u"java/lang/Object";
+    }
+
+    // If T is an interface type, then T must be the same interface as S or a superinterface of S.
+    if (other->isInterface()) {
+      return this == other || this->hasSuperInterface(other);
+    }
+  }
+
+  // If S is a class representing the array type SC[], that is, an array of components of type SC, then:
+  if (auto arrayClass = this->asArrayClass(); arrayClass) {
+    // If T is a class type, then T must be Object.
+    if (other->isClassType()) {
+      return other->className() == u"java/lang/Object";
+    }
+    // If T is an interface type, then T must be one of the interfaces implemented by arrays (JLS §4.10.3).
+    if (other->isInterface()) {
+      return other->className() == u"java/lang/Cloneable" || other->className() == u"java/io/Serializable";
+    }
+    // If T is an array type TC[], that is, an array of components of type TC, then one of the following must be true:
+    if (auto otherArray = other->asArrayClass(); otherArray) {
+      auto leftElementTy = arrayClass->elementType();
+      auto rightElementTy = otherArray->elementType();
+
+      if (auto leftPrimitive = leftElementTy.asPrimitive(), rightPrimitive = rightElementTy.asPrimitive();
+          leftPrimitive.has_value() && rightPrimitive.has_value()) {
+        // TC and SC are the same primitive type.
+        return *leftPrimitive == *rightPrimitive;
+      } else if (auto leftCls = arrayClass->elementClass(), rightCls = otherArray->elementClass(); leftCls.has_value() && rightCls.has_value()) {
+        // TC and SC are reference types, and type SC can be cast to TC by these run-time rules.
+        return (*leftCls)->isInstanceOf(*rightCls);
+      }
+    }
+  }
+
+  return false;
+}
+
+bool JClass::hasSuperInterface(const JClass* other) const
+{
+  std::vector<JClass*> workList = this->superInterfaces();
+
+  while (!workList.empty()) {
+    JClass* interface = workList.back();
+    workList.pop_back();
+
+    if (interface == other) {
+      return true;
+    }
+    workList.insert(workList.end(), interface->superInterfaces().begin(), interface->superInterfaces().end());
+  }
+
+  if (mSuperClass != nullptr) {
+    return mSuperClass->hasSuperInterface(other);
+  }
+
+  return false;
+}
+
+bool JClass::isInterface() const
+{
+  if (auto instanceClass = this->asInstanceClass(); instanceClass) {
+    return hasAccessFlag(instanceClass->mClassFile->accessFlags(), ClassAccessFlags::ACC_INTERFACE);
+  }
+  return false;
+}
+
+bool JClass::isClassType() const
+{
+  if (auto instanceClass = this->asInstanceClass(); instanceClass) {
+    return !this->isInterface();
+  }
+  return false;
 }
 
 void InstanceClass::initializeRuntimeConstantPool(StringHeap& stringHeap, BootstrapClassLoader& classLoader)

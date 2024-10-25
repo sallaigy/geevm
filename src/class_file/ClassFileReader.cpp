@@ -310,11 +310,11 @@ std::vector<MethodInfo> ClassFileReader::readMethods(const ConstantPool& constan
         types::u2 exceptionTableLength = mStream.readU2();
         std::vector<Code::ExceptionTableEntry> exceptionTable;
         for (types::u2 j = 0; j < exceptionTableLength; ++j) {
-          exceptionTable.emplace_back(
-              /*startPc=*/mStream.readU2(),
-              /*endPc=*/mStream.readU2(),
-              /*handlerPc=*/mStream.readU2(),
-              /*catchType=*/mStream.readU2());
+          types::u2 startPc = mStream.readU2();
+          types::u2 endPc = mStream.readU2();
+          types::u2 handlerPc = mStream.readU2();
+          types::u2 catchType = mStream.readU2();
+          exceptionTable.emplace_back(startPc, endPc, handlerPc, catchType);
         }
 
         // Code attributes

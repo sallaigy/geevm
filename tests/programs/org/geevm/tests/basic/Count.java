@@ -11,9 +11,7 @@ public class Count {
             sum += 1;
         }
 
-        __geevm_print(sum);
+        Printer.println(sum);
     }
-
-    public static native void __geevm_print(int value);
 
 }

@@ -12,6 +12,8 @@
 #include "vm/NativeMethods.h"
 #include "vm/StringHeap.h"
 
+#include <list>
+
 namespace geevm
 {
 
@@ -36,14 +38,17 @@ public:
   void returnToCaller();
 
   void returnToCaller(Value returnValue);
+  void unwindToCaller(Instance* instance);
 
   JMethod* resolveStaticMethod(JClass* klass, const types::JString& name, const types::JString& descriptor);
 
   JMethod* resolveMethod(JClass* klass, const types::JString& name, const types::JString& descriptor);
 
   void raiseError(VmError& error);
+  void raiseError(const types::JString& className);
 
   CallFrame& currentFrame();
+  Instance* currentThread();
 
   Instance* newInstance(InstanceClass* klass);
   ArrayInstance* newArrayInstance(ArrayClass* arrayClass, size_t size);
@@ -66,7 +71,9 @@ private:
   std::unordered_map<types::JString, std::unique_ptr<JClass>> mLoadedClasses;
   NativeMethodRegistry mNativeMethods;
   // Stack
-  std::vector<CallFrame> mCallStack;
+  std::list<CallFrame> mCallStack;
+  // TODO: We only support one thread
+  std::unique_ptr<Instance> mCurrentThread;
   // Method area
   std::vector<std::unique_ptr<Instance>> mHeap;
   StringHeap mInternedStrings;
