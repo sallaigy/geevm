@@ -3,10 +3,17 @@
 
 #include <class_file/Descriptor.h>
 
+#include <utility>
+
 #include "class_file/ClassFile.h"
 
 namespace geevm
 {
+class InstanceClass;
+}
+namespace geevm
+{
+class JClass;
 
 struct MethodRef
 {
@@ -18,8 +25,8 @@ struct MethodRef
 class JMethod
 {
 public:
-  explicit JMethod(const MethodInfo& methodInfo, types::JString name, types::JString rawDescriptor, MethodDescriptor descriptor)
-    : mMethodInfo(methodInfo), mName(name), mRawDescriptor(rawDescriptor), mDescriptor(std::move(descriptor))
+  explicit JMethod(const MethodInfo& methodInfo, InstanceClass* klass, types::JString name, types::JString rawDescriptor, MethodDescriptor descriptor)
+    : mClass(klass), mMethodInfo(methodInfo), mName(std::move(name)), mRawDescriptor(std::move(rawDescriptor)), mDescriptor(std::move(descriptor))
   {
   }
 
@@ -36,6 +43,11 @@ public:
   bool isNative() const
   {
     return hasAccessFlag(mMethodInfo.accessFlags(), MethodAccessFlags::ACC_NATIVE);
+  }
+
+  bool isVoid() const
+  {
+    return mDescriptor.returnType().isVoid();
   }
 
   const MethodInfo& getMethodInfo() const
@@ -63,8 +75,14 @@ public:
     return mRawDescriptor;
   }
 
+  InstanceClass* getClass() const
+  {
+    return mClass;
+  }
+
 private:
   const MethodInfo& mMethodInfo;
+  InstanceClass* mClass;
   types::JString mName;
   types::JString mRawDescriptor;
   MethodDescriptor mDescriptor;

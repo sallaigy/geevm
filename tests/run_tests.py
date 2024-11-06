@@ -91,7 +91,9 @@ class JavaIntegrationTest:
             TestCase('exceptions.SimpleException',
                      stdout='Caught exception: Exception thrown and caught in the same method.\n'),
             TestCase('exceptions.ExceptionInCallee',
-                     stdout='Caught exception: Exception thrown in callee.\n')
+                     stdout='Caught exception: Exception thrown in callee.\n'),
+            TestCase('exceptions.UncaughtException',
+                     stderr="Exception java.lang.IllegalStateException: 'Exception thrown in callee.'\n")
         ])
 
     def run(self):
@@ -119,14 +121,14 @@ class JavaIntegrationTest:
                 actual = r.stdout.decode()
                 success = self.compare(class_name, 'stdout', expected_stdout, actual) and success
             if expected_stderr is not None:
-                actual = r.stdout.decode()
+                actual = r.stderr.decode()
                 success = self.compare(class_name, 'stderr', expected_stderr, actual) and success
 
     def compare(self, name, comparing, expected, actual) -> bool:
         if expected != actual:
             print(f'  [{Color.RED}FAIL{Color.RESET}] {name}')
             print(f'actual {comparing} is different than expected')
-            print(''.join(difflib.context_diff(expected, actual, fromfile='expected', tofile='actual')))
+            print(''.join(difflib.unified_diff(expected, actual, fromfile='expected', tofile='actual')))
             return False
         else:
             print(f'  [{Color.GREEN}PASS{Color.RESET}] {name}')

@@ -19,8 +19,6 @@ public:
   {
   }
 
-  int32_t hash(types::JStringRef utf8) const;
-
   Instance* intern(types::JStringRef utf8);
 
 private:

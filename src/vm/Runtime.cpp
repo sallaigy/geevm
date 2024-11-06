@@ -9,7 +9,7 @@
 
 using namespace geevm;
 
-const MethodRef& RuntimeConstantPool::getMethodRef(types::u2 index)
+JMethod* RuntimeConstantPool::getMethodRef(types::u2 index)
 {
   if (auto it = mMethodRefs.find(index); it != mMethodRefs.end()) {
     return it->second;
@@ -22,7 +22,19 @@ const MethodRef& RuntimeConstantPool::getMethodRef(types::u2 index)
   types::JString className{mConstantPool.getClassName(entry.data.classAndNameRef.classIndex)};
   auto [methodName, descriptor] = mConstantPool.getNameAndType(entry.data.classAndNameRef.nameAndTypeIndex);
 
-  auto [it, _] = mMethodRefs.try_emplace(index, className, types::JString{methodName}, types::JString{descriptor});
+  auto klass = mBootstrapClassLoader.loadClass(className);
+  if (!klass) {
+    // TODO
+    assert(false && "Should resolve class in getMethodRef");
+  }
+
+  auto method = (*klass)->getVirtualMethod(types::JString{methodName}, types::JString{descriptor});
+  if (!method.has_value()) {
+    // TODO
+    assert(false);
+  }
+
+  auto [it, _] = mMethodRefs.try_emplace(index, *method);
   return it->second;
 }
 

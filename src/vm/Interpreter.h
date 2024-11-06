@@ -1,12 +1,16 @@
 #ifndef GEEVM_VM_INTERPRETER_H
 #define GEEVM_VM_INTERPRETER_H
 
-#include <memory>
-#include <span>
-
 #include "class_file/Attributes.h"
-#include "common/JvmTypes.h"
+#include "vm/Frame.h"
 
+#include <memory>
+#include <optional>
+
+namespace geevm
+{
+class JavaThread;
+}
 namespace geevm
 {
 
@@ -15,7 +19,7 @@ class Vm;
 class Interpreter
 {
 public:
-  virtual void execute(Vm& vm, const Code& code, std::size_t pc) = 0;
+  virtual std::optional<Value> execute(JavaThread& thread, const Code& code, std::size_t pc) = 0;
   virtual ~Interpreter() = default;
 };
 
