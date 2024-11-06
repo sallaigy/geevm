@@ -25,9 +25,11 @@ enum class Predicate
 class DefaultInterpreter : public Interpreter
 {
 public:
-  void execute(Vm& vm, const Code& code, std::size_t pc) override;
+  std::optional<Value> execute(JavaThread& thread, const Code& code, std::size_t startPc) override;
 
 private:
+  void invoke(JavaThread& thread, JMethod* method);
+
   void integerComparison(Predicate predicate, CodeCursor& cursor, CallFrame& frame);
   void integerComparisonToZero(Predicate predicate, CodeCursor& cursor, CallFrame& frame);
 };
@@ -44,59 +46,15 @@ static void notImplemented(Opcode opcode)
   throw std::runtime_error("Opcode not implemented: " + opcodeToString(opcode));
 }
 
-void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
+std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code& code, std::size_t startPc)
 {
   CodeCursor cursor(code.bytes(), startPc);
 
   while (cursor.hasNext()) {
     Opcode opcode = cursor.next();
-    CallFrame& frame = vm.currentFrame();
+    CallFrame& frame = thread.currentFrame();
     RuntimeConstantPool& runtimeConstantPool = frame.currentClass()->runtimeConstantPool();
 
-#if 0
-    std::cout << cursor.position() << " " << types::convertJString(frame.currentClass()->className() + u"#" + frame.currentMethod()->name() + u": ")
-              << opcodeToString(opcode) << "     ";
-    std::cout << "Locals=[";
-    for (size_t i = 0; i < frame.locals().size(); ++i) {
-      auto& entry = frame.locals()[i];
-      std::cout << i << ": ";
-      switch (entry.kind()) {
-        case Value::Kind::Byte: std::cout << "Byte(" << entry.asInt() << ")"; break;
-        case Value::Kind::Short: std::cout << "Short(" << entry.asInt() << ")"; break;
-        case Value::Kind::Int: std::cout << "Int(" << entry.asInt() << ")"; break;
-        case Value::Kind::Long: std::cout << "Long(" << entry.asLong() << ")"; break;
-        case Value::Kind::Char: std::cout << "Char(" << types::convertJString(types::JString{entry.asChar()}) << ")"; break;
-        case Value::Kind::Float: std::cout << "Float(" << entry.asFloat() << ")"; break;
-        case Value::Kind::Double: std::cout << "Double(" << entry.asDouble() << ")"; break;
-        case Value::Kind::ReturnAddress: std::cout << "ReturnAddress(" << entry.asInt() << ")"; break;
-        case Value::Kind::Reference:
-          std::cout << "Reference(" << (entry.asReference() != nullptr ? types::convertJString(entry.asReference()->getClass()->className()) : "null") << ")";
-          break;
-      }
-      std::cout << " ";
-    }
-    std::cout << "] ";
-    std::cout << "Stack=[";
-    for (auto& entry : frame.operandStack()) {
-      switch (entry.kind()) {
-        case Value::Kind::Byte: std::cout << "Byte(" << entry.asInt() << ")"; break;
-        case Value::Kind::Short: std::cout << "Short(" << entry.asInt() << ")"; break;
-        case Value::Kind::Int: std::cout << "Int(" << entry.asInt() << ")"; break;
-        case Value::Kind::Long: std::cout << "Long(" << entry.asLong() << ")"; break;
-        case Value::Kind::Char: std::cout << "Char(" << types::convertJString(types::JString{entry.asChar()}) << ")"; break;
-        case Value::Kind::Float: std::cout << "Float(" << entry.asFloat() << ")"; break;
-        case Value::Kind::Double: std::cout << "Double(" << entry.asDouble() << ")"; break;
-        case Value::Kind::ReturnAddress: std::cout << "ReturnAddress(" << entry.asInt() << ")"; break;
-        case Value::Kind::Reference:
-          std::cout << "Reference(" << (entry.asReference() != nullptr ? types::convertJString(entry.asReference()->getClass()->className()) : "null") << ")";
-          break;
-      }
-      std::cout << " ";
-    }
-    std::cout << "]" << std::endl;
-#endif
-
-    // std::cout << "#" << cursor.position() << " " << opcodeToString(opcode) << std::endl;
     switch (opcode) {
       case Opcode::NOP: notImplemented(opcode); break;
       case Opcode::ACONST_NULL: frame.pushOperand(Value::Reference(nullptr)); break;
@@ -602,21 +560,12 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       case Opcode::RET: notImplemented(opcode); break;
       case Opcode::TABLESWITCH: notImplemented(opcode); break;
       case Opcode::LOOKUPSWITCH: notImplemented(opcode); break;
-      case Opcode::IRETURN: {
-        vm.returnToCaller(frame.popOperand());
-        return;
-      }
-      case Opcode::LRETURN: notImplemented(opcode); break;
-      case Opcode::FRETURN: {
-        vm.returnToCaller(Value::Float(frame.popOperand().asFloat()));
-        return;
-      }
-      case Opcode::DRETURN: {
-        vm.returnToCaller(Value::Double(frame.popOperand().asDouble()));
-        return;
-      }
-      case Opcode::ARETURN: vm.returnToCaller(Value::Reference(frame.popOperand().asReference())); return;
-      case Opcode::RETURN: vm.returnToCaller(); return;
+      case Opcode::IRETURN: return Value::Int(frame.popOperand().asInt());
+      case Opcode::LRETURN: return Value::Long(frame.popOperand().asLong());
+      case Opcode::FRETURN: return Value::Float(frame.popOperand().asFloat());
+      case Opcode::DRETURN: return Value::Double(frame.popOperand().asDouble());
+      case Opcode::ARETURN: return Value::Reference(frame.popOperand().asReference());
+      case Opcode::RETURN: return std::nullopt;
       case Opcode::GETSTATIC: {
         auto index = cursor.readU2();
         auto& fieldRef = runtimeConstantPool.getFieldRef(index);
@@ -658,85 +607,58 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       }
       case Opcode::INVOKEVIRTUAL: {
         auto index = cursor.readU2();
-        auto methodRef = runtimeConstantPool.getMethodRef(index);
-
-        auto klass = vm.resolveClass(methodRef.className);
-        if (!klass) {
-          // TODO: Abort frame
-          vm.raiseError(*klass.error());
-        }
-
-        JMethod* baseMethod = (*klass)->getMethod(methodRef.methodName, methodRef.methodDescriptor)->method;
+        const JMethod* baseMethod = runtimeConstantPool.getMethodRef(index);
 
         int numArgs = baseMethod->descriptor().parameters().size();
         Value objectRef = frame.peek(numArgs);
         if (objectRef.asReference() == nullptr) {
-          vm.raiseError(u"java/lang/NullPointerException");
+          thread.throwException(u"java/lang/NullPointerException");
           break;
         }
 
         JClass* target = objectRef.asReference()->getClass();
-        auto classAndMethod = target->getMethod(methodRef.methodName, methodRef.methodDescriptor);
+        auto targetMethod = target->getVirtualMethod(baseMethod->name(), baseMethod->rawDescriptor());
 
-        assert(classAndMethod.has_value());
+        assert(targetMethod.has_value());
 
-        vm.invoke(classAndMethod->klass->asInstanceClass(), classAndMethod->method);
-        // TODO: signature method
+        this->invoke(thread, *targetMethod);
 
         break;
       }
       case Opcode::INVOKESPECIAL: {
         auto index = cursor.readU2();
-        auto& methodRef = runtimeConstantPool.getMethodRef(index);
+        JMethod* method = runtimeConstantPool.getMethodRef(index);
 
-        auto klass = vm.resolveClass(methodRef.className);
-        if (!klass) {
-          // TODO: Abort frame
-          vm.raiseError(*klass.error());
-        }
-
-        auto method = vm.resolveMethod(*klass, methodRef.methodName, methodRef.methodDescriptor);
-        vm.invoke((*klass)->asInstanceClass(), method);
+        this->invoke(thread, method);
 
         break;
       }
       case Opcode::INVOKESTATIC: {
         auto index = cursor.readU2();
-        auto& methodRef = runtimeConstantPool.getMethodRef(index);
+        JMethod* method = runtimeConstantPool.getMethodRef(index);
 
-        auto klass = vm.resolveClass(methodRef.className);
-        if (!klass) {
-          vm.raiseError(*klass.error());
-          // TODO: Abort frame
-        }
+        assert(method->isStatic());
 
-        auto method = vm.resolveStaticMethod(*klass, methodRef.methodName, methodRef.methodDescriptor);
-        vm.invokeStatic((*klass)->asInstanceClass(), method);
+        this->invoke(thread, method);
 
         break;
       }
       case Opcode::INVOKEINTERFACE: {
         auto index = cursor.readU2();
-        auto methodRef = runtimeConstantPool.getMethodRef(index);
+        JMethod* methodRef = runtimeConstantPool.getMethodRef(index);
 
         // Consume 'count'
         cursor.readU1();
         // Consume '0'
         cursor.readU1();
 
-        auto klass = vm.resolveClass(methodRef.className);
-        if (!klass) {
-          vm.raiseError(*klass.error());
-          // TODO: Abort frame
-        }
-
-        int numArgs = MethodDescriptor::parse(methodRef.methodDescriptor)->parameters().size();
+        int numArgs = methodRef->descriptor().parameters().size();
         Value objectRef = frame.peek(numArgs);
 
         JClass* target = objectRef.asReference()->getClass();
-        auto classAndMethod = target->getMethod(methodRef.methodName, methodRef.methodDescriptor);
+        auto method = target->getVirtualMethod(methodRef->name(), methodRef->rawDescriptor());
 
-        vm.invoke(classAndMethod->klass, classAndMethod->method);
+        this->invoke(thread, *method);
         break;
       }
       case Opcode::INVOKEDYNAMIC: notImplemented(opcode); break;
@@ -744,14 +666,14 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         auto index = cursor.readU2();
         auto className = frame.currentClass()->constantPool().getClassName(index);
 
-        auto klass = vm.resolveClass(types::JString{className});
+        auto klass = thread.resolveClass(types::JString{className});
         if (!klass) {
-          vm.raiseError(*klass.error());
           // TODO: Abort frame
+          assert(false);
         }
 
         if (auto instanceClass = (*klass)->asInstanceClass(); instanceClass != nullptr) {
-          Instance* instance = vm.newInstance(instanceClass);
+          Instance* instance = thread.heap().allocate(instanceClass);
           frame.pushOperand(Value::Reference(instance));
         } else {
           assert(false && "TODO new with array class");
@@ -789,12 +711,13 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
           default: assert(false && "impossible"); break;
         }
 
-        auto arrayClass = vm.resolveClass(arrayClsName);
+        auto arrayClass = thread.resolveClass(arrayClsName);
         if (!arrayClass) {
-          vm.raiseError(*arrayClass.error());
+          // TODO: Abort frame
+          assert(false);
         }
 
-        ArrayInstance* newInstance = vm.newArrayInstance((*arrayClass)->asArrayClass(), count);
+        ArrayInstance* newInstance = thread.heap().allocateArray((*arrayClass)->asArrayClass(), count);
         frame.pushOperand(Value::Reference(newInstance));
 
         break;
@@ -805,13 +728,14 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
 
         auto klass = runtimeConstantPool.getClass(index);
         if (!klass) {
-          vm.raiseError(*klass.error());
+          // TODO: Abort frame
+          assert(false);
         }
 
-        auto arrayClass = vm.resolveClass(u"[L" + types::JString{(*klass)->className()} + u";");
+        auto arrayClass = thread.resolveClass(u"[L" + types::JString{(*klass)->className()} + u";");
         assert(arrayClass.has_value());
 
-        ArrayInstance* array = vm.newArrayInstance((*arrayClass)->asArrayClass(), count);
+        ArrayInstance* array = thread.heap().allocateArray((*arrayClass)->asArrayClass(), count);
         frame.pushOperand(Value::Reference(array));
         // TODO: if count is less than zero, the anewarray instruction throws a NegativeArraySizeException.
 
@@ -824,7 +748,7 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       }
       case Opcode::ATHROW: {
         auto exception = frame.popOperand().asReference();
-        frame.throwException(exception);
+        thread.throwException(exception);
         break;
       }
       case Opcode::CHECKCAST: {
@@ -835,7 +759,8 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         } else {
           auto klass = runtimeConstantPool.getClass(index);
           if (!klass) {
-            vm.raiseError(*klass.error());
+            // TODO: Abort frame
+            assert(false);
           }
 
           JClass* classToCheck = objectRef->getClass();
@@ -856,7 +781,8 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
         } else {
           auto klass = runtimeConstantPool.getClass(index);
           if (!klass) {
-            vm.raiseError(*klass.error());
+            // TODO: Abort frame
+            assert(false);
           }
 
           JClass* classToCheck = objectRef->getClass();
@@ -913,7 +839,7 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
     }
 
     // Handle exception
-    if (auto exception = frame.currentException(); exception != nullptr) {
+    if (auto exception = thread.currentException(); exception != nullptr) {
       size_t pc = cursor.position() - 1;
 
       bool handled = false;
@@ -942,13 +868,14 @@ void DefaultInterpreter::execute(Vm& vm, const Code& code, std::size_t startPc)
       }
 
       if (!handled) {
-        vm.unwindToCaller(exception);
-        return;
+        return std::nullopt;
       } else {
-        frame.clearException();
+        thread.clearException();
       }
     }
   }
+
+  assert(false && "Should be unreachable");
 }
 
 static bool compareInt(Predicate predicate, Value val1, Value val2)
@@ -963,6 +890,16 @@ static bool compareInt(Predicate predicate, Value val1, Value val2)
   }
 
   std::unreachable();
+}
+
+void DefaultInterpreter::invoke(JavaThread& thread, JMethod* method)
+{
+  auto returnValue = thread.invoke(method);
+  assert(method->isVoid() || returnValue.has_value());
+
+  if (returnValue.has_value()) {
+    thread.currentFrame().pushOperand(*returnValue);
+  }
 }
 
 void DefaultInterpreter::integerComparison(Predicate predicate, CodeCursor& cursor, CallFrame& frame)

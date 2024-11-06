@@ -10,6 +10,7 @@ namespace geevm
 {
 
 class MethodRef;
+class JMethod;
 class FieldRef;
 class Instance;
 class JClass;
@@ -26,14 +27,14 @@ public:
 
   Instance* getString(types::u2 index);
 
-  const MethodRef& getMethodRef(types::u2 index);
+  JMethod* getMethodRef(types::u2 index);
   const FieldRef& getFieldRef(types::u2 index);
   JvmExpected<JClass*> getClass(types::u2 index);
 
   types::JStringRef getUtf8(types::u2 index);
 
 private:
-  std::unordered_map<types::u2, MethodRef> mMethodRefs;
+  std::unordered_map<types::u2, JMethod*> mMethodRefs;
   std::unordered_map<types::u2, FieldRef> mFieldRefs;
   std::unordered_map<types::u2, Instance*> mStrings;
   std::unordered_map<types::u2, JClass*> mClasses;

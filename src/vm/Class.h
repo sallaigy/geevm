@@ -80,7 +80,10 @@ public:
 
   // Methods and fields
   //==----------------------------------------------------------------------==//
-  std::optional<ClassAndMethod> getMethod(const types::JString& name, const types::JString& descriptor);
+  std::optional<JMethod*> getMethod(const types::JString& name, const types::JString& descriptor);
+
+  std::optional<JMethod*> getStaticMethod(const types::JString& name, const types::JString& descriptor);
+  std::optional<JMethod*> getVirtualMethod(const types::JString& name, const types::JString& descriptor);
 
   Value getStaticField(types::JStringRef name);
   void storeStaticField(types::JStringRef name, Value);

@@ -119,15 +119,15 @@ void JClass::initialize(Vm& vm)
   }
 
   JClass* classClass = mClassInstance->getClass();
-  auto clsInstanceInit = vm.resolveMethod(classClass, u"<init>", u"()V");
-  vm.execute(classClass->asInstanceClass(), clsInstanceInit, {});
+  auto clsInstanceInit = classClass->getVirtualMethod(u"<init>", u"()V");
+  vm.mainThread().executeCall(*clsInstanceInit, {});
 
   if (auto instanceClass = this->asInstanceClass(); instanceClass != nullptr) {
     instanceClass->initializeFields();
 
     auto clsInit = mMethods.find(NameAndDescriptor{u"<clinit>", u"()V"});
     if (clsInit != mMethods.end()) {
-      vm.execute(instanceClass, clsInit->second.get());
+      vm.mainThread().executeCall(clsInit->second.get(), {});
     }
   }
 
@@ -204,31 +204,45 @@ void InstanceClass::prepareMethods()
     assert(parsedDescriptor.has_value() && "Cannot parse descriptor");
 
     mMethods.try_emplace(NameAndDescriptor{name, descriptor},
-                         std::make_unique<JMethod>(method, types::JString{name}, types::JString{descriptor}, *parsedDescriptor));
+                         std::make_unique<JMethod>(method, this, types::JString{name}, types::JString{descriptor}, *parsedDescriptor));
   }
 }
 
-std::optional<ClassAndMethod> JClass::getMethod(const types::JString& name, const types::JString& descriptor)
+std::optional<JMethod*> JClass::getStaticMethod(const types::JString& name, const types::JString& descriptor)
+{
+  return this->getMethod(name, descriptor);
+}
+
+std::optional<JMethod*> JClass::getVirtualMethod(const types::JString& name, const types::JString& descriptor)
 {
   NameAndDescriptor pair{name, descriptor};
   if (auto it = mMethods.find(pair); it != mMethods.end()) {
-    assert(this->asInstanceClass() != nullptr);
-    return ClassAndMethod{this->asInstanceClass(), it->second.get()};
+    return it->second.get();
   }
 
   if (mSuperClass != nullptr) {
-    if (auto superClassMethod = mSuperClass->getMethod(name, descriptor); superClassMethod) {
+    if (auto superClassMethod = mSuperClass->getVirtualMethod(name, descriptor); superClassMethod) {
       return superClassMethod;
     }
   }
 
   for (JClass* superInterface : mSuperInterfaces) {
-    if (auto superClassMethod = superInterface->getMethod(name, descriptor); superClassMethod) {
+    if (auto superClassMethod = superInterface->getVirtualMethod(name, descriptor); superClassMethod) {
       return superClassMethod;
     }
   }
 
   // TODO: Return JvmExpected?
+  return std::nullopt;
+}
+
+std::optional<JMethod*> JClass::getMethod(const types::JString& name, const types::JString& descriptor)
+{
+  NameAndDescriptor pair{name, descriptor};
+  if (auto it = mMethods.find(pair); it != mMethods.end()) {
+    return it->second.get();
+  }
+
   return std::nullopt;
 }
 

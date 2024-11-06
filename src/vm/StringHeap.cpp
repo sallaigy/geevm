@@ -10,21 +10,17 @@ Instance* StringHeap::intern(types::JStringRef utf8)
   }
 
   auto stringClass = mVm.resolveClass(u"java/lang/String");
-  if (!stringClass) {
-    mVm.raiseError(*stringClass.error());
-  }
+  assert(stringClass.has_value() && "java/lang/String should be available!");
 
   auto charArrayClass = mVm.resolveClass(u"[C");
-  if (!charArrayClass) {
-    mVm.raiseError(*charArrayClass.error());
-  }
+  assert(charArrayClass.has_value() && "The array class '[C' should be available!");
 
-  ArrayInstance* stringContents = mVm.newArrayInstance((*charArrayClass)->asArrayClass(), utf8.size());
+  ArrayInstance* stringContents = mVm.heap().allocateArray((*charArrayClass)->asArrayClass(), utf8.size());
   for (int32_t i = 0; i < utf8.size(); ++i) {
     stringContents->setArrayElement(i, Value::Char(utf8[i]));
   }
 
-  Instance* newInstance = mVm.newInstance((*stringClass)->asInstanceClass());
+  Instance* newInstance = mVm.heap().allocate((*stringClass)->asInstanceClass());
   newInstance->setFieldValue(u"value", Value::Reference(stringContents));
 
   auto [res, _] = mInternedStrings.try_emplace(utf8, newInstance);

@@ -151,14 +151,14 @@ private:
 class CallFrame
 {
 public:
-  explicit CallFrame(InstanceClass* klass, JMethod* method, CallFrame* previous)
-    : mClass(klass), mMethod(method), mLocalVariables(method->getCode().maxLocals(), Value::Int(0)), mPrevious(previous)
+  explicit CallFrame(JMethod* method, CallFrame* previous)
+    : mMethod(method), mLocalVariables(method->getCode().maxLocals(), Value::Int(0)), mPrevious(previous)
   {
   }
 
   InstanceClass* currentClass()
   {
-    return mClass;
+    return mMethod->getClass();
   }
 
   JMethod* currentMethod()
@@ -235,24 +235,6 @@ public:
     return mPrevious;
   }
 
-  Instance* currentException() const
-  {
-    return mCurrentException;
-  }
-
-  void throwException(Instance* exception)
-  {
-    assert(mCurrentException == nullptr);
-    mCurrentException = exception;
-    mOperandStack.clear();
-    mOperandStack.push_back(Value::Reference(exception));
-  }
-
-  void clearException()
-  {
-    mCurrentException = nullptr;
-  }
-
   void clearOperandStack()
   {
     mOperandStack.clear();
@@ -261,10 +243,8 @@ public:
 private:
   std::vector<Value> mLocalVariables;
   std::vector<Value> mOperandStack;
-  InstanceClass* mClass;
   JMethod* mMethod;
   CallFrame* mPrevious;
-  Instance* mCurrentException = nullptr;
 };
 
 } // namespace geevm

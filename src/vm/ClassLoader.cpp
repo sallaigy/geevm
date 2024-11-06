@@ -48,7 +48,7 @@ JvmExpected<JClass*> BootstrapClassLoader::loadClass(const types::JString& name)
   auto [result, _] = mClasses.try_emplace(name, std::move(*loadResult));
   auto* klass = result->second->asInstanceClass();
 
-  klass->initializeRuntimeConstantPool(mVm.internedStrings(), *this);
+  klass->initializeRuntimeConstantPool(mVm.heap().stringHeap(), *this);
   klass->prepare(*this);
   klass->initialize(mVm);
 

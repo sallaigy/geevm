@@ -1,3 +1,4 @@
+#include "vm/Thread.h"
 #include "vm/Vm.h"
 
 #include <algorithm>
@@ -19,17 +20,16 @@ int main(int argc, char* argv[])
   auto mainClass = vm->resolveClass(mainClassName);
 
   if (!mainClass) {
-    vm->raiseError(*mainClass.error());
     return 1;
   }
 
-  auto mainMethod = vm->resolveStaticMethod(*mainClass, u"main", u"([Ljava/lang/String;)V");
+  auto mainMethod = (*mainClass)->getMethod(u"main", u"([Ljava/lang/String;)V");
   if (!mainMethod) {
     // TODO: Raise error
     return 1;
   }
 
-  vm->execute((*mainClass)->asInstanceClass(), mainMethod);
+  vm->mainThread().executeCall(*mainMethod, {});
 
   return 0;
 }
