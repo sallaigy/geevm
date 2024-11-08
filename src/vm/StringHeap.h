@@ -1,15 +1,14 @@
 #ifndef GEEVM_STRINGHEAP_H
 #define GEEVM_STRINGHEAP_H
-#include "Instance.h"
 
 #include <common/JvmTypes.h>
 #include <unordered_map>
-#include <vector>
 
 namespace geevm
 {
 
 class Vm;
+class Instance;
 
 class StringHeap
 {

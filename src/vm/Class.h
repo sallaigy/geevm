@@ -2,6 +2,8 @@
 #define GEEVM_VM_CLASS_H
 
 #include "Frame.h"
+#include "Heap.h"
+#include "Thread.h"
 
 #include <unordered_map>
 
@@ -9,6 +11,7 @@
 #include "common/Hash.h"
 #include "common/JvmTypes.h"
 #include "vm/Field.h"
+#include "vm/Instance.h"
 #include "vm/Method.h"
 #include "vm/Runtime.h"
 
@@ -19,6 +22,7 @@ class StringHeap;
 class InstanceClass;
 class ArrayClass;
 class JMethod;
+class JavaHeap;
 
 // using ClassAndMethod = std::pair<JClass*,JMethod*>;
 
@@ -49,10 +53,7 @@ public:
   };
 
 protected:
-  JClass(Kind kind, types::JString className)
-    : mKind(kind), mStatus(Status::Allocated), mClassName(std::move(className))
-  {
-  }
+  JClass(Kind kind, types::JString className);
 
 public:
   // Basic class metadata
@@ -102,8 +103,8 @@ public:
 
   // Linking and initialization
   //==----------------------------------------------------------------------==//
-  void prepare(BootstrapClassLoader& classLoader);
-  void initialize(Vm& vm);
+  void prepare(BootstrapClassLoader& classLoader, JavaHeap& heap);
+  void initialize(JavaThread& thread);
 
   // Query methods
   //==----------------------------------------------------------------------==//
@@ -115,6 +116,16 @@ public:
 
   bool isInstanceOf(const JClass* other) const;
   bool hasSuperInterface(const JClass* other) const;
+
+  bool isInitialized() const
+  {
+    return mStatus >= Status::Initialized;
+  }
+
+  bool isUnderInitialization() const
+  {
+    return mStatus == Status::UnderInitialization;
+  }
 
 private:
   void linkSuperClass(types::JStringRef className, BootstrapClassLoader& classLoader);

@@ -16,8 +16,8 @@ struct FieldRef
 class JField
 {
 public:
-  JField(const FieldInfo& fieldInfo, FieldType fieldType)
-    : mFieldInfo(fieldInfo), mFieldType(std::move(fieldType))
+  JField(const FieldInfo& fieldInfo, types::JString name, FieldType fieldType)
+    : mFieldInfo(fieldInfo), mName(std::move(name)), mFieldType(std::move(fieldType))
   {
   }
 
@@ -36,6 +36,11 @@ public:
     return mFieldInfo.accessFlags();
   }
 
+  const types::JString& name() const
+  {
+    return mName;
+  }
+
   bool isStatic() const
   {
     return hasAccessFlag(mFieldInfo.accessFlags(), FieldAccessFlags::ACC_STATIC);
@@ -46,9 +51,15 @@ public:
     return hasAccessFlag(mFieldInfo.accessFlags(), FieldAccessFlags::ACC_FINAL);
   }
 
+  bool isPublic() const
+  {
+    return hasAccessFlag(mFieldInfo.accessFlags(), FieldAccessFlags::ACC_PUBLIC);
+  }
+
 private:
   const FieldInfo& mFieldInfo;
   FieldType mFieldType;
+  types::JString mName;
 };
 
 } // namespace geevm

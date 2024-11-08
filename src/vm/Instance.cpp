@@ -32,6 +32,11 @@ Value Instance::getFieldValue(types::JStringRef fieldName)
   return mFields.at(fieldName);
 }
 
+ArrayInstance::ArrayInstance(ArrayClass* arrayClass, size_t length)
+  : Instance(Kind::Array, arrayClass), mContents(length, Value::defaultValue(arrayClass->elementType()))
+{
+}
+
 ArrayInstance* Instance::asArrayInstance()
 {
   assert(mKind == Kind::Array);

@@ -53,10 +53,7 @@ protected:
 class ArrayInstance : public Instance
 {
 public:
-  explicit ArrayInstance(ArrayClass* arrayClass, size_t length)
-    : Instance(Kind::Array, arrayClass), mContents(length, Value::defaultValue(arrayClass->elementType()))
-  {
-  }
+  ArrayInstance(ArrayClass* arrayClass, size_t length);
 
   JvmExpected<Value> getArrayElement(int32_t index);
   JvmExpected<void> setArrayElement(int32_t index, Value value);

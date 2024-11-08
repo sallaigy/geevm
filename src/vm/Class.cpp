@@ -1,10 +1,16 @@
 #include "vm/Class.h"
+#include "vm/Instance.h"
 
 #include "Vm.h"
 
 #include <utility>
 
 using namespace geevm;
+
+JClass::JClass(Kind kind, types::JString className)
+  : mKind(kind), mStatus(Status::Allocated), mClassName(std::move(className))
+{
+}
 
 ArrayClass* JClass::asArrayClass()
 {
@@ -43,7 +49,7 @@ InstanceClass::InstanceClass(std::unique_ptr<ClassFile> classFile)
 {
 }
 
-void JClass::prepare(BootstrapClassLoader& classLoader)
+void JClass::prepare(BootstrapClassLoader& classLoader, JavaHeap& heap)
 {
   if (mStatus >= Status::Prepared) {
     return;
@@ -112,24 +118,36 @@ void JClass::linkSuperInterfaces(const std::vector<types::JStringRef>& interface
   }
 }
 
-void JClass::initialize(Vm& vm)
+void JClass::initialize(JavaThread& thread)
 {
   if (mStatus >= Status::UnderInitialization) {
     return;
   }
 
-  JClass* classClass = mClassInstance->getClass();
-  auto clsInstanceInit = classClass->getVirtualMethod(u"<init>", u"()V");
-  vm.mainThread().executeCall(*clsInstanceInit, {});
+  mStatus = Status::UnderInitialization;
+
+  if (mSuperClass != nullptr) {
+    mSuperClass->initialize(thread);
+  }
+
+  for (JClass* interface : mSuperInterfaces) {
+    interface->initialize(thread);
+  }
 
   if (auto instanceClass = this->asInstanceClass(); instanceClass != nullptr) {
     instanceClass->initializeFields();
 
     auto clsInit = mMethods.find(NameAndDescriptor{u"<clinit>", u"()V"});
     if (clsInit != mMethods.end()) {
-      vm.mainThread().executeCall(clsInit->second.get(), {});
+      thread.executeCall(clsInit->second.get(), {});
     }
   }
+
+  // JClass* classClass = mClassInstance->getClass();
+  // auto clsInstanceInit = classClass->getVirtualMethod(u"<init>", u"()V");
+  // thread.executeCall(*clsInstanceInit, {});
+
+  // mClassInstance->setFieldValue(u"name", Value::Reference(thread.heap().intern(mClassName)));
 
   mStatus = Status::Initialized;
 }
@@ -138,7 +156,7 @@ void InstanceClass::linkFields()
 {
   if (this->superClass() != nullptr) {
     for (auto& [name, value] : this->superClass()->fields()) {
-      mFields.try_emplace(name, std::make_unique<JField>(value->fieldInfo(), value->fieldType()));
+      mFields.try_emplace(name, std::make_unique<JField>(value->fieldInfo(), name.first, value->fieldType()));
     }
   }
 
@@ -152,7 +170,7 @@ void InstanceClass::linkFields()
       Value initialValue = Value::defaultValue(*fieldType);
       mStaticFields.try_emplace(fieldName, initialValue);
     } else {
-      auto jfield = std::make_unique<JField>(field, *fieldType);
+      auto jfield = std::make_unique<JField>(field, types::JString{fieldName}, *fieldType);
       mFields.insert_or_assign(NameAndDescriptor{fieldName, descriptor}, std::move(jfield));
     }
   }

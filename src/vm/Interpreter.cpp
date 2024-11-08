@@ -5,6 +5,7 @@
 #include "class_file/Code.h"
 #include "class_file/Opcode.h"
 #include "vm/Frame.h"
+#include "vm/Instance.h"
 #include "vm/Vm.h"
 
 using namespace geevm;
@@ -285,7 +286,19 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
       }
       case Opcode::DUP_X2: notImplemented(opcode); break;
       case Opcode::DUP2: {
-        notImplemented(opcode);
+        // Category 1
+        Value value1 = frame.popOperand();
+        if (value1.isCategoryTwo()) {
+          frame.pushOperand(value1);
+          frame.pushOperand(value1);
+        } else {
+          Value value2 = frame.popOperand();
+          frame.pushOperand(value2);
+          frame.pushOperand(value1);
+          frame.pushOperand(value2);
+          frame.pushOperand(value1);
+        }
+
         break;
       }
       case Opcode::DUP2_X1: notImplemented(opcode); break;
@@ -570,7 +583,10 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         auto index = cursor.readU2();
         auto& fieldRef = runtimeConstantPool.getFieldRef(index);
 
-        Value value = fieldRef.klass->getStaticField(fieldRef.fieldName);
+        JClass* klass = fieldRef.klass;
+        klass->initialize(thread);
+
+        Value value = klass->getStaticField(fieldRef.fieldName);
         frame.pushOperand(value);
 
         break;
@@ -579,7 +595,10 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         auto index = cursor.readU2();
         auto& fieldRef = runtimeConstantPool.getFieldRef(index);
 
-        fieldRef.klass->storeStaticField(fieldRef.fieldName, frame.popOperand());
+        JClass* klass = fieldRef.klass;
+        klass->initialize(thread);
+        klass->storeStaticField(fieldRef.fieldName, frame.popOperand());
+
         break;
       }
       case Opcode::GETFIELD: {
@@ -636,8 +655,9 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
       case Opcode::INVOKESTATIC: {
         auto index = cursor.readU2();
         JMethod* method = runtimeConstantPool.getMethodRef(index);
-
         assert(method->isStatic());
+
+        method->getClass()->initialize(thread);
 
         this->invoke(thread, method);
 
@@ -671,6 +691,8 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
           // TODO: Abort frame
           assert(false);
         }
+
+        (*klass)->initialize(thread);
 
         if (auto instanceClass = (*klass)->asInstanceClass(); instanceClass != nullptr) {
           Instance* instance = thread.heap().allocate(instanceClass);
@@ -895,7 +917,7 @@ static bool compareInt(Predicate predicate, Value val1, Value val2)
 void DefaultInterpreter::invoke(JavaThread& thread, JMethod* method)
 {
   auto returnValue = thread.invoke(method);
-  assert(method->isVoid() || returnValue.has_value());
+  assert((method->isVoid() || thread.currentException() != nullptr) || returnValue.has_value());
 
   if (returnValue.has_value()) {
     thread.currentFrame().pushOperand(*returnValue);

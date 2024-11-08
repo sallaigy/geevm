@@ -49,6 +49,9 @@ public:
 private:
   void registerNatives();
 
+  /// Resolves and initializes a core class
+  JClass* requireClass(const types::JString& name);
+
 private:
   BootstrapClassLoader mBootstrapClassLoader;
   std::unordered_map<types::JString, std::unique_ptr<JClass>> mLoadedClasses;
