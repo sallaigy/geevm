@@ -30,7 +30,7 @@ public:
   Instance* allocate(InstanceClass* klass);
   ArrayInstance* allocateArray(ArrayClass* klass, size_t length);
 
-  Instance* intern(types::JStringRef utf8)
+  Instance* intern(const types::JString& utf8)
   {
     return mInternedStrings.intern(utf8);
   }

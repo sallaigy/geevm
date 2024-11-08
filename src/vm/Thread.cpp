@@ -8,6 +8,11 @@
 
 using namespace geevm;
 
+JavaThread::JavaThread(Vm& vm)
+  : mVm(vm)
+{
+}
+
 void JavaThread::initialize(const types::JString& name, Instance* threadGroup)
 {
   auto klass = mVm.resolveClass(u"java/lang/Thread");
@@ -17,12 +22,23 @@ void JavaThread::initialize(const types::JString& name, Instance* threadGroup)
 
   auto nameInstance = heap().intern(name);
   mThreadInstance->setFieldValue(u"name", Value::Reference(nameInstance));
-
-  auto address = std::bit_cast<int64_t>(this);
-  mThreadInstance->setFieldValue(u"eetop", Value::Long(address));
-
+  mThreadInstance->setFieldValue(u"eetop", Value::Long((long)mNativeThread.native_handle()));
   mThreadInstance->setFieldValue(u"group", Value::Reference(threadGroup));
   mThreadInstance->setFieldValue(u"uncaughtExceptionHandler", Value::Reference(threadGroup));
+  mThreadInstance->setFieldValue(u"priority", Value::Int(10));
+}
+
+void JavaThread::start(JMethod* method, std::vector<Value> arguments)
+{
+  mMethod = method;
+  mArguments = std::move(arguments);
+  mNativeThread = std::jthread([this]() { this->run(); });
+  mThreadInstance->setFieldValue(u"eetop", Value::Long((long)mNativeThread.native_handle()));
+}
+
+void JavaThread::run()
+{
+  this->executeCall(mMethod, mArguments);
 }
 
 JavaHeap& JavaThread::heap()
@@ -33,6 +49,17 @@ JavaHeap& JavaThread::heap()
 JvmExpected<JClass*> JavaThread::resolveClass(const types::JString& name)
 {
   return mVm.resolveClass(name);
+}
+
+Instance* JavaThread::newInstance(const types::JString& className)
+{
+  auto klass = mVm.resolveClass(className);
+  if (!klass) {
+    // TODO
+    assert(false && "TODO");
+  }
+
+  return heap().allocate((*klass)->asInstanceClass());
 }
 
 std::optional<Value> JavaThread::invoke(JMethod* method)

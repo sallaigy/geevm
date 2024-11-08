@@ -3,6 +3,7 @@
 #include "vm/Vm.h"
 
 #include <iostream>
+#include <signal.h>
 #include <utility>
 
 using namespace geevm;
@@ -30,6 +31,8 @@ static std::optional<Value> noop(JavaThread& thread, CallFrame& frame, const std
 static std::optional<Value> return_nullptr(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 
 static std::optional<Value> java_lang_Object_hashCode(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> java_lang_Object_getClass(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> java_lang_Object_wait(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> java_lang_System_initProperties(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> java_lang_System_arraycopy(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 
@@ -37,6 +40,7 @@ static std::optional<Value> java_lang_Class_getPrimitiveClass(JavaThread& thread
 static std::optional<Value> java_lang_Class_desiredAssertionStatus0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> java_lang_Class_getName0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> java_lang_Class_forName0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> java_lang_Class_getDeclaredFields0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 
 static std::optional<Value> java_lang_Float_floatToRawIntBits(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> java_lang_Double_doubleToRawIntBits(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
@@ -45,7 +49,11 @@ static std::optional<Value> java_lang_Double_longBitsToDouble(JavaThread& thread
 static std::optional<Value> sun_misc_Unsafe_arrayBaseOffset(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> sun_reflect_Reflection_getCallerClass(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> java_security_AccessController_doPrivileged(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+
 static std::optional<Value> java_lang_Thread_currentThread(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> java_lang_Thread_isAlive(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> java_lang_Thread_start0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+
 static std::optional<Value> java_lang_Throwable_fillInStackTrace(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 
 static std::optional<Value> java_lang_String_intern(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
@@ -102,6 +110,9 @@ void Vm::registerNatives()
   // java.lang.Object
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Object", u"registerNatives", u"()V"}, noop);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Object", u"hashCode", u"()I"}, java_lang_Object_hashCode);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Object", u"getClass", u"()Ljava/lang/Class;"}, java_lang_Object_getClass);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Object", u"wait", u"(J)V"}, java_lang_Object_wait);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Object", u"wait", u"()V"}, java_lang_Object_wait);
 
   // java.lang.System
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/System", u"registerNatives", u"()V"}, noop);
@@ -120,6 +131,8 @@ void Vm::registerNatives()
   mNativeMethods.registerNativeMethod(
       ClassNameAndDescriptor{u"java/lang/Class", u"forName0", u"(Ljava/lang/String;ZLjava/lang/ClassLoader;Ljava/lang/Class;)Ljava/lang/Class;"},
       java_lang_Class_forName0);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Class", u"getDeclaredFields0", u"(Z)[Ljava/lang/reflect/Field;"},
+                                      java_lang_Class_getDeclaredFields0);
 
   // java.lang.String
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/String", u"intern", u"()Ljava/lang/String;"}, java_lang_String_intern);
@@ -128,6 +141,8 @@ void Vm::registerNatives()
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Thread", u"registerNatives", u"()V"}, noop);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Thread", u"currentThread", u"()Ljava/lang/Thread;"}, java_lang_Thread_currentThread);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Thread", u"setPriority0", u"(I)V"}, noop);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Thread", u"isAlive", u"()Z"}, java_lang_Thread_isAlive);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Thread", u"start0", u"()V"}, java_lang_Thread_start0);
 
   // java.lang.Float
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Float", u"floatToRawIntBits", u"(F)I"}, java_lang_Float_floatToRawIntBits);
@@ -189,6 +204,19 @@ std::optional<Value> java_lang_Object_hashCode(JavaThread& thread, CallFrame& fr
   return Value::Int(static_cast<int32_t>(std::hash<Instance*>{}(objectRef)));
 }
 
+std::optional<Value> java_lang_Object_getClass(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  Instance* objectRef = args[0].asReference();
+  Instance* klass = objectRef->getClass()->classInstance();
+
+  return Value::Reference(klass);
+}
+
+std::optional<Value> java_lang_Object_wait(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  return std::nullopt;
+}
+
 std::optional<Value> java_lang_Class_desiredAssertionStatus0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
   return Value::Int(0);
@@ -242,6 +270,46 @@ std::optional<Value> java_lang_Class_forName0(JavaThread& thread, CallFrame& fra
     // TODO: throw exception
   }
   return Value::Reference((*loaded)->classInstance());
+}
+
+std::optional<Value> java_lang_Class_getDeclaredFields0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  auto fieldCls = thread.resolveClass(u"java/lang/reflect/Field");
+  assert(fieldCls.has_value());
+
+  Instance* clsInstance = args[0].asReference();
+  bool isPublicOnly = args[1].asInt() == 1;
+
+  Instance* clsNameInstance = clsInstance->getFieldValue(u"name").asReference();
+  assert(clsNameInstance != nullptr);
+
+  auto nameArray = clsNameInstance->getFieldValue(u"value").asReference()->asArrayInstance();
+
+  types::JString clsName = u"";
+  for (Value v : nameArray->contents()) {
+    clsName += v.asChar();
+  }
+
+  auto klass = thread.resolveClass(clsName);
+  assert(klass);
+
+  std::vector<Instance*> fields;
+  for (auto& [nameAndDescriptor, field] : (*klass)->fields()) {
+    if (!isPublicOnly || field->isPublic()) {
+      Instance* fieldInstance = thread.heap().allocate((*fieldCls)->asInstanceClass());
+      fieldInstance->setFieldValue(u"name", Value::Reference(thread.heap().intern(field->name())));
+      fieldInstance->setFieldValue(u"modifiers", Value::Int(static_cast<int32_t>(field->accessFlags())));
+
+      fields.push_back(fieldInstance);
+    }
+  }
+
+  ArrayInstance* fieldsArray = thread.heap().allocateArray((*thread.resolveClass(u"[java/lang/reflect/Field"))->asArrayClass(), fields.size());
+  for (int i = 0; i < fields.size(); i++) {
+    fieldsArray->setArrayElement(i, Value::Reference(fields.at(i)));
+  }
+
+  return Value::Reference(fieldsArray);
 }
 
 std::optional<Value> java_lang_Float_floatToRawIntBits(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
@@ -312,6 +380,43 @@ std::optional<Value> java_security_AccessController_doPrivileged(JavaThread& thr
 std::optional<Value> java_lang_Thread_currentThread(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
   return Value::Reference(thread.instance());
+}
+
+std::optional<Value> java_lang_Thread_isAlive(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  Instance* threadRef = args[0].asReference();
+  int64_t eetop = threadRef->getFieldValue(u"eetop").asLong();
+
+  if (eetop == 0) {
+    return Value::Int(0);
+  }
+
+  int ret = pthread_kill((pthread_t)eetop, 0);
+  if (ret == 0) {
+    return Value::Int(1);
+  } else if (ret == ESRCH) {
+    return Value::Int(0);
+  }
+
+  assert(false && "Impossible");
+}
+
+std::optional<Value> java_lang_Thread_start0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  Instance* threadRef = args[0].asReference();
+  auto target = threadRef->getClass()->getVirtualMethod(u"run", u"()V");
+  assert(target.has_value());
+
+  if ((*target)->getClass()->className() == u"java/lang/ref/Reference$ReferenceHandler") {
+    return std::nullopt;
+  }
+
+  auto targetThread = std::make_unique<JavaThread>(thread.vm());
+  targetThread->setThreadInstance(threadRef);
+
+  targetThread->start(*target, {});
+
+  return std::nullopt;
 }
 
 std::optional<Value> java_lang_Throwable_fillInStackTrace(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)

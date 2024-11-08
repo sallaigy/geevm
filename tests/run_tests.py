@@ -60,7 +60,8 @@ class JavaIntegrationTest:
 
     def run_geevm_java(self, classname: str):
         java_command = [self.geevm_java_command, classname]
-        return subprocess.run(java_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=self.class_dir.name)
+        return subprocess.run(java_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=self.class_dir.name,
+                              timeout=10)
 
     def simple_math_programs(self):
         self.execute_tests('simple_math_programs', [
@@ -110,19 +111,26 @@ class JavaIntegrationTest:
             expected_stdout = test_case.expected_stdout
             expected_stderr = test_case.expected_stderr
 
-            r = self.run_geevm_java(f'org.geevm.tests.basic.{class_name}')
-            if r.returncode != 0:
-                print(f'  [{Color.RED}ERROR{Color.RESET}] {class_name}')
-                print(f'  {Color.RED}The geevm java command failed with status code {r.returncode}{Color.RESET}:')
-                print(r.stderr.decode())
-                continue
+            try:
+                r = self.run_geevm_java(f'org.geevm.tests.basic.{class_name}')
+                if r.returncode != 0:
+                    print(f'  [{Color.RED}ERROR{Color.RESET}] {class_name}')
+                    print(
+                        f'  {Color.RED}The geevm java command failed with status code {r.returncode}{Color.RESET}:')
+                    print(r.stderr.decode())
+                    continue
 
-            if expected_stdout is not None:
-                actual = r.stdout.decode()
-                success = self.compare(class_name, 'stdout', expected_stdout, actual) and success
-            if expected_stderr is not None:
-                actual = r.stderr.decode()
-                success = self.compare(class_name, 'stderr', expected_stderr, actual) and success
+                if expected_stdout is not None:
+                    actual = r.stdout.decode()
+                    success = self.compare(class_name, 'stdout', expected_stdout, actual) and success
+                if expected_stderr is not None:
+                    actual = r.stderr.decode()
+                    success = self.compare(class_name, 'stderr', expected_stderr, actual) and success
+            except TimeoutError:
+                print(f'  [{Color.RED}TIMEOUT{Color.RESET}] {class_name}')
+                print(
+                    f'  {Color.RED}The geevm java failed due to timeout {Color.RESET}:')
+                continue
 
     def compare(self, name, comparing, expected, actual) -> bool:
         if expected != actual:

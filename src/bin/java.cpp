@@ -29,7 +29,7 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  vm->mainThread().executeCall(*mainMethod, {});
+  vm->mainThread().start(*mainMethod, {});
 
   return 0;
 }
