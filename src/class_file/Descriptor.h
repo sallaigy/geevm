@@ -63,6 +63,8 @@ public:
     return mDimensions;
   }
 
+  types::JString toJavaString() const;
+
 private:
   std::variant<PrimitiveType, types::JString> mVariant;
   int mDimensions;
@@ -95,6 +97,8 @@ public:
     return mType;
   }
 
+  types::JString toJavaString() const;
+
 private:
   bool mIsVoid = false;
   FieldType mType;
@@ -121,6 +125,8 @@ public:
   {
     return mReturnType;
   }
+
+  types::JString formatAsJavaSignature(const types::JString& name) const;
 
 private:
   ReturnType mReturnType;

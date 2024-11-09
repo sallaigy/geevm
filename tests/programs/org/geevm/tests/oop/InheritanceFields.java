@@ -1,7 +1,6 @@
-package org.geevm.tests.basic;
+package org.geevm.tests.oop;
 
-import org.geevm.tests.basic.inheritance.Base;
-import org.geevm.tests.basic.inheritance.Derived;
+import org.geevm.tests.Printer;
 
 public class InheritanceFields {
 

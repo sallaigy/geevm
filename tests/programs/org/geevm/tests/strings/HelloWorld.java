@@ -1,6 +1,6 @@
-package org.geevm.tests.basic.strings;
+package org.geevm.tests.strings;
 
-import org.geevm.tests.basic.Printer;
+import org.geevm.tests.Printer;
 
 public class HelloWorld {
     public static void main(String[] args) {

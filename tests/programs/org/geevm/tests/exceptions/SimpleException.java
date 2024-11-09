@@ -1,6 +1,6 @@
-package org.geevm.tests.basic.exceptions;
+package org.geevm.tests.exceptions;
 
-import org.geevm.tests.basic.Printer;
+import org.geevm.tests.Printer;
 
 public class SimpleException {
     public static void main(String[] args) {

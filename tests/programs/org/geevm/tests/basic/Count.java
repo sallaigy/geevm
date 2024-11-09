@@ -1,5 +1,7 @@
 package org.geevm.tests.basic;
 
+import org.geevm.tests.Printer;
+
 public class Count {
 
     public static void main(String[] args) {

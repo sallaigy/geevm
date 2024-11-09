@@ -1,5 +1,8 @@
 #include "class_file/Descriptor.h"
 
+#include <algorithm>
+#include <sstream>
+
 using namespace geevm;
 
 ReturnType ReturnType::VoidType{};
@@ -107,4 +110,64 @@ std::optional<MethodDescriptor> MethodDescriptor::parse(types::JStringRef input)
   }
 
   return std::nullopt;
+}
+
+types::JString FieldType::toJavaString() const
+{
+  types::JString str;
+
+  if (auto primitveType = asPrimitive(); primitveType) {
+    switch (*primitveType) {
+      case PrimitiveType::Byte: str = u"byte";
+      case PrimitiveType::Char: str = u"char";
+      case PrimitiveType::Double: str = u"double";
+      case PrimitiveType::Float: str = u"float";
+      case PrimitiveType::Int: str = u"int";
+      case PrimitiveType::Long: str = u"long";
+      case PrimitiveType::Short: str = u"short";
+      case PrimitiveType::Boolean: str = u"boolean";
+      default: std::unreachable();
+    }
+  } else {
+    types::JStringRef objectName = (*asObjectName());
+
+    objectName.remove_prefix(1);
+    objectName.remove_suffix(1);
+
+    str = types::JString{objectName};
+    std::ranges::replace(str, u'/', u'.');
+  }
+
+  for (size_t i = 0; i < mDimensions; i++) {
+    str += u"[]";
+  }
+
+  return str;
+}
+
+types::JString ReturnType::toJavaString() const
+{
+  if (this->isVoid()) {
+    return u"void";
+  }
+
+  return this->getType().toJavaString();
+}
+
+types::JString MethodDescriptor::formatAsJavaSignature(const types::JString& name) const
+{
+  types::JString str;
+  str += this->returnType().toJavaString();
+  str += u" " + name;
+
+  str += u"(";
+  for (size_t i = 0; i < this->parameters().size(); i++) {
+    str += this->parameters()[i].toJavaString();
+    if (i != this->parameters().size() - 1) {
+      str += u", ";
+    }
+  }
+
+  str += u")";
+  return str;
 }

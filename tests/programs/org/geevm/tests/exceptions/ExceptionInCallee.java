@@ -1,10 +1,14 @@
-package org.geevm.tests.basic.exceptions;
+package org.geevm.tests.exceptions;
 
-import org.geevm.tests.basic.Printer;
+import org.geevm.tests.Printer;
 
-public class UncaughtException {
+public class ExceptionInCallee {
     public static void main(String[] args) {
-        callee();
+        try {
+            callee();
+        } catch (Exception ex) {
+            Printer.println("Caught exception: " + ex.getMessage());
+        }
     }
 
     public static void callee() {

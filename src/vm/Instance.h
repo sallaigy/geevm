@@ -16,6 +16,7 @@ class ArrayClass;
 class AbstractClass;
 class JClass;
 class ArrayInstance;
+class ClassInstance;
 
 class Instance
 {
@@ -37,17 +38,18 @@ public:
     return mClass;
   }
 
-  void setFieldValue(types::JStringRef fieldName, Value value);
-  Value getFieldValue(types::JStringRef fieldName);
+  void setFieldValue(types::JStringRef fieldName, types::JStringRef descriptor, Value value);
+  Value getFieldValue(types::JStringRef fieldName, types::JStringRef descriptor);
 
   ArrayInstance* asArrayInstance();
+  ClassInstance* asClassInstance();
 
   virtual ~Instance() = default;
 
 protected:
   const Kind mKind;
   JClass* mClass;
-  std::unordered_map<types::JStringRef, Value> mFields;
+  std::vector<Value> mFields;
 };
 
 class ArrayInstance : public Instance
@@ -70,6 +72,24 @@ public:
 
 private:
   std::vector<Value> mContents;
+};
+
+/// An instance of java.lang.Class
+class ClassInstance : public Instance
+{
+public:
+  explicit ClassInstance(JClass* javaLangClass, JClass* target)
+    : Instance(Kind::Object, javaLangClass), mTarget(target)
+  {
+  }
+
+  JClass* target() const
+  {
+    return mTarget;
+  }
+
+private:
+  JClass* mTarget;
 };
 
 } // namespace geevm

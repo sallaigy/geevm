@@ -17,8 +17,8 @@ void Vm::initialize()
   auto threadGroupCls = this->requireClass(u"java/lang/ThreadGroup");
 
   auto mainThreadGroup = heap().allocate(threadGroupCls->asInstanceClass());
-  mainThreadGroup->setFieldValue(u"name", Value::Reference(mHeap.intern(u"main")));
-  mainThreadGroup->setFieldValue(u"maxPriority", Value::Int(10));
+  mainThreadGroup->setFieldValue(u"name", u"Ljava/lang/String;", Value::Reference(mHeap.intern(u"main")));
+  mainThreadGroup->setFieldValue(u"maxPriority", u"I", Value::Int(10));
 
   this->requireClass(u"java/lang/Thread");
   mMainThread.initialize(u"main", mainThreadGroup);
@@ -32,8 +32,8 @@ void Vm::initialize()
 
   Instance* outFd = fdCls->getStaticField(u"out").asReference();
   auto fos = mMainThread.newInstance(u"java/io/FileOutputStream");
-  fos->setFieldValue(u"fd", Value::Reference(outFd));
-  fos->setFieldValue(u"append", Value::Int(0));
+  fos->setFieldValue(u"fd", u"Ljava/io/FileDescriptor;", Value::Reference(outFd));
+  fos->setFieldValue(u"append", u"Z", Value::Int(0));
 
   Instance* bufferedOut = mainThread().newInstance(u"java/io/BufferedOutputStream");
   auto bufferedOutCtor = bufferedOut->getClass()->getMethod(u"<init>", u"(Ljava/io/OutputStream;)V");

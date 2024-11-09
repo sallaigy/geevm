@@ -1,4 +1,6 @@
-package org.geevm.tests.basic;
+package org.geevm.tests.oop;
+
+import org.geevm.tests.Printer;
 
 public class Instance {
 

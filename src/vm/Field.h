@@ -16,8 +16,8 @@ struct FieldRef
 class JField
 {
 public:
-  JField(const FieldInfo& fieldInfo, types::JString name, FieldType fieldType)
-    : mFieldInfo(fieldInfo), mName(std::move(name)), mFieldType(std::move(fieldType))
+  JField(const FieldInfo& fieldInfo, types::JString name, FieldType fieldType, size_t offset)
+    : mFieldInfo(fieldInfo), mName(std::move(name)), mFieldType(std::move(fieldType)), mOffset(offset)
   {
   }
 
@@ -41,6 +41,11 @@ public:
     return mName;
   }
 
+  size_t offset() const
+  {
+    return mOffset;
+  }
+
   bool isStatic() const
   {
     return hasAccessFlag(mFieldInfo.accessFlags(), FieldAccessFlags::ACC_STATIC);
@@ -60,6 +65,7 @@ private:
   const FieldInfo& mFieldInfo;
   FieldType mFieldType;
   types::JString mName;
+  size_t mOffset;
 };
 
 } // namespace geevm

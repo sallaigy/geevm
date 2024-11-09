@@ -65,20 +65,21 @@ class JavaIntegrationTest:
 
     def simple_math_programs(self):
         self.execute_tests('simple_math_programs', [
-            TestCase('Count', '10\n'),
-            TestCase('StaticCalls', '15\n'),
-            TestCase('StaticCallsToAnotherClass', '15\n'),
-            TestCase('StaticFields', '540\n'),
-            TestCase('IntegerComparisons', '0\n3\n5\n1\n2\n5\n2\n3\n4\n'),
-            TestCase('IntegerCompareZero', '1\n2\n5\n2\n3\n4\n0\n3\n5\n'),
-            TestCase('StaticFieldsLong', '540\n')
+            TestCase('basic.Count', '10\n'),
+            TestCase('basic.StaticCalls', '15\n'),
+            TestCase('basic.StaticCallsToAnotherClass', '15\n'),
+            TestCase('basic.StaticFields', '540\n'),
+            TestCase('basic.IntegerComparisons', '0\n3\n5\n1\n2\n5\n2\n3\n4\n'),
+            TestCase('basic.IntegerCompareZero', '1\n2\n5\n2\n3\n4\n0\n3\n5\n'),
+            TestCase('basic.StaticCallsLong', '15\n'),
+            TestCase('basic.StaticFieldsLong', '540\n')
         ])
 
     def oop_programs(self):
         self.execute_tests('oop_programs', [
-            TestCase('Instance', '42\n'),
-            TestCase('Inheritance', '10\n20\n10\n40\n'),
-            TestCase('InheritanceFields', '10\n10\n10\n40\n')
+            TestCase('oop.Instance', '42\n'),
+            TestCase('oop.Inheritance', '10\n20\n10\n40\n'),
+            TestCase('oop.InheritanceFields', '10\n10\n10\n40\n')
         ])
 
     def strings(self):
@@ -97,11 +98,25 @@ class JavaIntegrationTest:
                      stderr="Exception java.lang.IllegalStateException: 'Exception thrown in callee.'\n")
         ])
 
+    def errors(self):
+        self.execute_tests('errors', [
+            TestCase('errors.UnknownNativeMethod',
+                     stderr="Exception java.lang.UnsatisfiedLinkError: 'void org.geevm.tests.errors.UnknownNativeMethod.callee()'\n")
+        ])
+
+    def reflection(self):
+        self.execute_tests('reflection', [
+            TestCase('reflection.ClassMetadata',
+                     stdout='org.geevm.tests.reflection.ClassMetadata\norg.geevm.tests.reflection.ClassMetadata\norg.geevm.tests.reflection.ClassMetadata\n')
+        ])
+
     def run(self):
         self.simple_math_programs()
         self.strings()
         self.oop_programs()
         self.exceptions()
+        self.errors()
+        self.reflection()
 
     def execute_tests(self, test_suite_name, tests: List[TestCase]):
         success: bool = True
@@ -112,7 +127,7 @@ class JavaIntegrationTest:
             expected_stderr = test_case.expected_stderr
 
             try:
-                r = self.run_geevm_java(f'org.geevm.tests.basic.{class_name}')
+                r = self.run_geevm_java(f'org.geevm.tests.{class_name}')
                 if r.returncode != 0:
                     print(f'  [{Color.RED}ERROR{Color.RESET}] {class_name}')
                     print(
