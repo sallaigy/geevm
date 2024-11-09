@@ -2,6 +2,7 @@
 #include "vm/Thread.h"
 #include "vm/Vm.h"
 
+#include <algorithm>
 #include <iostream>
 #include <signal.h>
 #include <utility>
@@ -47,6 +48,8 @@ static std::optional<Value> java_lang_Double_doubleToRawIntBits(JavaThread& thre
 static std::optional<Value> java_lang_Double_longBitsToDouble(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 
 static std::optional<Value> sun_misc_Unsafe_arrayBaseOffset(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> sun_misc_Unsafe_objectFieldOffset(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+
 static std::optional<Value> sun_reflect_Reflection_getCallerClass(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> java_security_AccessController_doPrivileged(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 
@@ -83,7 +86,7 @@ static std::optional<Value> geevm_test_print(JavaThread& thread, CallFrame& fram
       Instance* ref = value.asReference();
       if (ref->getClass()->className() == u"java/lang/String") {
         types::JString out = u"";
-        for (Value charValue : ref->getFieldValue(u"value").asReference()->asArrayInstance()->contents()) {
+        for (Value charValue : ref->getFieldValue(u"value", u"[C").asReference()->asArrayInstance()->contents()) {
           out += charValue.asChar();
         }
         std::cout << types::convertJString(out) << std::endl;
@@ -100,12 +103,12 @@ static std::optional<Value> geevm_test_print(JavaThread& thread, CallFrame& fram
 void Vm::registerNatives()
 {
   // Temporary printing methods 'org.geethread.tests.basic.Printer'
-  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/tests/basic/Printer", u"println", u"(I)V"}, geevm_test_print);
-  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/tests/basic/Printer", u"println", u"(J)V"}, geevm_test_print);
-  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/tests/basic/Printer", u"println", u"(F)V"}, geevm_test_print);
-  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/tests/basic/Printer", u"println", u"(D)V"}, geevm_test_print);
-  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/tests/basic/Printer", u"println", u"(Z)V"}, geevm_test_print);
-  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/tests/basic/Printer", u"println", u"(Ljava/lang/String;)V"}, geevm_test_print);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/tests/Printer", u"println", u"(I)V"}, geevm_test_print);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/tests/Printer", u"println", u"(J)V"}, geevm_test_print);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/tests/Printer", u"println", u"(F)V"}, geevm_test_print);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/tests/Printer", u"println", u"(D)V"}, geevm_test_print);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/tests/Printer", u"println", u"(Z)V"}, geevm_test_print);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/tests/Printer", u"println", u"(Ljava/lang/String;)V"}, geevm_test_print);
 
   // java.lang.Object
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Object", u"registerNatives", u"()V"}, noop);
@@ -134,6 +137,9 @@ void Vm::registerNatives()
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Class", u"getDeclaredFields0", u"(Z)[Ljava/lang/reflect/Field;"},
                                       java_lang_Class_getDeclaredFields0);
 
+  // java.lang.ClassLoader
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/ClassLoader", u"registerNatives", u"()V"}, noop);
+
   // java.lang.String
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/String", u"intern", u"()Ljava/lang/String;"}, java_lang_String_intern);
 
@@ -159,6 +165,8 @@ void Vm::registerNatives()
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"sun/misc/Unsafe", u"arrayBaseOffset", u"(Ljava/lang/Class;)I"}, sun_misc_Unsafe_arrayBaseOffset);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"sun/misc/Unsafe", u"arrayIndexScale", u"(Ljava/lang/Class;)I"}, sun_misc_Unsafe_arrayBaseOffset);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"sun/misc/Unsafe", u"addressSize", u"()I"}, sun_misc_Unsafe_arrayBaseOffset);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"sun/misc/Unsafe", u"objectFieldOffset", u"(Ljava/lang/reflect/Field;)J"},
+                                      sun_misc_Unsafe_objectFieldOffset);
 
   // sun.reflect.Reflection
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"sun/reflect/Reflection", u"getCallerClass", u"()Ljava/lang/Class;"},
@@ -225,7 +233,7 @@ std::optional<Value> java_lang_Class_desiredAssertionStatus0(JavaThread& thread,
 std::optional<Value> java_lang_Class_getPrimitiveClass(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
   auto stringObject = args[0].asReference();
-  auto charArray = stringObject->getFieldValue(u"value").asReference()->asArrayInstance();
+  auto charArray = stringObject->getFieldValue(u"value", u"[C").asReference()->asArrayInstance();
 
   types::JString buffer;
   for (Value v : charArray->contents()) {
@@ -245,8 +253,13 @@ std::optional<Value> java_lang_Class_getPrimitiveClass(JavaThread& thread, CallF
 
 std::optional<Value> java_lang_Class_getName0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  JClass* cls = args[0].asReference()->getClass();
-  Instance* str = thread.heap().intern(cls->className());
+  ClassInstance* cls = args[0].asReference()->asClassInstance();
+  assert(cls != nullptr);
+
+  auto name = cls->target()->className();
+  std::ranges::replace(name, u'/', u'.');
+
+  Instance* str = thread.heap().intern(name);
 
   return Value::Reference(str);
 }
@@ -258,7 +271,7 @@ std::optional<Value> java_lang_Class_forName0(JavaThread& thread, CallFrame& fra
   Instance* classLoader = args[2].asReference();
 
   assert(classLoader == nullptr && "TODO: Support non-boostrap classloader");
-  auto charArray = name->getFieldValue(u"value").asReference()->asArrayInstance();
+  auto charArray = name->getFieldValue(u"value", u"[C").asReference()->asArrayInstance();
 
   types::JString nameStr = u"";
   for (Value value : charArray->contents()) {
@@ -280,31 +293,20 @@ std::optional<Value> java_lang_Class_getDeclaredFields0(JavaThread& thread, Call
   Instance* clsInstance = args[0].asReference();
   bool isPublicOnly = args[1].asInt() == 1;
 
-  Instance* clsNameInstance = clsInstance->getFieldValue(u"name").asReference();
-  assert(clsNameInstance != nullptr);
-
-  auto nameArray = clsNameInstance->getFieldValue(u"value").asReference()->asArrayInstance();
-
-  types::JString clsName = u"";
-  for (Value v : nameArray->contents()) {
-    clsName += v.asChar();
-  }
-
-  auto klass = thread.resolveClass(clsName);
-  assert(klass);
+  auto klass = clsInstance->asClassInstance()->target();
 
   std::vector<Instance*> fields;
-  for (auto& [nameAndDescriptor, field] : (*klass)->fields()) {
+  for (auto& [nameAndDescriptor, field] : klass->fields()) {
     if (!isPublicOnly || field->isPublic()) {
       Instance* fieldInstance = thread.heap().allocate((*fieldCls)->asInstanceClass());
-      fieldInstance->setFieldValue(u"name", Value::Reference(thread.heap().intern(field->name())));
-      fieldInstance->setFieldValue(u"modifiers", Value::Int(static_cast<int32_t>(field->accessFlags())));
+      fieldInstance->setFieldValue(u"name", u"[C", Value::Reference(thread.heap().intern(field->name())));
+      fieldInstance->setFieldValue(u"modifiers", u"I", Value::Int(static_cast<int32_t>(field->accessFlags())));
 
       fields.push_back(fieldInstance);
     }
   }
 
-  ArrayInstance* fieldsArray = thread.heap().allocateArray((*thread.resolveClass(u"[java/lang/reflect/Field"))->asArrayClass(), fields.size());
+  ArrayInstance* fieldsArray = thread.heap().allocateArray((*thread.resolveClass(u"[Ljava/lang/reflect/Field;"))->asArrayClass(), fields.size());
   for (int i = 0; i < fields.size(); i++) {
     fieldsArray->setArrayElement(i, Value::Reference(fields.at(i)));
   }
@@ -357,6 +359,12 @@ std::optional<Value> sun_misc_Unsafe_arrayBaseOffset(JavaThread& thread, CallFra
   return Value::Int(0);
 }
 
+std::optional<Value> sun_misc_Unsafe_objectFieldOffset(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  // TODO
+  return Value::Long(0);
+}
+
 std::optional<Value> sun_reflect_Reflection_getCallerClass(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
   // Returns the class of the caller of the method calling this method ignoring frames associated with java.lang.reflect.Method.invoke() and its implementation.
@@ -385,7 +393,7 @@ std::optional<Value> java_lang_Thread_currentThread(JavaThread& thread, CallFram
 std::optional<Value> java_lang_Thread_isAlive(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
   Instance* threadRef = args[0].asReference();
-  int64_t eetop = threadRef->getFieldValue(u"eetop").asLong();
+  int64_t eetop = threadRef->getFieldValue(u"eetop", u"J").asLong();
 
   if (eetop == 0) {
     return Value::Int(0);
@@ -429,7 +437,7 @@ std::optional<Value> java_lang_Throwable_fillInStackTrace(JavaThread& thread, Ca
 std::optional<Value> java_lang_String_intern(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
   Instance* self = args.at(0).asReference();
-  auto& charArray = self->getFieldValue(u"value").asReference()->asArrayInstance()->contents();
+  auto& charArray = self->getFieldValue(u"value", u"[C").asReference()->asArrayInstance()->contents();
 
   types::JString str = u"";
   for (auto value : charArray) {

@@ -10,26 +10,30 @@ Instance::Instance(JClass* klass)
 Instance::Instance(Kind kind, JClass* klass)
   : mKind(kind), mClass(klass)
 {
-  for (const auto& [key, value] : klass->fields()) {
-    if (!hasAccessFlag(value->accessFlags(), FieldAccessFlags::ACC_STATIC)) {
-      mFields.emplace(key.first, Value::defaultValue(value->fieldType()));
+  mFields.resize(klass->fields().size(), Value::Int(0));
+  for (const auto& [key, field] : klass->fields()) {
+    if (!hasAccessFlag(field->accessFlags(), FieldAccessFlags::ACC_STATIC)) {
+      mFields[field->offset()] = Value::defaultValue(field->fieldType());
     }
   }
 }
 
-void Instance::setFieldValue(types::JStringRef fieldName, Value value)
+void Instance::setFieldValue(types::JStringRef fieldName, types::JStringRef descriptor, Value value)
 {
-  assert(mFields.contains(fieldName));
-  auto [it, success] = mFields.try_emplace(fieldName, value);
-  if (!success) {
-    it->second = value;
-  }
+  NameAndDescriptor key{fieldName, descriptor};
+  assert(mClass->fields().contains(key));
+  size_t offset = mClass->fields().at(key)->offset();
+
+  mFields[offset] = value;
 }
 
-Value Instance::getFieldValue(types::JStringRef fieldName)
+Value Instance::getFieldValue(types::JStringRef fieldName, types::JStringRef descriptor)
 {
-  assert(mFields.contains(fieldName));
-  return mFields.at(fieldName);
+  NameAndDescriptor key{fieldName, descriptor};
+  assert(mClass->fields().contains(key));
+  size_t offset = mClass->fields().at(key)->offset();
+
+  return mFields.at(offset);
 }
 
 ArrayInstance::ArrayInstance(ArrayClass* arrayClass, size_t length)
@@ -41,6 +45,12 @@ ArrayInstance* Instance::asArrayInstance()
 {
   assert(mKind == Kind::Array);
   return static_cast<ArrayInstance*>(this);
+}
+
+ClassInstance* Instance::asClassInstance()
+{
+  assert(getClass()->className() == u"java/lang/Class");
+  return static_cast<ClassInstance*>(this);
 }
 
 JvmExpected<Value> ArrayInstance::getArrayElement(int32_t index)

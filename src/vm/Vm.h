@@ -6,15 +6,10 @@
 #include "common/JvmError.h"
 #include "vm/Class.h"
 #include "vm/ClassLoader.h"
-#include "vm/Frame.h"
 #include "vm/Heap.h"
 #include "vm/Interpreter.h"
-#include "vm/Method.h"
 #include "vm/NativeMethods.h"
-#include "vm/StringHeap.h"
 #include "vm/Thread.h"
-
-#include <list>
 
 namespace geevm
 {

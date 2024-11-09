@@ -3,6 +3,7 @@
 
 #include "Vm.h"
 
+#include <algorithm>
 #include <utility>
 
 using namespace geevm;
@@ -86,7 +87,7 @@ void JClass::prepare(BootstrapClassLoader& classLoader, JavaHeap& heap)
   }
 
   auto classClass = classLoader.loadClass(u"java/lang/Class");
-  mClassInstance = std::make_unique<Instance>((*classClass)->asInstanceClass());
+  mClassInstance = std::make_unique<ClassInstance>(*classClass, this);
 
   mStatus = Status::Prepared;
 }
@@ -147,16 +148,15 @@ void JClass::initialize(JavaThread& thread)
   // auto clsInstanceInit = classClass->getVirtualMethod(u"<init>", u"()V");
   // thread.executeCall(*clsInstanceInit, {});
 
-  // mClassInstance->setFieldValue(u"name", Value::Reference(thread.heap().intern(mClassName)));
-
   mStatus = Status::Initialized;
 }
 
 void InstanceClass::linkFields()
 {
+  size_t offset = 0;
   if (this->superClass() != nullptr) {
     for (auto& [name, value] : this->superClass()->fields()) {
-      mFields.try_emplace(name, std::make_unique<JField>(value->fieldInfo(), name.first, value->fieldType()));
+      mFields.try_emplace(name, std::make_unique<JField>(value->fieldInfo(), name.first, value->fieldType(), offset++));
     }
   }
 
@@ -170,7 +170,7 @@ void InstanceClass::linkFields()
       Value initialValue = Value::defaultValue(*fieldType);
       mStaticFields.try_emplace(fieldName, initialValue);
     } else {
-      auto jfield = std::make_unique<JField>(field, types::JString{fieldName}, *fieldType);
+      auto jfield = std::make_unique<JField>(field, types::JString{fieldName}, *fieldType, offset++);
       mFields.insert_or_assign(NameAndDescriptor{fieldName, descriptor}, std::move(jfield));
     }
   }
@@ -377,6 +377,22 @@ bool JClass::isClassType() const
     return !this->isInterface();
   }
   return false;
+}
+
+types::JString JClass::javaClassName() const
+{
+  if (auto instanceClass = this->asInstanceClass(); instanceClass) {
+    types::JString name = this->className();
+    std::ranges::replace(name, u'/', u'.');
+
+    return name;
+  }
+
+  if (auto arrayClass = this->asArrayClass(); arrayClass) {
+    return arrayClass->elementType().toJavaString();
+  }
+
+  assert(false && "A class must be an instance or an array!");
 }
 
 void InstanceClass::initializeRuntimeConstantPool(StringHeap& stringHeap, BootstrapClassLoader& classLoader)

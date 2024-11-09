@@ -21,11 +21,10 @@ void JavaThread::initialize(const types::JString& name, Instance* threadGroup)
   mThreadInstance = heap().allocate((*klass)->asInstanceClass());
 
   auto nameInstance = heap().intern(name);
-  mThreadInstance->setFieldValue(u"name", Value::Reference(nameInstance));
-  mThreadInstance->setFieldValue(u"eetop", Value::Long((long)mNativeThread.native_handle()));
-  mThreadInstance->setFieldValue(u"group", Value::Reference(threadGroup));
-  mThreadInstance->setFieldValue(u"uncaughtExceptionHandler", Value::Reference(threadGroup));
-  mThreadInstance->setFieldValue(u"priority", Value::Int(10));
+  mThreadInstance->setFieldValue(u"name", u"Ljava/lang/String;", Value::Reference(nameInstance));
+  mThreadInstance->setFieldValue(u"group", u"Ljava/lang/ThreadGroup;", Value::Reference(threadGroup));
+  mThreadInstance->setFieldValue(u"uncaughtExceptionHandler", u"Ljava/lang/Thread$UncaughtExceptionHandler;", Value::Reference(threadGroup));
+  mThreadInstance->setFieldValue(u"priority", u"I", Value::Int(10));
 }
 
 void JavaThread::start(JMethod* method, std::vector<Value> arguments)
@@ -33,7 +32,7 @@ void JavaThread::start(JMethod* method, std::vector<Value> arguments)
   mMethod = method;
   mArguments = std::move(arguments);
   mNativeThread = std::jthread([this]() { this->run(); });
-  mThreadInstance->setFieldValue(u"eetop", Value::Long((long)mNativeThread.native_handle()));
+  mThreadInstance->setFieldValue(u"eetop", u"J", Value::Long((long)mNativeThread.native_handle()));
 }
 
 void JavaThread::run()
@@ -107,13 +106,13 @@ std::optional<Value> JavaThread::executeCall(JMethod* method, const std::vector<
       current->clearOperandStack();
       current->pushOperand(Value::Reference(mCurrentException));
     } else {
-      Instance* handler = mThreadInstance->getFieldValue(u"uncaughtExceptionHandler").asReference();
+      Instance* handler = mThreadInstance->getFieldValue(u"uncaughtExceptionHandler", u"Ljava/lang/Thread$UncaughtExceptionHandler;").asReference();
       auto handlerMethod = handler->getClass()->getVirtualMethod(u"uncaughtException", u"(Ljava/lang/Thread;Ljava/lang/Throwable;)V");
       assert(handlerMethod.has_value());
 
       // FIXME: We should execute the handler, but we do not support `System.err` / `System.out` yet.
       // this->executeCall((*handlerMethod), {Value::Reference(handler), Value::Reference(mThreadInstance), Value::Reference(mCurrentException)});
-      Instance* exceptionMessage = mCurrentException->getFieldValue(u"detailMessage").asReference();
+      Instance* exceptionMessage = mCurrentException->getFieldValue(u"detailMessage", u"Ljava/lang/String;").asReference();
       assert(exceptionMessage->getClass()->className() == u"java/lang/String");
 
       types::JString message = u"Exception ";
@@ -123,7 +122,7 @@ std::optional<Value> JavaThread::executeCall(JMethod* method, const std::vector<
 
       message += exceptionClsName;
       message += u": '";
-      for (Value ch : exceptionMessage->getFieldValue(u"value").asReference()->asArrayInstance()->contents()) {
+      for (Value ch : exceptionMessage->getFieldValue(u"value", u"[C").asReference()->asArrayInstance()->contents()) {
         message += ch.asChar();
       }
       message += u"'";
@@ -141,7 +140,13 @@ std::optional<Value> JavaThread::executeNative(JMethod* method, CallFrame& frame
 {
   auto handle = mVm.nativeMethods().get(method);
   if (!handle) {
-    assert(false && "TODO Unknown native method");
+    types::JString name;
+    name += method->getClass()->javaClassName();
+    name += u".";
+    name += method->name();
+
+    this->throwException(u"java/lang/UnsatisfiedLinkError", method->descriptor().formatAsJavaSignature(name));
+    return std::nullopt;
   }
 
   return (*handle)(*this, frame, args);
@@ -164,7 +169,7 @@ void JavaThread::throwException(const types::JString& name, const types::JString
 
   Instance* exceptionInstance = heap().allocate((*klass)->asInstanceClass());
   Instance* messageInstance = heap().intern(message);
-  exceptionInstance->setFieldValue(u"detailMessage", Value::Reference(messageInstance));
+  exceptionInstance->setFieldValue(u"detailMessage", u"Ljava/lang/String;", Value::Reference(messageInstance));
 
   this->throwException(exceptionInstance);
 }

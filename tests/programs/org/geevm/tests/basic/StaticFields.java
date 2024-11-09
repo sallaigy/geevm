@@ -1,5 +1,7 @@
 package org.geevm.tests.basic;
 
+import org.geevm.tests.Printer;
+
 public class StaticFields {
 
     private static final int START = 1;

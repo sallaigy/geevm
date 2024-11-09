@@ -21,7 +21,7 @@ Instance* StringHeap::intern(types::JStringRef utf8)
   }
 
   Instance* newInstance = mVm.heap().allocate((*stringClass)->asInstanceClass());
-  newInstance->setFieldValue(u"value", Value::Reference(stringContents));
+  newInstance->setFieldValue(u"value", u"[C", Value::Reference(stringContents));
 
   auto [res, _] = mInternedStrings.try_emplace(utf8, newInstance);
   return res->second;

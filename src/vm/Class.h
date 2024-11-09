@@ -64,6 +64,8 @@ public:
     return mClassName;
   }
 
+  types::JString javaClassName() const;
+
   JClass* superClass() const
   {
     return mSuperClass;

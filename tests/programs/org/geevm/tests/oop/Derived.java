@@ -1,4 +1,4 @@
-package org.geevm.tests.basic.inheritance;
+package org.geevm.tests.oop;
 
 public class Derived extends Base {
 

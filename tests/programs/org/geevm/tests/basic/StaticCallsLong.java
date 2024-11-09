@@ -2,14 +2,14 @@ package org.geevm.tests.basic;
 
 import org.geevm.tests.Printer;
 
-public class StaticCalls {
+public class StaticCallsLong {
 
     public static void main(String[] args) {
-        int start = 0;
-        int end = 10;
-        int sum = 0;
+        long start = 0l;
+        long end = 10l;
+        long sum = 0l;
 
-        for (int i = start; i < max(); i++) {
+        for (long i = start; i < max(); i++) {
             sum = inc(sum, i);
         }
 
@@ -17,11 +17,11 @@ public class StaticCalls {
         Printer.println(sum);
     }
 
-    private static int max() {
+    private static long max() {
         return 10;
     }
 
-    private static int inc(int v, int i) {
+    private static long inc(long v, long i) {
         if (i % 2 == 0) {
             return v + 1;
         }

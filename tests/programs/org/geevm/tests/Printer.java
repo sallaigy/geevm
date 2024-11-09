@@ -1,4 +1,4 @@
-package org.geevm.tests.basic;
+package org.geevm.tests;
 
 public class Printer {
 

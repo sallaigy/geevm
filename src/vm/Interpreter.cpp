@@ -609,7 +609,7 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         // TODO: Null check
 
         assert(objectRef->getClass()->isInstanceOf(field.klass));
-        frame.pushOperand(objectRef->getFieldValue(field.fieldName));
+        frame.pushOperand(objectRef->getFieldValue(field.fieldName, field.fieldDescriptor));
         break;
       }
       case Opcode::PUTFIELD: {
@@ -620,7 +620,7 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         Instance* objectRef = frame.popOperand().asReference();
         assert(objectRef->getClass()->isInstanceOf(field.klass));
 
-        objectRef->setFieldValue(field.fieldName, value);
+        objectRef->setFieldValue(field.fieldName, field.fieldDescriptor, value);
 
         break;
       }
