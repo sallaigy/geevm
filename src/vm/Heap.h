@@ -28,7 +28,7 @@ public:
 
   /// Allocates space for an instance of the given class.
   Instance* allocate(InstanceClass* klass);
-  ArrayInstance* allocateArray(ArrayClass* klass, size_t length);
+  ArrayInstance* allocateArray(ArrayClass* klass, int32_t length);
 
   Instance* intern(const types::JString& utf8)
   {

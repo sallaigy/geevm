@@ -30,6 +30,7 @@ public:
 
 private:
   void invoke(JavaThread& thread, JMethod* method);
+  void handleErrorAsException(JavaThread& thread, const VmError& error);
 
   void integerComparison(Predicate predicate, CodeCursor& cursor, CallFrame& frame);
   void integerComparisonToZero(Predicate predicate, CodeCursor& cursor, CallFrame& frame);
@@ -164,27 +165,65 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
       case Opcode::ALOAD_1: frame.pushOperand(frame.loadValue(1)); break;
       case Opcode::ALOAD_2: frame.pushOperand(frame.loadValue(2)); break;
       case Opcode::ALOAD_3: frame.pushOperand(frame.loadValue(3)); break;
-      case Opcode::IALOAD: notImplemented(opcode); break;
+      case Opcode::IALOAD: {
+        int32_t index = frame.popOperand().asInt();
+        Instance* arrayRef = frame.popOperand().asReference();
+
+        if (arrayRef == nullptr) {
+          thread.throwException(u"java/lang/NullPointerException");
+          break;
+        }
+
+        ArrayInstance* array = arrayRef->asArrayInstance();
+        auto element = array->getArrayElement(index);
+        if (!element) {
+          thread.throwException(element.error().exception(), element.error().message());
+          break;
+        }
+
+        frame.pushOperand(Value::Int(element->asInt()));
+        break;
+      }
       case Opcode::LALOAD: notImplemented(opcode); break;
       case Opcode::FALOAD: notImplemented(opcode); break;
       case Opcode::DALOAD: notImplemented(opcode); break;
       case Opcode::AALOAD: {
         int32_t index = frame.popOperand().asInt();
-        ArrayInstance* arrayRef = frame.popOperand().asReference()->asArrayInstance();
+        Instance* arrayRef = frame.popOperand().asReference();
 
-        frame.pushOperand(*arrayRef->getArrayElement(index));
-        // TODO: Check and throw exceptions
+        if (arrayRef == nullptr) {
+          thread.throwException(u"java/lang/NullPointerException");
+          break;
+        }
 
+        ArrayInstance* array = arrayRef->asArrayInstance();
+        auto res = array->getArrayElement(index);
+        if (!res) {
+          this->handleErrorAsException(thread, res.error());
+          break;
+        }
+
+        frame.pushOperand(*res);
         break;
       }
       case Opcode::BALOAD: notImplemented(opcode); break;
       case Opcode::CALOAD: {
         int32_t index = frame.popOperand().asInt();
-        ArrayInstance* arrayRef = frame.popOperand().asReference()->asArrayInstance();
+        Instance* arrayRef = frame.popOperand().asReference();
 
-        char16_t value = arrayRef->getArrayElement(index)->asChar();
-        frame.pushOperand(Value::Int(static_cast<int32_t>(value)));
-        // TODO: Check and throw exceptions
+        if (arrayRef == nullptr) {
+          thread.throwException(u"java/lang/NullPointerException");
+          break;
+        }
+
+        ArrayInstance* array = arrayRef->asArrayInstance();
+        auto value = array->getArrayElement(index);
+        if (!value) {
+          this->handleErrorAsException(thread, value.error());
+          break;
+        }
+
+        frame.pushOperand(Value::Int(static_cast<int32_t>(value->asChar())));
 
         break;
       }
@@ -206,7 +245,7 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         frame.storeValue(index, frame.popOperand());
         break;
       }
-      case Opcode::ISTORE_0: notImplemented(opcode); break;
+      case Opcode::ISTORE_0: frame.storeValue(0, frame.popInt()); break;
       case Opcode::ISTORE_1: frame.storeValue(1, frame.popInt()); break;
       case Opcode::ISTORE_2: frame.storeValue(2, frame.popInt()); break;
       case Opcode::ISTORE_3: frame.storeValue(3, frame.popInt()); break;
@@ -229,10 +268,19 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
       case Opcode::IASTORE: {
         Value value = frame.popOperand();
         int32_t index = frame.popOperand().asInt();
-        ArrayInstance* arrayRef = frame.popOperand().asReference()->asArrayInstance();
+        Instance* arrayRef = frame.popOperand().asReference();
 
-        arrayRef->setArrayElement(index, value);
-        // TODO: null-check, bounds check, type checks
+        if (arrayRef == nullptr) {
+          thread.throwException(u"java/lang/NullPointerException");
+          break;
+        }
+
+        ArrayInstance* array = arrayRef->asArrayInstance();
+        auto result = array->setArrayElement(index, value);
+        if (!result) {
+          thread.throwException(u"java/lang/ArrayIndexOutOfBoundsException");
+          break;
+        }
 
         break;
       }
@@ -242,22 +290,48 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
       case Opcode::AASTORE: {
         Value value = frame.popOperand();
         int32_t index = frame.popOperand().asInt();
-        ArrayInstance* arrayRef = frame.popOperand().asReference()->asArrayInstance();
+        Instance* arrayRef = frame.popOperand().asReference();
 
-        arrayRef->setArrayElement(index, value);
+        if (arrayRef == nullptr) {
+          thread.throwException(u"java/lang/NullPointerException");
+          break;
+        }
 
-        // TODO: null-check, bounds check, type checks
+        ArrayInstance* array = arrayRef->asArrayInstance();
+
+        JClass* elementClass = value.asReference()->getClass();
+        auto arrayElementClass = array->getClass()->asArrayClass()->elementClass();
+        assert(arrayElementClass);
+
+        if (!elementClass->isInstanceOf(*arrayElementClass)) {
+          thread.throwException(u"java/lang/ArrayStoreException");
+          break;
+        }
+
+        if (auto res = array->setArrayElement(index, value); !res) {
+          this->handleErrorAsException(thread, res.error());
+          break;
+        }
+
         break;
       }
       case Opcode::BASTORE: notImplemented(opcode); break;
       case Opcode::CASTORE: {
         int32_t value = frame.popOperand().asInt();
         int32_t index = frame.popOperand().asInt();
-        ArrayInstance* arrayRef = frame.popOperand().asReference()->asArrayInstance();
+        Instance* arrayRef = frame.popOperand().asReference();
 
-        // FIXME: Explicitly truncate
-        // TODO: Null check, exceptions
-        arrayRef->setArrayElement(index, Value::Char(static_cast<char16_t>(value)));
+        if (arrayRef == nullptr) {
+          thread.throwException(u"java/lang/NullPointerException");
+          break;
+        }
+
+        ArrayInstance* array = arrayRef->asArrayInstance();
+
+        if (auto res = array->setArrayElement(index, Value::Char(static_cast<char16_t>(value))); !res) {
+          this->handleErrorAsException(thread, res.error());
+          break;
+        }
 
         break;
       }
@@ -470,7 +544,13 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
       case Opcode::D2L: notImplemented(opcode); break;
       case Opcode::D2F: notImplemented(opcode); break;
       case Opcode::I2B: notImplemented(opcode); break;
-      case Opcode::I2C: notImplemented(opcode); break;
+      case Opcode::I2C: {
+        int32_t value = frame.popOperand().asInt();
+        char16_t charValue = static_cast<char16_t>(value);
+
+        frame.pushOperand(Value::Int(charValue));
+        break;
+      }
       case Opcode::I2S: notImplemented(opcode); break;
 
       case Opcode::LCMP: {
@@ -688,8 +768,8 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
 
         auto klass = thread.resolveClass(types::JString{className});
         if (!klass) {
-          // TODO: Abort frame
-          assert(false);
+          this->handleErrorAsException(thread, klass.error());
+          break;
         }
 
         (*klass)->initialize(thread);
@@ -735,8 +815,13 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
 
         auto arrayClass = thread.resolveClass(arrayClsName);
         if (!arrayClass) {
-          // TODO: Abort frame
-          assert(false);
+          this->handleErrorAsException(thread, arrayClass.error());
+          break;
+        }
+
+        if (count < 0) {
+          thread.throwException(u"java/lang/NegativeArraySizeException", u"");
+          break;
         }
 
         ArrayInstance* newInstance = thread.heap().allocateArray((*arrayClass)->asArrayClass(), count);
@@ -750,16 +835,23 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
 
         auto klass = runtimeConstantPool.getClass(index);
         if (!klass) {
-          // TODO: Abort frame
-          assert(false);
+          this->handleErrorAsException(thread, klass.error());
+          break;
         }
 
         auto arrayClass = thread.resolveClass(u"[L" + types::JString{(*klass)->className()} + u";");
-        assert(arrayClass.has_value());
+        if (!arrayClass) {
+          this->handleErrorAsException(thread, arrayClass.error());
+          break;
+        }
+
+        if (count < 0) {
+          thread.throwException(u"java/lang/NegativeArraySizeException", u"");
+          break;
+        }
 
         ArrayInstance* array = thread.heap().allocateArray((*arrayClass)->asArrayClass(), count);
         frame.pushOperand(Value::Reference(array));
-        // TODO: if count is less than zero, the anewarray instruction throws a NegativeArraySizeException.
 
         break;
       }
@@ -781,13 +873,14 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         } else {
           auto klass = runtimeConstantPool.getClass(index);
           if (!klass) {
-            // TODO: Abort frame
-            assert(false);
+            this->handleErrorAsException(thread, klass.error());
+            break;
           }
 
           JClass* classToCheck = objectRef->getClass();
           if (!classToCheck->isInstanceOf(*klass)) {
-            assert(false && "TODO throw execption");
+            types::JString message = u"class " + classToCheck->javaClassName() + u" cannot be cast to class " + (*klass)->javaClassName();
+            thread.throwException(u"java/lang/ClassCastException", message);
           } else {
             frame.pushOperand(Value::Reference(objectRef));
           }
@@ -803,8 +896,8 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         } else {
           auto klass = runtimeConstantPool.getClass(index);
           if (!klass) {
-            // TODO: Abort frame
-            assert(false);
+            this->handleErrorAsException(thread, klass.error());
+            break;
           }
 
           JClass* classToCheck = objectRef->getClass();
@@ -874,6 +967,7 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         bool caught = false;
         if (entry.catchType != 0) {
           auto exceptionClass = runtimeConstantPool.getClass(entry.catchType);
+
           assert(exceptionClass.has_value());
           if (exception->getClass()->isInstanceOf(*exceptionClass)) {
             caught = true;
@@ -922,6 +1016,11 @@ void DefaultInterpreter::invoke(JavaThread& thread, JMethod* method)
   if (returnValue.has_value()) {
     thread.currentFrame().pushOperand(*returnValue);
   }
+}
+
+void DefaultInterpreter::handleErrorAsException(JavaThread& thread, const VmError& error)
+{
+  thread.throwException(error.exception(), error.message());
 }
 
 void DefaultInterpreter::integerComparison(Predicate predicate, CodeCursor& cursor, CallFrame& frame)

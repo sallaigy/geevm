@@ -1,50 +1,15 @@
 #ifndef GEEVM_VM_CLASSLOADER_H
 #define GEEVM_VM_CLASSLOADER_H
 
-#include <utility>
-
 #include "common/JvmError.h"
 #include "common/JvmTypes.h"
 #include "vm/Class.h"
+#include "vm/ClassPath.h"
 
 namespace geevm
 {
 
-class ClassLocation
-{
-public:
-  virtual JvmExpected<std::unique_ptr<InstanceClass>> resolve() = 0;
-  virtual ~ClassLocation() = default;
-};
-
-class ClassFileLocation : public ClassLocation
-{
-public:
-  explicit ClassFileLocation(std::string fileName)
-    : mFileName(std::move(fileName))
-  {
-  }
-
-  JvmExpected<std::unique_ptr<InstanceClass>> resolve() override;
-
-private:
-  std::string mFileName;
-};
-
-class JarLocation : public ClassLocation
-{
-public:
-  JarLocation(std::string archiveLocation, std::string fileName)
-    : mArchiveLocation(std::move(archiveLocation)), mFileName(std::move(fileName))
-  {
-  }
-
-  JvmExpected<std::unique_ptr<InstanceClass>> resolve() override;
-
-private:
-  std::string mArchiveLocation;
-  std::string mFileName;
-};
+class ZipArchive;
 
 class ClassLoader
 {
@@ -68,7 +33,7 @@ private:
 
 private:
   Vm& mVm;
-  std::string mBootstrapClassPath;
+  std::unique_ptr<ZipArchive> mBootstrapArchive;
   std::unique_ptr<ClassLoader> mNextClassLoader;
   std::unordered_map<types::JString, std::unique_ptr<JClass>> mClasses;
 };

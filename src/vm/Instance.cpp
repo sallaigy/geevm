@@ -56,7 +56,7 @@ ClassInstance* Instance::asClassInstance()
 JvmExpected<Value> ArrayInstance::getArrayElement(int32_t index)
 {
   if (index < 0 || index >= mContents.size()) {
-    return makeError<Value, ArrayIndexOutOfBoundsException>();
+    return makeError<Value>(u"java/lang/ArrayIndexOutOfBoundsException");
   }
 
   return mContents[index];
@@ -65,7 +65,7 @@ JvmExpected<Value> ArrayInstance::getArrayElement(int32_t index)
 JvmExpected<void> ArrayInstance::setArrayElement(int32_t index, Value value)
 {
   if (index < 0 || index >= mContents.size()) {
-    return makeError<void, ArrayIndexOutOfBoundsException>();
+    return makeError<void>(u"java/lang/ArrayIndexOutOfBoundsException");
   }
 
   mContents[index] = value;

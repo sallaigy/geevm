@@ -37,6 +37,7 @@ class JavaIntegrationTest:
     geevm_java_command: str
     class_dir: tempfile.TemporaryDirectory
     tests_dir: pathlib.Path
+    failures = List[TestCase]
 
     def __init__(self, geevm_binary_dir: str):
         java_path = pathlib.Path(geevm_binary_dir) / 'java'
@@ -88,6 +89,38 @@ class JavaIntegrationTest:
             TestCase('strings.StringEquals', 'true\nfalse\nfalse\ntrue\ntrue\nfalse\ntrue\nfalse\n')
         ])
 
+    def arrays(self):
+        expected_number_sequence = '0\n2\n4\n6\n8\n10\n12\n14\n16\n18\n'
+        expected_exceptions_for_primitives = '''Caught NegativeArraySizeException
+Caught NullPointerException
+Caught ArrayIndexOutOfBoundsException
+Caught ArrayIndexOutOfBoundsException
+Caught ArrayIndexOutOfBoundsException
+Caught NullPointerException
+Caught ArrayIndexOutOfBoundsException
+Caught ArrayIndexOutOfBoundsException
+Caught ArrayIndexOutOfBoundsException
+'''
+
+        self.execute_tests('arrays', [
+            TestCase('arrays.IntArrays', expected_number_sequence),
+            TestCase('arrays.IntArrayExceptions', expected_exceptions_for_primitives),
+            TestCase('arrays.CharArrays', '0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n'),
+            TestCase('arrays.CharArrayExceptions', expected_exceptions_for_primitives),
+            TestCase('arrays.ObjectArrays', '#0\n#1\n#2\n#3\n#4\n#5\n#6\n#7\n#8\n#9\n'),
+            TestCase('arrays.ObjectArrayExceptions', '''Caught NegativeArraySizeException
+Caught NullPointerException
+Caught ArrayIndexOutOfBoundsException
+Caught ArrayIndexOutOfBoundsException
+Caught ArrayIndexOutOfBoundsException
+Caught ArrayStoreException
+Caught NullPointerException
+Caught ArrayIndexOutOfBoundsException
+Caught ArrayIndexOutOfBoundsException
+Caught ArrayIndexOutOfBoundsException
+''')
+        ])
+
     def exceptions(self):
         self.execute_tests('exceptions', [
             TestCase('exceptions.SimpleException',
@@ -101,7 +134,9 @@ class JavaIntegrationTest:
     def errors(self):
         self.execute_tests('errors', [
             TestCase('errors.UnknownNativeMethod',
-                     stderr="Exception java.lang.UnsatisfiedLinkError: 'void org.geevm.tests.errors.UnknownNativeMethod.callee()'\n")
+                     stderr="Exception java.lang.UnsatisfiedLinkError: 'void org.geevm.tests.errors.UnknownNativeMethod.callee()'\n"),
+            TestCase('errors.ClassCast',
+                     stderr="Exception java.lang.ClassCastException: 'class org.geevm.tests.errors.ClassCast cannot be cast to class java.lang.String'\n")
         ])
 
     def reflection(self):
@@ -111,17 +146,20 @@ class JavaIntegrationTest:
         ])
 
     def run(self):
+        self.failures = []
         self.simple_math_programs()
         self.strings()
+        self.arrays()
         self.oop_programs()
         self.exceptions()
         self.errors()
         self.reflection()
 
     def execute_tests(self, test_suite_name, tests: List[TestCase]):
-        success: bool = True
         print(test_suite_name)
         for test_case in tests:
+            success: bool = True
+
             class_name = test_case.name
             expected_stdout = test_case.expected_stdout
             expected_stderr = test_case.expected_stderr
@@ -133,19 +171,22 @@ class JavaIntegrationTest:
                     print(
                         f'  {Color.RED}The geevm java command failed with status code {r.returncode}{Color.RESET}:')
                     print(r.stderr.decode())
-                    continue
-
-                if expected_stdout is not None:
-                    actual = r.stdout.decode()
-                    success = self.compare(class_name, 'stdout', expected_stdout, actual) and success
-                if expected_stderr is not None:
-                    actual = r.stderr.decode()
-                    success = self.compare(class_name, 'stderr', expected_stderr, actual) and success
+                    success = False
+                else:
+                    if expected_stdout is not None:
+                        actual = r.stdout.decode()
+                        success = self.compare(class_name, 'stdout', expected_stdout, actual)
+                    if expected_stderr is not None:
+                        actual = r.stderr.decode()
+                        success = self.compare(class_name, 'stderr', expected_stderr, actual)
             except TimeoutError:
                 print(f'  [{Color.RED}TIMEOUT{Color.RESET}] {class_name}')
                 print(
                     f'  {Color.RED}The geevm java failed due to timeout {Color.RESET}:')
-                continue
+                success = False
+
+            if not success:
+                self.failures.append(test_case)
 
     def compare(self, name, comparing, expected, actual) -> bool:
         if expected != actual:
@@ -167,3 +208,8 @@ if __name__ == "__main__":
 
     with JavaIntegrationTest(binary_dir) as test:
         test.run()
+        if len(test.failures) != 0:
+            print(f'Failed {len(test.failures)} tests:')
+            for test_case in test.failures:
+                print(f'  {test_case.name}')
+            exit(1)
