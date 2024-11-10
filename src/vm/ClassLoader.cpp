@@ -1,4 +1,5 @@
 #include "vm/ClassLoader.h"
+#include "common/Zip.h"
 
 #include "Vm.h"
 
@@ -6,7 +7,6 @@
 #include <filesystem>
 #include <iostream>
 #include <utility>
-#include <zip.h>
 
 using namespace geevm;
 
@@ -34,8 +34,15 @@ JvmExpected<JClass*> BootstrapClassLoader::loadClass(const types::JString& name)
 
   JvmExpected<std::unique_ptr<InstanceClass>> loadResult;
   if (name.starts_with(u"java/") || name.starts_with(u"sun/") || name.starts_with(u"jdk/")) {
-    // TODO: replace
-    JarLocation location{std::getenv("RT_JAR_PATH"), classNameToPath(name)};
+    if (mBootstrapArchive == nullptr) {
+      mBootstrapArchive = ZipArchive::open(std::getenv("RT_JAR_PATH"));
+    }
+
+    if (mBootstrapArchive == nullptr) {
+      return makeError<JClass*>(u"java/lang/NoClassDefFoundError");
+    }
+
+    ClassLocation location = ClassLocation::createJarLocation(mBootstrapArchive.get(), classNameToPath(name));
     loadResult = location.resolve();
   } else {
     loadResult = mNextClassLoader->loadClass(name);
@@ -76,57 +83,45 @@ JvmExpected<ArrayClass*> BootstrapClassLoader::loadArrayClass(const types::JStri
 
 JvmExpected<std::unique_ptr<InstanceClass>> BaseClassLoader::loadClass(const types::JString& name)
 {
-  return ClassFileLocation{classNameToPath(name)}.resolve();
+  // TODO: Load JARs
+  return ClassLocation::createFileLocation(classNameToPath(name)).resolve();
 }
 
-JvmExpected<std::unique_ptr<InstanceClass>> ClassFileLocation::resolve()
+ClassLocation ClassLocation::createJarLocation(ZipArchive* archive, const std::string& fileName)
 {
-  auto classFile = ClassFile::fromFile(mFileName);
-  if (!classFile) {
-    // TODO: Check exactly why the file cannot be loaded
-    return makeError<std::unique_ptr<InstanceClass>, NoClassDefFoundError>();
-  }
-  return std::make_unique<InstanceClass>(std::move(classFile));
+  return ClassLocation(std::make_pair(archive, fileName));
 }
 
-JvmExpected<std::unique_ptr<InstanceClass>> JarLocation::resolve()
+ClassLocation ClassLocation::createFileLocation(std::string fileName)
 {
-  int ec;
-  zip_t* archive = zip_open(mArchiveLocation.c_str(), ZIP_RDONLY, &ec);
-  if (archive == nullptr) {
-    return makeError<std::unique_ptr<InstanceClass>, NoClassDefFoundError>();
+  return ClassLocation(fileName);
+}
+
+JvmExpected<std::unique_ptr<InstanceClass>> ClassLocation::resolve()
+{
+  if (std::holds_alternative<std::string>(mStorage)) {
+    auto& fileName = std::get<std::string>(mStorage);
+    auto classFile = ClassFile::fromFile(fileName);
+    if (!classFile) {
+      // TODO: Check exactly why the file cannot be loaded
+      return makeError<std::unique_ptr<InstanceClass>>(u"java/lang/NoClassDefFoundError");
+    }
+    return std::make_unique<InstanceClass>(std::move(classFile));
   }
 
-  int64_t fileIndex = zip_name_locate(archive, mFileName.c_str(), ZIP_FL_ENC_GUESS);
-  if (fileIndex == -1) {
-    zip_close(archive);
-    return makeError<std::unique_ptr<InstanceClass>, NoClassDefFoundError>();
+  auto& [zip, fileName] = std::get<std::pair<ZipArchive*, std::string>>(mStorage);
+  if (zip == nullptr) {
+    return makeError<std::unique_ptr<InstanceClass>>(u"java/lang/NoClassDefFoundError");
   }
 
-  zip_stat_t stat;
-  if (zip_stat_index(archive, fileIndex, ZIP_STAT_SIZE, &stat) != 0) {
-    zip_close(archive);
-    return makeError<std::unique_ptr<InstanceClass>, NoClassDefFoundError>();
+  char* buffer;
+  size_t size;
+  if (!zip->readAsBinary(fileName, &buffer, &size)) {
+    return makeError<std::unique_ptr<InstanceClass>>(u"java/lang/NoClassDefFoundError");
   }
 
-  zip_file_t* zipFile = zip_fopen_index(archive, fileIndex, 0);
-  if (zipFile == nullptr) {
-    zip_close(archive);
-    return makeError<std::unique_ptr<InstanceClass>, NoClassDefFoundError>();
-  }
+  auto classFile = ClassFile::fromBytes(buffer, size);
 
-  auto buffer = new char[stat.size];
-  if (zip_fread(zipFile, buffer, stat.size) == -1) {
-    zip_fclose(zipFile);
-    zip_close(archive);
-    delete[] buffer;
-    return makeError<std::unique_ptr<InstanceClass>, NoClassDefFoundError>();
-  }
-
-  auto classFile = ClassFile::fromBytes(buffer, stat.size);
-
-  zip_fclose(zipFile);
-  zip_close(archive);
   delete[] buffer;
 
   return std::make_unique<InstanceClass>(std::move(classFile));

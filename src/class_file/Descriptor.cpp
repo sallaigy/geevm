@@ -118,14 +118,14 @@ types::JString FieldType::toJavaString() const
 
   if (auto primitveType = asPrimitive(); primitveType) {
     switch (*primitveType) {
-      case PrimitiveType::Byte: str = u"byte";
-      case PrimitiveType::Char: str = u"char";
-      case PrimitiveType::Double: str = u"double";
-      case PrimitiveType::Float: str = u"float";
-      case PrimitiveType::Int: str = u"int";
-      case PrimitiveType::Long: str = u"long";
-      case PrimitiveType::Short: str = u"short";
-      case PrimitiveType::Boolean: str = u"boolean";
+      case PrimitiveType::Byte: str = u"byte"; break;
+      case PrimitiveType::Char: str = u"char"; break;
+      case PrimitiveType::Double: str = u"double"; break;
+      case PrimitiveType::Float: str = u"float"; break;
+      case PrimitiveType::Int: str = u"int"; break;
+      case PrimitiveType::Long: str = u"long"; break;
+      case PrimitiveType::Short: str = u"short"; break;
+      case PrimitiveType::Boolean: str = u"boolean"; break;
       default: std::unreachable();
     }
   } else {

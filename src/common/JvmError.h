@@ -14,49 +14,35 @@ class VmError
 public:
   VmError() = default;
 
-  explicit VmError(types::JString message)
-    : mMessage(std::move(message))
+  explicit VmError(types::JString exception, types::JString message = u"")
+    : mException(std::move(exception)), mMessage(std::move(message))
   {
   }
 
   VmError(const VmError&) = default;
 
-  types::JString message() const
+  const types::JString& exception() const
+  {
+    return mException;
+  }
+
+  const types::JString& message() const
   {
     return mMessage;
   }
 
 private:
+  types::JString mException;
   types::JString mMessage;
 };
 
-class NoClassDefFoundError : public VmError
-{
-public:
-  NoClassDefFoundError() = default;
-  using VmError::VmError;
-};
-
-// TODO: Move this
-class ArrayIndexOutOfBoundsException : public VmError
-{
-public:
-  using VmError::VmError;
-};
-
 template<class T>
-using JvmExpected = std::expected<T, std::unique_ptr<VmError>>;
+using JvmExpected = std::expected<T, VmError>;
 
-template<class T, class E, class... Args>
+template<class T, class... Args>
 JvmExpected<T> makeError(Args&&... args)
 {
-  return std::unexpected(std::make_unique<E>(args...));
-}
-
-template<class T>
-JvmExpected<T> makeError(std::unique_ptr<VmError> error)
-{
-  return std::unexpected(std::move(error));
+  return std::unexpected(VmError{args...});
 }
 
 } // namespace geevm

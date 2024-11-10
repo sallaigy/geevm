@@ -144,10 +144,6 @@ void JClass::initialize(JavaThread& thread)
     }
   }
 
-  // JClass* classClass = mClassInstance->getClass();
-  // auto clsInstanceInit = classClass->getVirtualMethod(u"<init>", u"()V");
-  // thread.executeCall(*clsInstanceInit, {});
-
   mStatus = Status::Initialized;
 }
 

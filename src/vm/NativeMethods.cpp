@@ -65,35 +65,39 @@ static std::optional<Value> geevm_test_print(JavaThread& thread, CallFrame& fram
 {
   Value value = args[0];
 
-  switch (value.kind()) {
-    case Value::Kind::Byte: std::cout << value.asInt() << std::endl; break;
-    case Value::Kind::Short: std::cout << value.asInt() << std::endl; break;
-    case Value::Kind::Int: {
-      PrimitiveType type = *frame.currentMethod()->descriptor().parameters().at(0).asPrimitive();
-      if (type == PrimitiveType::Boolean) {
-        std::cout << (value.asInt() == 1 ? "true" : "false") << std::endl;
-      } else {
-        std::cout << value.asInt() << std::endl;
-      }
-      break;
-    }
-    case Value::Kind::Long: std::cout << value.asLong() << std::endl; break;
-    case Value::Kind::Char: std::cout << value.asInt() << std::endl; break;
-    case Value::Kind::Float: std::cout << value.asFloat() << std::endl; break;
-    case Value::Kind::Double: std::cout << value.asDouble() << std::endl; break;
-    case Value::Kind::ReturnAddress: std::cout << value.asInt() << std::endl; break;
-    case Value::Kind::Reference: {
-      Instance* ref = value.asReference();
-      if (ref->getClass()->className() == u"java/lang/String") {
-        types::JString out = u"";
-        for (Value charValue : ref->getFieldValue(u"value", u"[C").asReference()->asArrayInstance()->contents()) {
-          out += charValue.asChar();
+  const FieldType& type = frame.currentMethod()->descriptor().parameters().at(0);
+
+  if (auto primitiveType = type.asPrimitive(); primitiveType) {
+    switch (*primitiveType) {
+      case PrimitiveType::Byte: std::cout << value.asInt() << std::endl; break;
+      case PrimitiveType::Char: {
+        char16_t charValue;
+        if (value.kind() == Value::Kind::Char) {
+          charValue = value.asChar();
+        } else {
+          charValue = static_cast<char16_t>(value.asInt());
         }
-        std::cout << types::convertJString(out) << std::endl;
-      } else {
-        std::cout << value.asReference() << std::endl;
+
+        std::cout << types::convertJString(types::JString{charValue}) << std::endl;
+        break;
       }
-      break;
+      case PrimitiveType::Double: std::cout << value.asDouble() << std::endl; break;
+      case PrimitiveType::Float: std::cout << value.asFloat() << std::endl; break;
+      case PrimitiveType::Int: std::cout << value.asInt() << std::endl; break;
+      case PrimitiveType::Long: std::cout << value.asLong() << std::endl; break;
+      case PrimitiveType::Short: std::cout << value.asInt() << std::endl; break;
+      case PrimitiveType::Boolean: std::cout << (value.asInt() == 1 ? "true" : "false") << std::endl; break;
+    }
+  } else {
+    Instance* ref = value.asReference();
+    if (ref->getClass()->className() == u"java/lang/String") {
+      types::JString out;
+      for (Value charValue : ref->getFieldValue(u"value", u"[C").asReference()->asArrayInstance()->contents()) {
+        out += charValue.asChar();
+      }
+      std::cout << types::convertJString(out) << std::endl;
+    } else {
+      std::cout << value.asReference() << std::endl;
     }
   }
 
@@ -104,6 +108,7 @@ void Vm::registerNatives()
 {
   // Temporary printing methods 'org.geethread.tests.basic.Printer'
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/tests/Printer", u"println", u"(I)V"}, geevm_test_print);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/tests/Printer", u"println", u"(C)V"}, geevm_test_print);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/tests/Printer", u"println", u"(J)V"}, geevm_test_print);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/tests/Printer", u"println", u"(F)V"}, geevm_test_print);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/tests/Printer", u"println", u"(D)V"}, geevm_test_print);
@@ -245,6 +250,9 @@ std::optional<Value> java_lang_Class_getPrimitiveClass(JavaThread& thread, CallF
     return Value::Reference((*klass)->classInstance());
   } else if (buffer == u"double") {
     auto klass = thread.resolveClass(u"java/lang/Double");
+    return Value::Reference((*klass)->classInstance());
+  } else if (buffer == u"int") {
+    auto klass = thread.resolveClass(u"java/lang/Integer");
     return Value::Reference((*klass)->classInstance());
   } else {
     assert(false && "Unknown primitive class");
