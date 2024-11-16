@@ -288,7 +288,7 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
       case Opcode::FASTORE: notImplemented(opcode); break;
       case Opcode::DASTORE: notImplemented(opcode); break;
       case Opcode::AASTORE: {
-        Value value = frame.popOperand();
+        Instance* value = frame.popOperand().asReference();
         int32_t index = frame.popOperand().asInt();
         Instance* arrayRef = frame.popOperand().asReference();
 
@@ -299,16 +299,18 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
 
         ArrayInstance* array = arrayRef->asArrayInstance();
 
-        JClass* elementClass = value.asReference()->getClass();
-        auto arrayElementClass = array->getClass()->asArrayClass()->elementClass();
-        assert(arrayElementClass);
+        if (value != nullptr) {
+          JClass* elementClass = value->getClass();
+          auto arrayElementClass = array->getClass()->asArrayClass()->elementClass();
+          assert(arrayElementClass);
 
-        if (!elementClass->isInstanceOf(*arrayElementClass)) {
-          thread.throwException(u"java/lang/ArrayStoreException");
-          break;
+          if (!elementClass->isInstanceOf(*arrayElementClass)) {
+            thread.throwException(u"java/lang/ArrayStoreException");
+            break;
+          }
         }
 
-        if (auto res = array->setArrayElement(index, value); !res) {
+        if (auto res = array->setArrayElement(index, Value::Reference(value)); !res) {
           this->handleErrorAsException(thread, res.error());
           break;
         }

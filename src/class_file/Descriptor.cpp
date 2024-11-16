@@ -129,10 +129,7 @@ types::JString FieldType::toJavaString() const
       default: std::unreachable();
     }
   } else {
-    types::JStringRef objectName = (*asObjectName());
-
-    objectName.remove_prefix(1);
-    objectName.remove_suffix(1);
+    types::JString objectName = *asObjectName();
 
     str = types::JString{objectName};
     std::ranges::replace(str, u'/', u'.');

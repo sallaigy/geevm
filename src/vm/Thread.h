@@ -70,6 +70,11 @@ public:
     return mCallStack.back();
   }
 
+  const std::list<CallFrame>& callStack() const
+  {
+    return mCallStack;
+  }
+
   void returnToCaller(Value returnValue);
 
   std::optional<Value> executeCall(JMethod* method, const std::vector<Value>& args);
@@ -82,6 +87,7 @@ public:
 
   void throwException(Instance* exceptionInstance);
   void throwException(const types::JString& name, const types::JString& message = u"");
+  Instance* createStackTrace();
 
   void clearException();
 

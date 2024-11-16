@@ -3,8 +3,8 @@
 #include "vm/Vm.h"
 
 #include <algorithm>
+#include <csignal>
 #include <iostream>
-#include <signal.h>
 #include <utility>
 
 using namespace geevm;
@@ -49,6 +49,7 @@ static std::optional<Value> java_lang_Double_longBitsToDouble(JavaThread& thread
 
 static std::optional<Value> sun_misc_Unsafe_arrayBaseOffset(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> sun_misc_Unsafe_objectFieldOffset(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> sun_misc_Unsafe_compareAndSwapObject(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 
 static std::optional<Value> sun_reflect_Reflection_getCallerClass(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> java_security_AccessController_doPrivileged(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
@@ -58,6 +59,8 @@ static std::optional<Value> java_lang_Thread_isAlive(JavaThread& thread, CallFra
 static std::optional<Value> java_lang_Thread_start0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 
 static std::optional<Value> java_lang_Throwable_fillInStackTrace(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> java_lang_Throwable_getStackTraceDepth(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> java_lang_Throwable_getStackTraceElement(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 
 static std::optional<Value> java_lang_String_intern(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 
@@ -172,6 +175,9 @@ void Vm::registerNatives()
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"sun/misc/Unsafe", u"addressSize", u"()I"}, sun_misc_Unsafe_arrayBaseOffset);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"sun/misc/Unsafe", u"objectFieldOffset", u"(Ljava/lang/reflect/Field;)J"},
                                       sun_misc_Unsafe_objectFieldOffset);
+  // mNativeMethods.registerNativeMethod(
+  //     ClassNameAndDescriptor{u"sun/misc/Unsafe", u"compareAndSwapObject", u"(Ljava/lang/Object;JLjava/lang/Object;Ljava/lang/Object;)Z"},
+  //     sun_misc_Unsafe_compareAndSwapObject);
 
   // sun.reflect.Reflection
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"sun/reflect/Reflection", u"getCallerClass", u"()Ljava/lang/Class;"},
@@ -199,6 +205,9 @@ void Vm::registerNatives()
   // java.lang.Throwable
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Throwable", u"fillInStackTrace", u"(I)Ljava/lang/Throwable;"},
                                       java_lang_Throwable_fillInStackTrace);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Throwable", u"getStackTraceDepth", u"()I"}, java_lang_Throwable_getStackTraceDepth);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Throwable", u"getStackTraceElement", u"(I)Ljava/lang/StackTraceElement;"},
+                                      java_lang_Throwable_getStackTraceElement);
 }
 
 std::optional<Value> noop(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
@@ -307,7 +316,7 @@ std::optional<Value> java_lang_Class_getDeclaredFields0(JavaThread& thread, Call
   for (auto& [nameAndDescriptor, field] : klass->fields()) {
     if (!isPublicOnly || field->isPublic()) {
       Instance* fieldInstance = thread.heap().allocate((*fieldCls)->asInstanceClass());
-      fieldInstance->setFieldValue(u"name", u"[C", Value::Reference(thread.heap().intern(field->name())));
+      fieldInstance->setFieldValue(u"name", u"Ljava/lang/String;", Value::Reference(thread.heap().intern(field->name())));
       fieldInstance->setFieldValue(u"modifiers", u"I", Value::Int(static_cast<int32_t>(field->accessFlags())));
 
       fields.push_back(fieldInstance);
@@ -371,6 +380,18 @@ std::optional<Value> sun_misc_Unsafe_objectFieldOffset(JavaThread& thread, CallF
 {
   // TODO
   return Value::Long(0);
+}
+
+std::optional<Value> sun_misc_Unsafe_compareAndSwapObject(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  Instance* obj = args[1].asReference();
+  int64_t offset = args[2].asLong();
+  // 'offset' is category 2, so we skip an index
+  Instance* expected = args[4].asReference();
+  Instance* target = args[5].asReference();
+
+  // FIXME
+  return Value::Int(1);
 }
 
 std::optional<Value> sun_reflect_Reflection_getCallerClass(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
@@ -439,7 +460,37 @@ std::optional<Value> java_lang_Throwable_fillInStackTrace(JavaThread& thread, Ca
 {
   Instance* exceptionInstance = args[0].asReference();
 
+  auto array = thread.createStackTrace();
+  // exceptionInstance->setFieldValue(u"stackTrace", u"[Ljava/lang/StackTraceElement;", Value::Reference(array));
+  exceptionInstance->setFieldValue(u"stackTrace", u"[Ljava/lang/StackTraceElement;", Value::Reference(nullptr));
+  exceptionInstance->setFieldValue(u"backtrace", u"Ljava/lang/Object;", Value::Reference(array));
+
   return Value::Reference(exceptionInstance);
+}
+
+std::optional<Value> java_lang_Throwable_getStackTraceDepth(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  Instance* exceptionInstance = args[0].asReference();
+  auto backtrace = exceptionInstance->getFieldValue(u"backtrace", u"Ljava/lang/Object;");
+
+  if (backtrace.asReference() == nullptr) {
+    return Value::Int(0);
+  }
+
+  return Value::Int(backtrace.asReference()->asArrayInstance()->length());
+}
+
+std::optional<Value> java_lang_Throwable_getStackTraceElement(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  Instance* exceptionInstance = args[0].asReference();
+  int32_t index = args[1].asInt();
+
+  auto backtrace = exceptionInstance->getFieldValue(u"backtrace", u"Ljava/lang/Object;");
+  auto elem = backtrace.asReference()->asArrayInstance()->getArrayElement(index);
+
+  assert(elem.has_value());
+
+  return Value::Reference(elem->asReference());
 }
 
 std::optional<Value> java_lang_String_intern(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
