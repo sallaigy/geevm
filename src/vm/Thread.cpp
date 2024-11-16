@@ -1,7 +1,7 @@
 #include "vm/Thread.h"
-
-#include "Interpreter.h"
-#include "Vm.h"
+#include "vm/Interpreter.h"
+#include "vm/Vm.h"
+#include "vm/VmUtils.h"
 
 #include <algorithm>
 #include <iostream>
@@ -117,15 +117,34 @@ std::optional<Value> JavaThread::executeCall(JMethod* method, const std::vector<
 
       types::JString message = u"Exception ";
 
-      auto exceptionClsName = mCurrentException->getClass()->className();
-      std::ranges::replace(exceptionClsName, u'/', u'.');
+      auto exceptionClsName = mCurrentException->getClass()->javaClassName();
 
       message += exceptionClsName;
       message += u": '";
-      for (Value ch : exceptionMessage->getFieldValue(u"value", u"[C").asReference()->asArrayInstance()->contents()) {
-        message += ch.asChar();
-      }
+      message += utils::getStringValue(exceptionMessage);
       message += u"'";
+
+      // Instance* stackTrace = mCurrentException->getFieldValue(u"stackTrace", u"[Ljava/lang/StackTraceElement;").asReference();
+      auto getStackTrace = mCurrentException->getClass()->getVirtualMethod(u"getOurStackTrace", u"()[Ljava/lang/StackTraceElement;");
+
+      Instance* exceptionInstance = mCurrentException;
+      mCurrentException = nullptr;
+      Instance* stackTrace = this->executeCall((*getStackTrace), {Value::Reference(exceptionInstance)})->asReference();
+
+      if (stackTrace != nullptr) {
+        message += u"\n";
+
+        auto& arrayContents = stackTrace->asArrayInstance()->contents();
+        for (Value elem : arrayContents) {
+          auto toStringMethod = elem.asReference()->getClass()->getVirtualMethod(u"toString", u"()Ljava/lang/String;");
+          auto ret = this->executeCall(*toStringMethod, {elem});
+          assert(ret.has_value());
+
+          message += u"  at ";
+          message += utils::getStringValue(ret->asReference());
+          message += u"\n";
+        }
+      }
 
       std::cerr << types::convertJString(message) << std::endl;
       // TODO: We should exit with exit code 1, but some of our current tests would break
@@ -156,6 +175,7 @@ void JavaThread::throwException(Instance* exceptionInstance)
 {
   assert(mCurrentException == nullptr && "There is already an exception instance");
   mCurrentException = exceptionInstance;
+  currentFrame().throwException();
   currentFrame().clearOperandStack();
   currentFrame().pushOperand(Value::Reference(exceptionInstance));
 }
@@ -170,6 +190,7 @@ void JavaThread::throwException(const types::JString& name, const types::JString
   Instance* exceptionInstance = heap().allocate((*klass)->asInstanceClass());
   Instance* messageInstance = heap().intern(message);
   exceptionInstance->setFieldValue(u"detailMessage", u"Ljava/lang/String;", Value::Reference(messageInstance));
+  exceptionInstance->setFieldValue(u"stackTrace", u"[Ljava/lang/StackTraceElement;", Value::Reference(createStackTrace()));
 
   this->throwException(exceptionInstance);
 }
@@ -178,4 +199,38 @@ void JavaThread::clearException()
 {
   assert(mCurrentException != nullptr && "There should be an exception instance");
   mCurrentException = nullptr;
+}
+
+Instance* JavaThread::createStackTrace()
+{
+  auto stackTraceElementCls = resolveClass(u"java/lang/StackTraceElement");
+  assert(stackTraceElementCls);
+  auto stackTraceArrayCls = resolveClass(u"[Ljava/lang/StackTraceElement;");
+  assert(stackTraceArrayCls.has_value());
+
+  auto throwable = resolveClass(u"java/lang/Throwable");
+
+  std::vector<Value> stackTrace;
+
+  bool include = false;
+  for (auto it = callStack().rbegin(); it != callStack().rend(); ++it) {
+    const CallFrame& callFrame = *it;
+    if (!callFrame.currentClass()->isInstanceOf(*throwable)) {
+      include = true;
+    }
+
+    if (include) {
+      auto stackTraceElement = heap().allocate((*stackTraceElementCls)->asInstanceClass());
+      stackTraceElement->setFieldValue(u"declaringClass", u"Ljava/lang/String;", Value::Reference(heap().intern(callFrame.currentClass()->javaClassName())));
+      stackTraceElement->setFieldValue(u"methodName", u"Ljava/lang/String;", Value::Reference(heap().intern(callFrame.currentMethod()->name())));
+      stackTrace.push_back(Value::Reference(stackTraceElement));
+    }
+  }
+
+  ArrayInstance* array = heap().allocateArray((*stackTraceArrayCls)->asArrayClass(), stackTrace.size());
+  for (int32_t i = 0; i < stackTrace.size(); i++) {
+    array->setArrayElement(i, stackTrace[i]);
+  }
+
+  return array;
 }

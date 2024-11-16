@@ -127,16 +127,26 @@ Caught ArrayIndexOutOfBoundsException
                      stdout='Caught exception: Exception thrown and caught in the same method.\n'),
             TestCase('exceptions.ExceptionInCallee',
                      stdout='Caught exception: Exception thrown in callee.\n'),
-            TestCase('exceptions.UncaughtException',
-                     stderr="Exception java.lang.IllegalStateException: 'Exception thrown in callee.'\n")
+            TestCase('exceptions.UncaughtException', stderr='''Exception java.lang.IllegalStateException: 'Exception thrown in callee.'
+  at org.geevm.tests.exceptions.UncaughtException.callee(Unknown Source)
+  at org.geevm.tests.exceptions.UncaughtException.main(Unknown Source)
+
+''')
         ])
 
     def errors(self):
         self.execute_tests('errors', [
             TestCase('errors.UnknownNativeMethod',
-                     stderr="Exception java.lang.UnsatisfiedLinkError: 'void org.geevm.tests.errors.UnknownNativeMethod.callee()'\n"),
+                     stderr='''Exception java.lang.UnsatisfiedLinkError: 'void org.geevm.tests.errors.UnknownNativeMethod.callee()'
+  at org.geevm.tests.errors.UnknownNativeMethod.callee(Unknown Source)
+  at org.geevm.tests.errors.UnknownNativeMethod.main(Unknown Source)
+
+'''),
             TestCase('errors.ClassCast',
-                     stderr="Exception java.lang.ClassCastException: 'class org.geevm.tests.errors.ClassCast cannot be cast to class java.lang.String'\n")
+                     stderr='''Exception java.lang.ClassCastException: 'class org.geevm.tests.errors.ClassCast cannot be cast to class java.lang.String'
+  at org.geevm.tests.errors.ClassCast.main(Unknown Source)
+
+''')
         ])
 
     def reflection(self):
@@ -145,12 +155,19 @@ Caught ArrayIndexOutOfBoundsException
                      stdout='org.geevm.tests.reflection.ClassMetadata\norg.geevm.tests.reflection.ClassMetadata\norg.geevm.tests.reflection.ClassMetadata\n')
         ])
 
+    def init(self):
+        self.execute_tests('init', [
+            TestCase('init.ex1.Test',
+                     stdout='Super\nTwo\nfalse\n')
+        ])
+
     def run(self):
         self.failures = []
         self.simple_math_programs()
         self.strings()
         self.arrays()
         self.oop_programs()
+        self.init()
         self.exceptions()
         self.errors()
         self.reflection()

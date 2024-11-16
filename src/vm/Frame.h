@@ -156,12 +156,12 @@ public:
   {
   }
 
-  InstanceClass* currentClass()
+  InstanceClass* currentClass() const
   {
     return mMethod->getClass();
   }
 
-  JMethod* currentMethod()
+  JMethod* currentMethod() const
   {
     return mMethod;
   }
@@ -240,11 +240,25 @@ public:
     mOperandStack.clear();
   }
 
+  // Exceptions
+  //==--------------------------------------------------------------------==//
+  bool exceptionThrownHere() const
+  {
+    return mExceptionThrownHere;
+  }
+
+  void throwException()
+  {
+    assert(mExceptionThrownHere == false);
+    mExceptionThrownHere = true;
+  }
+
 private:
   std::vector<Value> mLocalVariables;
   std::vector<Value> mOperandStack;
   JMethod* mMethod;
   CallFrame* mPrevious;
+  bool mExceptionThrownHere = false;
 };
 
 } // namespace geevm
