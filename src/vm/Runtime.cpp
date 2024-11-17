@@ -38,7 +38,7 @@ JMethod* RuntimeConstantPool::getMethodRef(types::u2 index)
   return it->second;
 }
 
-const FieldRef& RuntimeConstantPool::getFieldRef(types::u2 index)
+JField* RuntimeConstantPool::getFieldRef(types::u2 index)
 {
   if (auto it = mFieldRefs.find(index); it != mFieldRefs.end()) {
     return it->second;
@@ -51,7 +51,9 @@ const FieldRef& RuntimeConstantPool::getFieldRef(types::u2 index)
   assert(klass.has_value() && "TODO: Return error if resolution fails.");
   auto [fieldName, descriptor] = mConstantPool.getNameAndType(entry.data.classAndNameRef.nameAndTypeIndex);
 
-  auto [it, _] = mFieldRefs.try_emplace(index, (*klass), types::JString{fieldName}, types::JString{descriptor});
+  auto field = (*klass)->lookupField(types::JString{fieldName}, types::JString{descriptor});
+
+  auto [it, _] = mFieldRefs.try_emplace(index, *field);
   return it->second;
 }
 

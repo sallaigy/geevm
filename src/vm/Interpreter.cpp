@@ -663,35 +663,36 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
       case Opcode::RETURN: return std::nullopt;
       case Opcode::GETSTATIC: {
         auto index = cursor.readU2();
-        auto& fieldRef = runtimeConstantPool.getFieldRef(index);
+        JField* field = runtimeConstantPool.getFieldRef(index);
 
-        JClass* klass = fieldRef.klass;
+        JClass* klass = field->getClass();
         klass->initialize(thread);
 
-        Value value = klass->getStaticField(fieldRef.fieldName);
+        Value value = klass->getStaticFieldValue(field->offset());
         frame.pushOperand(value);
 
         break;
       }
       case Opcode::PUTSTATIC: {
         auto index = cursor.readU2();
-        auto& fieldRef = runtimeConstantPool.getFieldRef(index);
+        JField* field = runtimeConstantPool.getFieldRef(index);
 
-        JClass* klass = fieldRef.klass;
+        JClass* klass = field->getClass();
         klass->initialize(thread);
-        klass->storeStaticField(fieldRef.fieldName, frame.popOperand());
+
+        klass->setStaticFieldValue(field->offset(), frame.popOperand());
 
         break;
       }
       case Opcode::GETFIELD: {
         types::u2 index = cursor.readU2();
-        auto field = runtimeConstantPool.getFieldRef(index);
+        JField* field = runtimeConstantPool.getFieldRef(index);
         Instance* objectRef = frame.popOperand().asReference();
 
         // TODO: Null check
 
-        assert(objectRef->getClass()->isInstanceOf(field.klass));
-        frame.pushOperand(objectRef->getFieldValue(field.fieldName, field.fieldDescriptor));
+        assert(objectRef->getClass()->isInstanceOf(field->getClass()));
+        frame.pushOperand(objectRef->getFieldValue(field->name(), field->descriptor()));
         break;
       }
       case Opcode::PUTFIELD: {
@@ -700,9 +701,9 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
 
         Value value = frame.popOperand();
         Instance* objectRef = frame.popOperand().asReference();
-        assert(objectRef->getClass()->isInstanceOf(field.klass));
+        assert(objectRef->getClass()->isInstanceOf(field->getClass()));
 
-        objectRef->setFieldValue(field.fieldName, field.fieldDescriptor, value);
+        objectRef->setFieldValue(field->name(), field->descriptor(), value);
 
         break;
       }

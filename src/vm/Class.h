@@ -88,8 +88,13 @@ public:
   std::optional<JMethod*> getStaticMethod(const types::JString& name, const types::JString& descriptor);
   std::optional<JMethod*> getVirtualMethod(const types::JString& name, const types::JString& descriptor);
 
-  Value getStaticField(types::JStringRef name);
-  void storeStaticField(types::JStringRef name, Value);
+  Value getStaticFieldValue(const types::JString& name, const types::JString& descriptor);
+  Value getStaticFieldValue(size_t offset);
+
+  void setStaticFieldValue(const types::JString& name, const types::JString& descriptor, Value value);
+  void setStaticFieldValue(size_t offset, Value value);
+
+  std::optional<JField*> lookupField(const types::JString& name, const types::JString& descriptor);
 
   const std::unordered_map<NameAndDescriptor, std::unique_ptr<JField>, PairHash>& fields() const
   {
@@ -137,10 +142,10 @@ protected:
   const Kind mKind;
   Status mStatus;
 
-protected:
   std::unordered_map<NameAndDescriptor, std::unique_ptr<JMethod>, PairHash> mMethods;
   std::unordered_map<NameAndDescriptor, std::unique_ptr<JField>, PairHash> mFields;
-  std::unordered_map<types::JStringRef, Value> mStaticFields;
+  std::vector<JField*> mInstanceFields;
+  std::vector<Value> mStaticFieldValues;
 
 private:
   types::JString mClassName;

@@ -158,7 +158,11 @@ Caught ArrayIndexOutOfBoundsException
     def init(self):
         self.execute_tests('init', [
             TestCase('init.ex1.Test',
-                     stdout='Super\nTwo\nfalse\n')
+                     stdout='Super\nTwo\nfalse\n'),
+            TestCase('init.ex2.Test',
+                     stdout='1729\n'),
+            TestCase('init.ex3.Test',
+                     stdout='1\nj=3\njj=4\n3\n')
         ])
 
     def run(self):

@@ -23,25 +23,25 @@ void Vm::initialize()
   this->requireClass(u"java/lang/Thread");
   mMainThread.initialize(u"main", mainThreadGroup);
 
-  auto systemCls = this->requireClass(u"java/lang/System");
-
-  auto fisCls = this->requireClass(u"java/io/FileInputStream");
-  auto fosCls = this->requireClass(u"java/io/FileOutputStream");
-  auto printStreamCls = this->requireClass(u"java/io/PrintStream");
-  auto fdCls = this->requireClass(u"java/io/FileDescriptor");
-
-  Instance* outFd = fdCls->getStaticField(u"out").asReference();
-  auto fos = mMainThread.newInstance(u"java/io/FileOutputStream");
-  fos->setFieldValue(u"fd", u"Ljava/io/FileDescriptor;", Value::Reference(outFd));
-  fos->setFieldValue(u"append", u"Z", Value::Int(0));
-
-  Instance* bufferedOut = mainThread().newInstance(u"java/io/BufferedOutputStream");
-  auto bufferedOutCtor = bufferedOut->getClass()->getMethod(u"<init>", u"(Ljava/io/OutputStream;)V");
-
-  mMainThread.executeCall(*bufferedOutCtor, {Value::Reference(bufferedOut), Value::Reference(fos)});
-
-  Instance* out = mMainThread.newInstance(u"java/io/PrintStream");
-  auto psCtor = out->getClass()->getMethod(u"<init>", u"(ZLjava/io/OutputStream;)V");
+  // auto systemCls = this->requireClass(u"java/lang/System");
+  //
+  // auto fisCls = this->requireClass(u"java/io/FileInputStream");
+  // auto fosCls = this->requireClass(u"java/io/FileOutputStream");
+  // auto printStreamCls = this->requireClass(u"java/io/PrintStream");
+  // auto fdCls = this->requireClass(u"java/io/FileDescriptor");
+  //
+  // Instance* outFd = fdCls->getStaticField(u"out").asReference();
+  // auto fos = mMainThread.newInstance(u"java/io/FileOutputStream");
+  // fos->setFieldValue(u"fd", u"Ljava/io/FileDescriptor;", Value::Reference(outFd));
+  // fos->setFieldValue(u"append", u"Z", Value::Int(0));
+  //
+  // Instance* bufferedOut = mainThread().newInstance(u"java/io/BufferedOutputStream");
+  // auto bufferedOutCtor = bufferedOut->getClass()->getMethod(u"<init>", u"(Ljava/io/OutputStream;)V");
+  //
+  // mMainThread.executeCall(*bufferedOutCtor, {Value::Reference(bufferedOut), Value::Reference(fos)});
+  //
+  // Instance* out = mMainThread.newInstance(u"java/io/PrintStream");
+  // auto psCtor = out->getClass()->getMethod(u"<init>", u"(ZLjava/io/OutputStream;)V");
 
   // mMainThread.executeCall(*psCtor, {Value::Reference(out), Value::Reference(bufferedOut)});
 }
