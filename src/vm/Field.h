@@ -16,14 +16,24 @@ struct FieldRef
 class JField
 {
 public:
-  JField(const FieldInfo& fieldInfo, types::JString name, FieldType fieldType, size_t offset)
-    : mFieldInfo(fieldInfo), mName(std::move(name)), mFieldType(std::move(fieldType)), mOffset(offset)
+  JField(const FieldInfo& fieldInfo, InstanceClass* klass, types::JString name, types::JString descriptor, FieldType fieldType, size_t offset)
+    : mFieldInfo(fieldInfo), mClass(klass), mName(std::move(name)), mDescriptor(descriptor), mFieldType(std::move(fieldType)), mOffset(offset)
   {
   }
 
   const FieldInfo& fieldInfo() const
   {
     return mFieldInfo;
+  }
+
+  InstanceClass* getClass() const
+  {
+    return mClass;
+  }
+
+  const types::JString& descriptor() const
+  {
+    return mDescriptor;
   }
 
   const FieldType& fieldType() const
@@ -61,10 +71,22 @@ public:
     return hasAccessFlag(mFieldInfo.accessFlags(), FieldAccessFlags::ACC_PUBLIC);
   }
 
+  bool isProtected() const
+  {
+    return hasAccessFlag(mFieldInfo.accessFlags(), FieldAccessFlags::ACC_PROTECTED);
+  }
+
+  bool isPrivate() const
+  {
+    return hasAccessFlag(mFieldInfo.accessFlags(), FieldAccessFlags::ACC_PRIVATE);
+  }
+
 private:
   const FieldInfo& mFieldInfo;
+  InstanceClass* mClass;
   FieldType mFieldType;
   types::JString mName;
+  types::JString mDescriptor;
   size_t mOffset;
 };
 

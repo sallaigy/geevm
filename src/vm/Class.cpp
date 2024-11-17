@@ -127,12 +127,14 @@ void JClass::initialize(JavaThread& thread)
 
   mStatus = Status::UnderInitialization;
 
-  if (mSuperClass != nullptr) {
-    mSuperClass->initialize(thread);
-  }
+  if (!this->isInterface()) {
+    if (mSuperClass != nullptr) {
+      mSuperClass->initialize(thread);
+    }
 
-  for (JClass* interface : mSuperInterfaces) {
-    interface->initialize(thread);
+    for (JClass* interface : mSuperInterfaces) {
+      interface->initialize(thread);
+    }
   }
 
   if (auto instanceClass = this->asInstanceClass(); instanceClass != nullptr) {
@@ -149,10 +151,14 @@ void JClass::initialize(JavaThread& thread)
 
 void InstanceClass::linkFields()
 {
-  size_t offset = 0;
+  size_t instanceFieldOffset = 0;
+  size_t staticFieldOffset = 0;
+
   if (this->superClass() != nullptr) {
-    for (auto& [name, value] : this->superClass()->fields()) {
-      mFields.try_emplace(name, std::make_unique<JField>(value->fieldInfo(), name.first, value->fieldType(), offset++));
+    for (auto& [name, field] : this->superClass()->fields()) {
+      if (!field->isStatic()) {
+        mFields.try_emplace(name, std::make_unique<JField>(field->fieldInfo(), this, name.first, name.second, field->fieldType(), instanceFieldOffset++));
+      }
     }
   }
 
@@ -162,22 +168,24 @@ void InstanceClass::linkFields()
     auto fieldType = FieldType::parse(descriptor);
     assert(fieldType.has_value());
 
+    std::unique_ptr<JField> jfield = nullptr;
     if (hasAccessFlag(field.accessFlags(), FieldAccessFlags::ACC_STATIC)) {
-      Value initialValue = Value::defaultValue(*fieldType);
-      mStaticFields.try_emplace(fieldName, initialValue);
+      assert(mStaticFieldValues.size() == staticFieldOffset);
+      jfield = std::make_unique<JField>(field, this, types::JString{fieldName}, types::JString{descriptor}, *fieldType, staticFieldOffset++);
+      mStaticFieldValues.emplace_back(Value::defaultValue(*fieldType));
     } else {
-      auto jfield = std::make_unique<JField>(field, types::JString{fieldName}, *fieldType, offset++);
-      mFields.insert_or_assign(NameAndDescriptor{fieldName, descriptor}, std::move(jfield));
+      jfield = std::make_unique<JField>(field, this, types::JString{fieldName}, types::JString{descriptor}, *fieldType, instanceFieldOffset++);
     }
+
+    mFields.insert_or_assign(NameAndDescriptor{fieldName, descriptor}, std::move(jfield));
   }
 }
 
 void InstanceClass::initializeFields()
 {
   for (auto& [fieldName, field] : this->fields()) {
-    if (hasAccessFlag(field->fieldInfo().accessFlags(), FieldAccessFlags::ACC_STATIC) &&
-        hasAccessFlag(field->fieldInfo().accessFlags(), FieldAccessFlags::ACC_FINAL) && field->fieldInfo().constantValue().has_value()) {
-      mStaticFields.try_emplace(fieldName.first, getInitialFieldValue(field->fieldType(), *(field->fieldInfo().constantValue())));
+    if (field->isStatic() && field->isFinal() && field->fieldInfo().constantValue().has_value()) {
+      mStaticFieldValues.at(field->offset()) = getInitialFieldValue(field->fieldType(), *(field->fieldInfo().constantValue()));
     }
   }
 }
@@ -260,14 +268,37 @@ std::optional<JMethod*> JClass::getMethod(const types::JString& name, const type
   return std::nullopt;
 }
 
-Value JClass::getStaticField(types::JStringRef name)
+std::optional<JField*> JClass::lookupField(const types::JString& name, const types::JString& descriptor)
 {
-  return mStaticFields.at(name);
+  NameAndDescriptor pair{name, descriptor};
+  if (auto it = mFields.find(pair); it != mFields.end()) {
+    return it->second.get();
+  }
+
+  for (JClass* superInterface : this->superInterfaces()) {
+    auto result = superInterface->lookupField(name, descriptor);
+    if (result) {
+      return result;
+    }
+  }
+
+  if (mSuperClass != nullptr) {
+    return mSuperClass->lookupField(name, descriptor);
+  }
+
+  return std::nullopt;
 }
 
-void JClass::storeStaticField(types::JStringRef name, Value value)
+Value JClass::getStaticFieldValue(size_t offset)
 {
-  mStaticFields.at(name) = value;
+  assert(offset < mStaticFieldValues.size());
+  return mStaticFieldValues[offset];
+}
+
+void JClass::setStaticFieldValue(size_t offset, Value value)
+{
+  assert(offset < mStaticFieldValues.size());
+  mStaticFieldValues[offset] = value;
 }
 
 bool JClass::isInstanceOf(const JClass* other) const
