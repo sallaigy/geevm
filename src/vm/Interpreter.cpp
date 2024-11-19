@@ -8,6 +8,8 @@
 #include "vm/Instance.h"
 #include "vm/Vm.h"
 
+#include <cmath>qq
+
 using namespace geevm;
 
 namespace
@@ -254,7 +256,7 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
       case Opcode::LSTORE_2: frame.storeLongValue(2, frame.popLong()); break;
       case Opcode::LSTORE_3: frame.storeLongValue(3, frame.popLong()); break;
       case Opcode::FSTORE_0: notImplemented(opcode); break;
-      case Opcode::FSTORE_1: notImplemented(opcode); break;
+      case Opcode::FSTORE_1: frame.storeValue(1, frame.popOperand()); break;
       case Opcode::FSTORE_2: notImplemented(opcode); break;
       case Opcode::FSTORE_3: notImplemented(opcode); break;
       case Opcode::DSTORE_0: notImplemented(opcode); break;
@@ -396,8 +398,28 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         frame.pushOperand(Value::Long(value1 + value2));
         break;
       }
-      case Opcode::FADD: notImplemented(opcode); break;
-      case Opcode::DADD: notImplemented(opcode); break;
+      case Opcode::FADD: {
+        float value2 = frame.popOperand().asFloat();
+        float value1 = frame.popOperand().asFloat();
+
+        // TODO: Value set conversion
+
+        float result = value1 + value2;
+
+        frame.pushOperand(Value::Float(result));
+
+        break;
+      }
+      case Opcode::DADD: {
+        double value2 = frame.popOperand().asDouble();
+        double value1 = frame.popOperand().asDouble();
+
+        double result = value1 + value2;
+
+        frame.pushOperand(Value::Double(result));
+
+        break;
+      }
       case Opcode::ISUB: {
         int32_t value2 = frame.popOperand().asInt();
         int32_t value1 = frame.popOperand().asInt();
@@ -407,8 +429,27 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         frame.pushOperand(Value::Int(result));
         break;
       }
-      case Opcode::LSUB: notImplemented(opcode); break;
-      case Opcode::FSUB: notImplemented(opcode); break;
+      case Opcode::LSUB: {
+        int64_t value2 = frame.popOperand().asLong();
+        int64_t value1 = frame.popOperand().asLong();
+
+        int64_t result = value1 - value2;
+
+        frame.pushOperand(Value::Long(result));
+        break;
+      }
+      case Opcode::FSUB: {
+        float value2 = frame.popOperand().asFloat();
+        float value1 = frame.popOperand().asFloat();
+
+        // TODO: Value set conversion
+
+        float result = value1 - value2;
+
+        frame.pushOperand(Value::Float(result));
+
+        break;
+      }
       case Opcode::DSUB: notImplemented(opcode); break;
       case Opcode::IMUL: {
         int32_t value2 = frame.popOperand().asInt();
@@ -417,7 +458,15 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
 
         break;
       }
-      case Opcode::LMUL: notImplemented(opcode); break;
+      case Opcode::LMUL: {
+        int64_t value2 = frame.popOperand().asLong();
+        int64_t value1 = frame.popOperand().asLong();
+
+        int64_t result = value1 * value2;
+
+        frame.pushOperand(Value::Long(result));
+        break;
+      }
       case Opcode::FMUL: {
         float value2 = frame.popOperand().asFloat();
         float value1 = frame.popOperand().asFloat();
@@ -426,9 +475,43 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         break;
       }
       case Opcode::DMUL: notImplemented(opcode); break;
-      case Opcode::IDIV: notImplemented(opcode); break;
-      case Opcode::LDIV: notImplemented(opcode); break;
-      case Opcode::FDIV: notImplemented(opcode); break;
+      case Opcode::IDIV: {
+        int32_t value2 = frame.popOperand().asInt();
+        int32_t value1 = frame.popOperand().asInt();
+
+        if (value2 == 0) {
+          thread.throwException(u"java/lang/ArithmeticException", u"Divison by zero");
+          break;
+        }
+
+        frame.pushOperand(Value::Int(value1 / value2));
+        break;
+      }
+      case Opcode::LDIV: {
+        int64_t value2 = frame.popOperand().asLong();
+        int64_t value1 = frame.popOperand().asLong();
+
+        if (value2 == 0) {
+          thread.throwException(u"java/lang/ArithmeticException", u"Divison by zero");
+          break;
+        }
+
+        frame.pushOperand(Value::Long(value1 / value2));
+
+        break;
+      }
+      case Opcode::FDIV: {
+        float value2 = frame.popOperand().asFloat();
+        float value1 = frame.popOperand().asFloat();
+
+        // TODO: Value set conversion
+
+        float result = value1 / value2;
+
+        frame.pushOperand(Value::Float(result));
+
+        break;
+      }
       case Opcode::DDIV: notImplemented(opcode); break;
       case Opcode::IREM: {
         int32_t value2 = frame.popOperand().asInt();
@@ -448,7 +531,18 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         frame.pushOperand(Value::Long(result));
         break;
       }
-      case Opcode::FREM: notImplemented(opcode); break;
+      case Opcode::FREM: {
+        float value2 = frame.popOperand().asFloat();
+        float value1 = frame.popOperand().asFloat();
+
+        // TODO: Value set conversion
+
+        float result = std::fmod(value1, value2);
+
+        frame.pushOperand(Value::Float(result));
+
+        break;
+      }
       case Opcode::DREM: notImplemented(opcode); break;
       case Opcode::INEG: notImplemented(opcode); break;
       case Opcode::LNEG: notImplemented(opcode); break;

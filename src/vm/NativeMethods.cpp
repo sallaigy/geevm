@@ -1,4 +1,6 @@
 #include "vm/NativeMethods.h"
+
+#include "VmUtils.h"
 #include "vm/Thread.h"
 #include "vm/Vm.h"
 
@@ -94,10 +96,7 @@ static std::optional<Value> geevm_test_print(JavaThread& thread, CallFrame& fram
   } else {
     Instance* ref = value.asReference();
     if (ref->getClass()->className() == u"java/lang/String") {
-      types::JString out;
-      for (Value charValue : ref->getFieldValue(u"value", u"[C").asReference()->asArrayInstance()->contents()) {
-        out += charValue.asChar();
-      }
+      types::JString out = utils::getStringValue(ref);
       std::cout << types::convertJString(out) << std::endl;
     } else {
       std::cout << value.asReference() << std::endl;
