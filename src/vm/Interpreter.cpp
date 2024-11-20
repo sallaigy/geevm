@@ -8,7 +8,7 @@
 #include "vm/Instance.h"
 #include "vm/Vm.h"
 
-#include <cmath>qq
+#include <cmath>
 
 using namespace geevm;
 

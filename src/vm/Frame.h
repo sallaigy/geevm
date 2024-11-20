@@ -242,23 +242,12 @@ public:
 
   // Exceptions
   //==--------------------------------------------------------------------==//
-  bool exceptionThrownHere() const
-  {
-    return mExceptionThrownHere;
-  }
-
-  void throwException()
-  {
-    assert(mExceptionThrownHere == false);
-    mExceptionThrownHere = true;
-  }
 
 private:
   std::vector<Value> mLocalVariables;
   std::vector<Value> mOperandStack;
   JMethod* mMethod;
   CallFrame* mPrevious;
-  bool mExceptionThrownHere = false;
 };
 
 } // namespace geevm
