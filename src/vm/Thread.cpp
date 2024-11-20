@@ -175,7 +175,6 @@ void JavaThread::throwException(Instance* exceptionInstance)
 {
   assert(mCurrentException == nullptr && "There is already an exception instance");
   mCurrentException = exceptionInstance;
-  currentFrame().throwException();
   currentFrame().clearOperandStack();
   currentFrame().pushOperand(Value::Reference(exceptionInstance));
 }
