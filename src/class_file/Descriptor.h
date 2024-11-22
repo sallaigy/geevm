@@ -3,6 +3,7 @@
 
 #include "common/JvmTypes.h"
 
+#include <functional>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -56,6 +57,20 @@ public:
       return std::get<types::JString>(mVariant);
     }
     return std::nullopt;
+  }
+
+  template<class R>
+  R map(std::function<R(const PrimitiveType&)> primitiveMapper, std::function<R(const types::JString&)> classNameMapper) const
+  {
+    return std::visit(
+        [&](auto&& arg) {
+          if constexpr (std::is_same_v<decltype(arg), PrimitiveType>) {
+            return primitiveMapper(arg);
+          } else {
+            return classNameMapper(arg);
+          }
+        },
+        mVariant);
   }
 
   int dimensions() const

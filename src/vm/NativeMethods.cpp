@@ -74,32 +74,26 @@ static std::optional<Value> geevm_test_print(JavaThread& thread, CallFrame& fram
 
   if (auto primitiveType = type.asPrimitive(); primitiveType) {
     switch (*primitiveType) {
-      case PrimitiveType::Byte: std::cout << value.asInt() << std::endl; break;
+      case PrimitiveType::Byte: std::cout << value.get<std::int32_t>() << std::endl; break;
       case PrimitiveType::Char: {
-        char16_t charValue;
-        if (value.kind() == Value::Kind::Char) {
-          charValue = value.asChar();
-        } else {
-          charValue = static_cast<char16_t>(value.asInt());
-        }
-
+        char16_t charValue = static_cast<char16_t>(value.get<std::int32_t>());
         std::cout << types::convertJString(types::JString{charValue}) << std::endl;
         break;
       }
-      case PrimitiveType::Double: std::cout << value.asDouble() << std::endl; break;
-      case PrimitiveType::Float: std::cout << value.asFloat() << std::endl; break;
-      case PrimitiveType::Int: std::cout << value.asInt() << std::endl; break;
-      case PrimitiveType::Long: std::cout << value.asLong() << std::endl; break;
-      case PrimitiveType::Short: std::cout << value.asInt() << std::endl; break;
-      case PrimitiveType::Boolean: std::cout << (value.asInt() == 1 ? "true" : "false") << std::endl; break;
+      case PrimitiveType::Double: std::cout << value.get<double>() << std::endl; break;
+      case PrimitiveType::Float: std::cout << value.get<float>() << std::endl; break;
+      case PrimitiveType::Int: std::cout << value.get<std::int32_t>() << std::endl; break;
+      case PrimitiveType::Long: std::cout << value.get<std::int64_t>() << std::endl; break;
+      case PrimitiveType::Short: std::cout << value.get<std::int32_t>() << std::endl; break;
+      case PrimitiveType::Boolean: std::cout << (value.get<std::int32_t>() == 1 ? "true" : "false") << std::endl; break;
     }
   } else {
-    Instance* ref = value.asReference();
+    Instance* ref = value.get<Instance*>();
     if (ref->getClass()->className() == u"java/lang/String") {
       types::JString out = utils::getStringValue(ref);
       std::cout << types::convertJString(out) << std::endl;
     } else {
-      std::cout << value.asReference() << std::endl;
+      std::cout << ref << std::endl;
     }
   }
 
@@ -216,21 +210,21 @@ std::optional<Value> noop(JavaThread& thread, CallFrame& frame, const std::vecto
 
 std::optional<Value> return_nullptr(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  return Value::Reference(nullptr);
+  return Value::from<Instance*>(nullptr);
 }
 
 std::optional<Value> java_lang_Object_hashCode(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  Instance* objectRef = args[0].asReference();
-  return Value::Int(static_cast<int32_t>(std::hash<Instance*>{}(objectRef)));
+  Instance* objectRef = args[0].get<Instance*>();
+  return Value::from<int32_t>(static_cast<int32_t>(std::hash<Instance*>{}(objectRef)));
 }
 
 std::optional<Value> java_lang_Object_getClass(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  Instance* objectRef = args[0].asReference();
+  Instance* objectRef = args[0].get<Instance*>();
   Instance* klass = objectRef->getClass()->classInstance();
 
-  return Value::Reference(klass);
+  return Value::from(klass);
 }
 
 std::optional<Value> java_lang_Object_wait(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
@@ -240,28 +234,28 @@ std::optional<Value> java_lang_Object_wait(JavaThread& thread, CallFrame& frame,
 
 std::optional<Value> java_lang_Class_desiredAssertionStatus0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  return Value::Int(0);
+  return Value::from<int32_t>(0);
 }
 
 std::optional<Value> java_lang_Class_getPrimitiveClass(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  auto stringObject = args[0].asReference();
-  auto charArray = stringObject->getFieldValue(u"value", u"[C").asReference()->asArrayInstance();
+  auto stringObject = args[0].get<Instance*>();
+  auto charArray = stringObject->getFieldValue<Instance*>(u"value", u"[C")->asArrayInstance();
 
   types::JString buffer;
   for (Value v : charArray->contents()) {
-    buffer += v.asChar();
+    buffer += v.get<char16_t>();
   }
 
   if (buffer == u"float") {
     auto klass = thread.resolveClass(u"java/lang/Float");
-    return Value::Reference((*klass)->classInstance());
+    return Value::from((*klass)->classInstance());
   } else if (buffer == u"double") {
     auto klass = thread.resolveClass(u"java/lang/Double");
-    return Value::Reference((*klass)->classInstance());
+    return Value::from((*klass)->classInstance());
   } else if (buffer == u"int") {
     auto klass = thread.resolveClass(u"java/lang/Integer");
-    return Value::Reference((*klass)->classInstance());
+    return Value::from((*klass)->classInstance());
   } else {
     assert(false && "Unknown primitive class");
   }
@@ -269,7 +263,7 @@ std::optional<Value> java_lang_Class_getPrimitiveClass(JavaThread& thread, CallF
 
 std::optional<Value> java_lang_Class_getName0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  ClassInstance* cls = args[0].asReference()->asClassInstance();
+  ClassInstance* cls = args[0].get<Instance*>()->asClassInstance();
   assert(cls != nullptr);
 
   auto name = cls->target()->className();
@@ -277,28 +271,28 @@ std::optional<Value> java_lang_Class_getName0(JavaThread& thread, CallFrame& fra
 
   Instance* str = thread.heap().intern(name);
 
-  return Value::Reference(str);
+  return Value::from(str);
 }
 
 std::optional<Value> java_lang_Class_forName0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  Instance* name = args[0].asReference();
-  int32_t initialize = args[1].asInt();
-  Instance* classLoader = args[2].asReference();
+  Instance* name = args[0].get<Instance*>();
+  int32_t initialize = args[1].get<int32_t>();
+  Instance* classLoader = args[2].get<Instance*>();
 
   assert(classLoader == nullptr && "TODO: Support non-boostrap classloader");
-  auto charArray = name->getFieldValue(u"value", u"[C").asReference()->asArrayInstance();
+  auto charArray = name->getFieldValue<Instance*>(u"value", u"[C")->asArrayInstance();
 
   types::JString nameStr = u"";
   for (Value value : charArray->contents()) {
-    nameStr += value.asChar();
+    nameStr += value.get<char16_t>();
   }
 
   auto loaded = thread.resolveClass(nameStr);
   if (!loaded) {
     // TODO: throw exception
   }
-  return Value::Reference((*loaded)->classInstance());
+  return Value::from((*loaded)->classInstance());
 }
 
 std::optional<Value> java_lang_Class_getDeclaredFields0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
@@ -306,8 +300,8 @@ std::optional<Value> java_lang_Class_getDeclaredFields0(JavaThread& thread, Call
   auto fieldCls = thread.resolveClass(u"java/lang/reflect/Field");
   assert(fieldCls.has_value());
 
-  Instance* clsInstance = args[0].asReference();
-  bool isPublicOnly = args[1].asInt() == 1;
+  Instance* clsInstance = args[0].get<Instance*>();
+  bool isPublicOnly = args[1].get<int32_t>() == 1;
 
   auto klass = clsInstance->asClassInstance()->target();
 
@@ -315,8 +309,8 @@ std::optional<Value> java_lang_Class_getDeclaredFields0(JavaThread& thread, Call
   for (auto& [nameAndDescriptor, field] : klass->fields()) {
     if (!isPublicOnly || field->isPublic()) {
       Instance* fieldInstance = thread.heap().allocate((*fieldCls)->asInstanceClass());
-      fieldInstance->setFieldValue(u"name", u"Ljava/lang/String;", Value::Reference(thread.heap().intern(field->name())));
-      fieldInstance->setFieldValue(u"modifiers", u"I", Value::Int(static_cast<int32_t>(field->accessFlags())));
+      fieldInstance->setFieldValue(u"name", u"Ljava/lang/String;", thread.heap().intern(field->name()));
+      fieldInstance->setFieldValue(u"modifiers", u"I", static_cast<int32_t>(field->accessFlags()));
 
       fields.push_back(fieldInstance);
     }
@@ -324,39 +318,39 @@ std::optional<Value> java_lang_Class_getDeclaredFields0(JavaThread& thread, Call
 
   ArrayInstance* fieldsArray = thread.heap().allocateArray((*thread.resolveClass(u"[Ljava/lang/reflect/Field;"))->asArrayClass(), fields.size());
   for (int i = 0; i < fields.size(); i++) {
-    fieldsArray->setArrayElement(i, Value::Reference(fields.at(i)));
+    fieldsArray->setArrayElement(i, fields.at(i));
   }
 
-  return Value::Reference(fieldsArray);
+  return Value::from<Instance*>(fieldsArray);
 }
 
 std::optional<Value> java_lang_Float_floatToRawIntBits(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  return Value::Int(std::bit_cast<int32_t>(args[0].asFloat()));
+  return Value::from(std::bit_cast<int32_t>(args[0].get<float>()));
 }
 
 std::optional<Value> java_lang_Double_doubleToRawIntBits(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  return Value::Long(std::bit_cast<int64_t>(args[0].asDouble()));
+  return Value::from(std::bit_cast<int64_t>(args[0].get<double>()));
 }
 
 std::optional<Value> java_lang_Double_longBitsToDouble(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  return Value::Double(std::bit_cast<double>(args[0].asLong()));
+  return Value::from(std::bit_cast<double>(args[0].get<int64_t>()));
 }
 
 std::optional<Value> java_lang_System_initProperties(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  return Value::Reference(args[0].asReference());
+  return Value::from(args[0].get<Instance*>());
 }
 
 std::optional<Value> java_lang_System_arraycopy(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  Instance* source = args[0].asReference();
-  int32_t sourcePos = args[1].asInt();
-  ArrayInstance* target = args[2].asReference()->asArrayInstance();
-  int32_t targetPos = args[3].asInt();
-  int32_t len = args[4].asInt();
+  Instance* source = args[0].get<Instance*>();
+  int32_t sourcePos = args[1].get<int32_t>();
+  ArrayInstance* target = args[2].get<Instance*>()->asArrayInstance();
+  int32_t targetPos = args[3].get<int32_t>();
+  int32_t len = args[4].get<int32_t>();
 
   auto& sourceArray = source->asArrayInstance()->contents();
   assert(sourcePos < sourceArray.size());
@@ -372,25 +366,25 @@ std::optional<Value> java_lang_System_arraycopy(JavaThread& thread, CallFrame& f
 
 std::optional<Value> sun_misc_Unsafe_arrayBaseOffset(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  return Value::Int(0);
+  return Value::from(0);
 }
 
 std::optional<Value> sun_misc_Unsafe_objectFieldOffset(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
   // TODO
-  return Value::Long(0);
+  return Value::from(0);
 }
 
 std::optional<Value> sun_misc_Unsafe_compareAndSwapObject(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  Instance* obj = args[1].asReference();
-  int64_t offset = args[2].asLong();
+  Instance* obj = args[1].get<Instance*>();
+  int64_t offset = args[2].get<int64_t>();
   // 'offset' is category 2, so we skip an index
-  Instance* expected = args[4].asReference();
-  Instance* target = args[5].asReference();
+  Instance* expected = args[4].get<Instance*>();
+  Instance* target = args[5].get<Instance*>();
 
   // FIXME
-  return Value::Int(1);
+  return Value::from(1);
 }
 
 std::optional<Value> sun_reflect_Reflection_getCallerClass(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
@@ -398,7 +392,7 @@ std::optional<Value> sun_reflect_Reflection_getCallerClass(JavaThread& thread, C
   // Returns the class of the caller of the method calling this method ignoring frames associated with java.lang.reflect.Method.invoke() and its implementation.
   CallFrame* previous = frame.previous()->previous();
 
-  return Value::Reference(previous->currentClass()->classInstance());
+  return Value::from(previous->currentClass()->classInstance());
 }
 
 std::optional<Value> java_security_AccessController_doPrivileged(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
@@ -406,32 +400,32 @@ std::optional<Value> java_security_AccessController_doPrivileged(JavaThread& thr
   auto actionCls = thread.resolveClass(u"java/security/PrivilegedExceptionAction");
   // TODO: Check loaded
 
-  Instance* target = args[0].asReference();
+  Instance* target = args[0].get<Instance*>();
   auto runMethod = target->getClass()->getMethod(u"run", u"()Ljava/lang/Object;");
   assert(runMethod.has_value());
 
-  return thread.executeCall(*runMethod, {Value::Reference(target)});
+  return thread.executeCall(*runMethod, {Value::from(target)});
 }
 
 std::optional<Value> java_lang_Thread_currentThread(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  return Value::Reference(thread.instance());
+  return Value::from(thread.instance());
 }
 
 std::optional<Value> java_lang_Thread_isAlive(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  Instance* threadRef = args[0].asReference();
-  int64_t eetop = threadRef->getFieldValue(u"eetop", u"J").asLong();
+  Instance* threadRef = args[0].get<Instance*>();
+  int64_t eetop = threadRef->getFieldValue<int64_t>(u"eetop", u"J");
 
   if (eetop == 0) {
-    return Value::Int(0);
+    return Value::from(0);
   }
 
   int ret = pthread_kill((pthread_t)eetop, 0);
   if (ret == 0) {
-    return Value::Int(1);
+    return Value::from(1);
   } else if (ret == ESRCH) {
-    return Value::Int(0);
+    return Value::from(0);
   }
 
   assert(false && "Impossible");
@@ -439,7 +433,7 @@ std::optional<Value> java_lang_Thread_isAlive(JavaThread& thread, CallFrame& fra
 
 std::optional<Value> java_lang_Thread_start0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  Instance* threadRef = args[0].asReference();
+  Instance* threadRef = args[0].get<Instance*>();
   auto target = threadRef->getClass()->getVirtualMethod(u"run", u"()V");
   assert(target.has_value());
 
@@ -457,52 +451,52 @@ std::optional<Value> java_lang_Thread_start0(JavaThread& thread, CallFrame& fram
 
 std::optional<Value> java_lang_Throwable_fillInStackTrace(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  Instance* exceptionInstance = args[0].asReference();
+  Instance* exceptionInstance = args[0].get<Instance*>();
 
   auto array = thread.createStackTrace();
   // exceptionInstance->setFieldValue(u"stackTrace", u"[Ljava/lang/StackTraceElement;", Value::Reference(array));
-  exceptionInstance->setFieldValue(u"stackTrace", u"[Ljava/lang/StackTraceElement;", Value::Reference(nullptr));
-  exceptionInstance->setFieldValue(u"backtrace", u"Ljava/lang/Object;", Value::Reference(array));
+  exceptionInstance->setFieldValue<Instance*>(u"stackTrace", u"[Ljava/lang/StackTraceElement;", nullptr);
+  exceptionInstance->setFieldValue<Instance*>(u"backtrace", u"Ljava/lang/Object;", array);
 
-  return Value::Reference(exceptionInstance);
+  return Value::from(exceptionInstance);
 }
 
 std::optional<Value> java_lang_Throwable_getStackTraceDepth(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  Instance* exceptionInstance = args[0].asReference();
-  auto backtrace = exceptionInstance->getFieldValue(u"backtrace", u"Ljava/lang/Object;");
+  Instance* exceptionInstance = args[0].get<Instance*>();
+  auto backtrace = exceptionInstance->getFieldValue<Instance*>(u"backtrace", u"Ljava/lang/Object;");
 
-  if (backtrace.asReference() == nullptr) {
-    return Value::Int(0);
+  if (backtrace == nullptr) {
+    return Value::from(0);
   }
 
-  return Value::Int(backtrace.asReference()->asArrayInstance()->length());
+  return Value::from(backtrace->asArrayInstance()->length());
 }
 
 std::optional<Value> java_lang_Throwable_getStackTraceElement(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  Instance* exceptionInstance = args[0].asReference();
-  int32_t index = args[1].asInt();
+  Instance* exceptionInstance = args[0].get<Instance*>();
+  int32_t index = args[1].get<int32_t>();
 
-  auto backtrace = exceptionInstance->getFieldValue(u"backtrace", u"Ljava/lang/Object;");
-  auto elem = backtrace.asReference()->asArrayInstance()->getArrayElement(index);
+  auto backtrace = exceptionInstance->getFieldValue<Instance*>(u"backtrace", u"Ljava/lang/Object;");
+  auto elem = backtrace->asArrayInstance()->getArrayElement<Instance*>(index);
 
   assert(elem.has_value());
 
-  return Value::Reference(elem->asReference());
+  return Value::from(*elem);
 }
 
 std::optional<Value> java_lang_String_intern(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  Instance* self = args.at(0).asReference();
-  auto& charArray = self->getFieldValue(u"value", u"[C").asReference()->asArrayInstance()->contents();
+  Instance* self = args.at(0).get<Instance*>();
+  auto& charArray = self->getFieldValue<Instance*>(u"value", u"[C")->asArrayInstance()->contents();
 
   types::JString str = u"";
   for (auto value : charArray) {
-    str += value.asChar();
+    str += value.get<char16_t>();
   }
 
   Instance* interned = thread.heap().intern(str);
 
-  return Value::Reference(interned);
+  return Value::from(interned);
 }

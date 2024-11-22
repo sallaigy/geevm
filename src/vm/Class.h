@@ -91,6 +91,12 @@ public:
   Value getStaticFieldValue(const types::JString& name, const types::JString& descriptor);
   Value getStaticFieldValue(size_t offset);
 
+  template<JvmType T>
+  T getStaticFieldValue(size_t offset)
+  {
+    return getStaticFieldValue(offset).get<T>();
+  }
+
   void setStaticFieldValue(const types::JString& name, const types::JString& descriptor, Value value);
   void setStaticFieldValue(size_t offset, Value value);
 

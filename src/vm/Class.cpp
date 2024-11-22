@@ -195,21 +195,21 @@ Value InstanceClass::getInitialFieldValue(const FieldType& fieldType, types::u2 
   if (auto primitiveType = fieldType.asPrimitive(); primitiveType.has_value()) {
     auto entry = constantPool().getEntry(cvIndex);
     switch (*primitiveType) {
-      case PrimitiveType::Int: return Value::Int(entry.data.singleInteger);
-      case PrimitiveType::Char: return Value::Char(static_cast<char16_t>(entry.data.singleInteger));
-      case PrimitiveType::Byte: return Value::Byte(static_cast<int8_t>(entry.data.singleInteger));
-      case PrimitiveType::Short: return Value::Short(static_cast<int16_t>(entry.data.singleInteger));
-      case PrimitiveType::Boolean: return Value::Int(entry.data.singleInteger);
-      case PrimitiveType::Float: return Value::Float(entry.data.singleFloat);
-      case PrimitiveType::Long: return Value::Long(entry.data.doubleInteger);
-      case PrimitiveType::Double: return Value::Double(entry.data.doubleFloat);
+      case PrimitiveType::Int: return Value::from(entry.data.singleInteger);
+      case PrimitiveType::Char: return Value::from(static_cast<char16_t>(entry.data.singleInteger));
+      case PrimitiveType::Byte: return Value::from(static_cast<int8_t>(entry.data.singleInteger));
+      case PrimitiveType::Short: return Value::from(static_cast<int16_t>(entry.data.singleInteger));
+      case PrimitiveType::Boolean: return Value::from(entry.data.singleInteger);
+      case PrimitiveType::Float: return Value::from(entry.data.singleFloat);
+      case PrimitiveType::Long: return Value::from(entry.data.doubleInteger);
+      case PrimitiveType::Double: return Value::from(entry.data.doubleFloat);
     }
     // No other primitive types are possible
     std::unreachable();
   }
 
   if (auto objectName = fieldType.asObjectName(); objectName && *objectName == u"java/lang/String") {
-    return Value::Reference(mRuntimeConstantPool->getString(cvIndex));
+    return Value::from(mRuntimeConstantPool->getString(cvIndex));
   }
 
   assert(false && "Unknown field type!");

@@ -41,6 +41,18 @@ public:
   void setFieldValue(types::JStringRef fieldName, types::JStringRef descriptor, Value value);
   Value getFieldValue(types::JStringRef fieldName, types::JStringRef descriptor);
 
+  template<JvmType T>
+  void setFieldValue(types::JStringRef fieldName, types::JStringRef descriptor, T value)
+  {
+    setFieldValue(fieldName, descriptor, Value::from<T>(value));
+  }
+
+  template<JvmType T>
+  T getFieldValue(types::JStringRef fieldName, types::JStringRef descriptor)
+  {
+    return getFieldValue(fieldName, descriptor).get<T>();
+  }
+
   ArrayInstance* asArrayInstance();
   ClassInstance* asClassInstance();
 
@@ -59,6 +71,20 @@ public:
 
   JvmExpected<Value> getArrayElement(int32_t index);
   JvmExpected<void> setArrayElement(int32_t index, Value value);
+
+  template<JvmType T>
+  JvmExpected<T> getArrayElement(int32_t index)
+  {
+    auto result = getArrayElement(index);
+
+    return result.transform([](const Value& value) -> T { return value.get<T>(); });
+  }
+
+  template<JvmType T>
+  JvmExpected<void> setArrayElement(int32_t index, T value)
+  {
+    return setArrayElement(index, Value::from<T>(value));
+  }
 
   int32_t length() const
   {
