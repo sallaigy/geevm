@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 import argparse
+import difflib
 import pathlib
 import subprocess
 import tempfile
-import difflib
-
 from typing import List
 
 TESTS_DIRECTORY = pathlib.Path('org').absolute()
@@ -65,14 +64,7 @@ class JavaIntegrationTest:
                               timeout=10)
 
     def simple_math_programs(self):
-        self.execute_tests('simple_math_programs', [
-            TestCase('basic.Count', '10\n'),
-            TestCase('basic.StaticCalls', '15\n'),
-            TestCase('basic.IntegerArithmetic', '13\n7\n30\n3\n-3\n-3\n3\n1\n1\n-1\n-1\n'),
-            TestCase('basic.LongArithmetic', '13\n7\n30\n3\n-3\n-3\n3\n1\n1\n-1\n-1\n'),
-            # The format between System.out.println and the debug printer is different.
-            # This will have to be adjusted once we support System.out
-            TestCase('basic.FloatArithmetic', '''12.75
+        expected_float_results = '''12.75
 nan
 nan
 -nan
@@ -102,8 +94,25 @@ inf
 -nan
 -nan
 4.66667
+nan
+nan
+-nan
+-0
+0
+inf
+-inf
 1.5
-'''),
+'''
+
+        self.execute_tests('simple_math_programs', [
+            TestCase('basic.Count', '10\n'),
+            TestCase('basic.StaticCalls', '15\n'),
+            TestCase('basic.IntegerArithmetic', '13\n7\n30\n3\n-3\n-3\n3\n1\n1\n-1\n-1\n'),
+            TestCase('basic.LongArithmetic', '13\n7\n30\n3\n-3\n-3\n3\n1\n1\n-1\n-1\n'),
+            # The format between System.out.println and the debug printer is different.
+            # This will have to be adjusted once we support System.out
+            TestCase('basic.FloatArithmetic', expected_float_results),
+            TestCase('basic.DoubleArithmetic', expected_float_results),
             TestCase('basic.StaticCallsToAnotherClass', '15\n'),
             TestCase('basic.StaticFields', '540\n'),
             TestCase('basic.IntegerComparisons', '0\n3\n5\n1\n2\n5\n2\n3\n4\n'),
@@ -141,6 +150,11 @@ Caught ArrayIndexOutOfBoundsException
         self.execute_tests('arrays', [
             TestCase('arrays.IntArrays', expected_number_sequence),
             TestCase('arrays.IntArrayExceptions', expected_exceptions_for_primitives),
+            TestCase('arrays.LongArrays', expected_number_sequence),
+            TestCase('arrays.ByteArrays', expected_number_sequence),
+            TestCase('arrays.ShortArrays', expected_number_sequence),
+            TestCase('arrays.FloatArrays', '0\n1.5\n3\n4.5\n6\n7.5\n9\n10.5\n12\n13.5\n'),
+            TestCase('arrays.DoubleArrays', '0\n1.5\n3\n4.5\n6\n7.5\n9\n10.5\n12\n13.5\n'),
             TestCase('arrays.CharArrays', '0\n1\n2\n3\n4\n5\n6\n7\n8\n9\n'),
             TestCase('arrays.CharArrayExceptions', expected_exceptions_for_primitives),
             TestCase('arrays.ObjectArrays', '#0\n#1\n#2\n#3\n#4\n#5\n#6\n#7\n#8\n#9\n'),

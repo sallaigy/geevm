@@ -40,6 +40,14 @@ public class FloatArithmetic {
         Printer.println(mul(Float.NEGATIVE_INFINITY, 0.0f)); // nan
 
         Printer.println(div(10.5f, 2.25f)); // 4.6666665
+        Printer.println(div(nan, 2.25f)); // nan
+        Printer.println(div(10.5f, nan)); // nan
+        Printer.println(div(Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY)); // -nan
+        Printer.println(div(10.5f, Float.NEGATIVE_INFINITY)); // -0
+        Printer.println(div(10.5f, Float.POSITIVE_INFINITY)); // 0
+        Printer.println(div(Float.POSITIVE_INFINITY, 2.25f)); // +inf
+        Printer.println(div(Float.NEGATIVE_INFINITY, 2.25f)); // -inf
+
         Printer.println(mod(10.5f, 2.25f)); // 1.5
     }
 
