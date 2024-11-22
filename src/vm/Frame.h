@@ -119,6 +119,18 @@ public:
     return mStorage.data.mReference;
   }
 
+  int8_t asByte() const
+  {
+    assert(mStorage.kind == Kind::Byte);
+    return mStorage.data.mByte;
+  }
+
+  int16_t asShort() const
+  {
+    assert(mStorage.kind == Kind::Short);
+    return mStorage.data.mShort;
+  }
+
   bool isCategoryTwo() const
   {
     return mStorage.kind == Kind::Double || mStorage.kind == Kind::Long;
