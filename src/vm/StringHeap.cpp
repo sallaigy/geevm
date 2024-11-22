@@ -17,11 +17,11 @@ Instance* StringHeap::intern(types::JStringRef utf8)
 
   ArrayInstance* stringContents = mVm.heap().allocateArray((*charArrayClass)->asArrayClass(), utf8.size());
   for (int32_t i = 0; i < utf8.size(); ++i) {
-    stringContents->setArrayElement(i, Value::Char(utf8[i]));
+    stringContents->setArrayElement<char16_t>(i, utf8[i]);
   }
 
   Instance* newInstance = mVm.heap().allocate((*stringClass)->asInstanceClass());
-  newInstance->setFieldValue(u"value", u"[C", Value::Reference(stringContents));
+  newInstance->setFieldValue<Instance*>(u"value", u"[C", stringContents);
 
   auto [res, _] = mInternedStrings.try_emplace(utf8, newInstance);
   return res->second;

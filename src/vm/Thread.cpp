@@ -21,10 +21,10 @@ void JavaThread::initialize(const types::JString& name, Instance* threadGroup)
   mThreadInstance = heap().allocate((*klass)->asInstanceClass());
 
   auto nameInstance = heap().intern(name);
-  mThreadInstance->setFieldValue(u"name", u"Ljava/lang/String;", Value::Reference(nameInstance));
-  mThreadInstance->setFieldValue(u"group", u"Ljava/lang/ThreadGroup;", Value::Reference(threadGroup));
-  mThreadInstance->setFieldValue(u"uncaughtExceptionHandler", u"Ljava/lang/Thread$UncaughtExceptionHandler;", Value::Reference(threadGroup));
-  mThreadInstance->setFieldValue(u"priority", u"I", Value::Int(10));
+  mThreadInstance->setFieldValue<Instance*>(u"name", u"Ljava/lang/String;", nameInstance);
+  mThreadInstance->setFieldValue<Instance*>(u"group", u"Ljava/lang/ThreadGroup;", threadGroup);
+  mThreadInstance->setFieldValue<Instance*>(u"uncaughtExceptionHandler", u"Ljava/lang/Thread$UncaughtExceptionHandler;", threadGroup);
+  mThreadInstance->setFieldValue<int32_t>(u"priority", u"I", 10);
 }
 
 void JavaThread::start(JMethod* method, std::vector<Value> arguments)
@@ -32,7 +32,7 @@ void JavaThread::start(JMethod* method, std::vector<Value> arguments)
   mMethod = method;
   mArguments = std::move(arguments);
   mNativeThread = std::jthread([this]() { this->run(); });
-  mThreadInstance->setFieldValue(u"eetop", u"J", Value::Long((long)mNativeThread.native_handle()));
+  mThreadInstance->setFieldValue<int64_t>(u"eetop", u"J", (long)mNativeThread.native_handle());
 }
 
 void JavaThread::run()
@@ -67,7 +67,7 @@ std::optional<Value> JavaThread::invoke(JMethod* method)
   std::vector<Value> args;
 
   for (int i = 0; i < method->descriptor().parameters().size(); i++) {
-    Value value = current.popOperand();
+    Value value = current.popGenericOperand();
     args.push_back(value);
     if (value.isCategoryTwo()) {
       args.push_back(value);
@@ -75,7 +75,7 @@ std::optional<Value> JavaThread::invoke(JMethod* method)
   }
 
   if (!method->isStatic()) {
-    args.push_back(current.popOperand());
+    args.push_back(Value::from(current.popOperand<Instance*>()));
   }
 
   std::ranges::reverse(args);
@@ -93,7 +93,7 @@ std::optional<Value> JavaThread::executeCall(JMethod* method, const std::vector<
     returnValue = this->executeNative(method, frame, args);
   } else {
     for (int i = 0; i < args.size(); ++i) {
-      frame.storeValue(i, args[i]);
+      frame.storeGenericValue(i, args[i]);
     }
 
     auto interpreter = createDefaultInterpreter();
@@ -104,15 +104,15 @@ std::optional<Value> JavaThread::executeCall(JMethod* method, const std::vector<
   if (mCurrentException != nullptr) {
     if (current != nullptr) {
       current->clearOperandStack();
-      current->pushOperand(Value::Reference(mCurrentException));
+      current->pushOperand<Instance*>(mCurrentException);
     } else {
-      Instance* handler = mThreadInstance->getFieldValue(u"uncaughtExceptionHandler", u"Ljava/lang/Thread$UncaughtExceptionHandler;").asReference();
+      Instance* handler = mThreadInstance->getFieldValue<Instance*>(u"uncaughtExceptionHandler", u"Ljava/lang/Thread$UncaughtExceptionHandler;");
       auto handlerMethod = handler->getClass()->getVirtualMethod(u"uncaughtException", u"(Ljava/lang/Thread;Ljava/lang/Throwable;)V");
       assert(handlerMethod.has_value());
 
       // FIXME: We should execute the handler, but we do not support `System.err` / `System.out` yet.
       // this->executeCall((*handlerMethod), {Value::Reference(handler), Value::Reference(mThreadInstance), Value::Reference(mCurrentException)});
-      Instance* exceptionMessage = mCurrentException->getFieldValue(u"detailMessage", u"Ljava/lang/String;").asReference();
+      auto exceptionMessage = mCurrentException->getFieldValue<Instance*>(u"detailMessage", u"Ljava/lang/String;");
       assert(exceptionMessage->getClass()->className() == u"java/lang/String");
 
       types::JString message = u"Exception ";
@@ -129,19 +129,19 @@ std::optional<Value> JavaThread::executeCall(JMethod* method, const std::vector<
 
       Instance* exceptionInstance = mCurrentException;
       mCurrentException = nullptr;
-      Instance* stackTrace = this->executeCall((*getStackTrace), {Value::Reference(exceptionInstance)})->asReference();
+      Instance* stackTrace = this->executeCall((*getStackTrace), {Value::from<Instance*>(exceptionInstance)})->get<Instance*>();
 
       if (stackTrace != nullptr) {
         message += u"\n";
 
         auto& arrayContents = stackTrace->asArrayInstance()->contents();
         for (Value elem : arrayContents) {
-          auto toStringMethod = elem.asReference()->getClass()->getVirtualMethod(u"toString", u"()Ljava/lang/String;");
+          auto toStringMethod = elem.get<Instance*>()->getClass()->getVirtualMethod(u"toString", u"()Ljava/lang/String;");
           auto ret = this->executeCall(*toStringMethod, {elem});
           assert(ret.has_value());
 
           message += u"  at ";
-          message += utils::getStringValue(ret->asReference());
+          message += utils::getStringValue(ret->get<Instance*>());
           message += u"\n";
         }
       }
@@ -176,7 +176,7 @@ void JavaThread::throwException(Instance* exceptionInstance)
   assert(mCurrentException == nullptr && "There is already an exception instance");
   mCurrentException = exceptionInstance;
   currentFrame().clearOperandStack();
-  currentFrame().pushOperand(Value::Reference(exceptionInstance));
+  currentFrame().pushOperand(exceptionInstance);
 }
 
 void JavaThread::throwException(const types::JString& name, const types::JString& message)
@@ -188,8 +188,8 @@ void JavaThread::throwException(const types::JString& name, const types::JString
 
   Instance* exceptionInstance = heap().allocate((*klass)->asInstanceClass());
   Instance* messageInstance = heap().intern(message);
-  exceptionInstance->setFieldValue(u"detailMessage", u"Ljava/lang/String;", Value::Reference(messageInstance));
-  exceptionInstance->setFieldValue(u"stackTrace", u"[Ljava/lang/StackTraceElement;", Value::Reference(createStackTrace()));
+  exceptionInstance->setFieldValue(u"detailMessage", u"Ljava/lang/String;", messageInstance);
+  exceptionInstance->setFieldValue(u"stackTrace", u"[Ljava/lang/StackTraceElement;", createStackTrace());
 
   this->throwException(exceptionInstance);
 }
@@ -209,7 +209,7 @@ Instance* JavaThread::createStackTrace()
 
   auto throwable = resolveClass(u"java/lang/Throwable");
 
-  std::vector<Value> stackTrace;
+  std::vector<Instance*> stackTrace;
 
   bool include = false;
   for (auto it = callStack().rbegin(); it != callStack().rend(); ++it) {
@@ -220,9 +220,9 @@ Instance* JavaThread::createStackTrace()
 
     if (include) {
       auto stackTraceElement = heap().allocate((*stackTraceElementCls)->asInstanceClass());
-      stackTraceElement->setFieldValue(u"declaringClass", u"Ljava/lang/String;", Value::Reference(heap().intern(callFrame.currentClass()->javaClassName())));
-      stackTraceElement->setFieldValue(u"methodName", u"Ljava/lang/String;", Value::Reference(heap().intern(callFrame.currentMethod()->name())));
-      stackTrace.push_back(Value::Reference(stackTraceElement));
+      stackTraceElement->setFieldValue(u"declaringClass", u"Ljava/lang/String;", heap().intern(callFrame.currentClass()->javaClassName()));
+      stackTraceElement->setFieldValue(u"methodName", u"Ljava/lang/String;", heap().intern(callFrame.currentMethod()->name()));
+      stackTrace.push_back(stackTraceElement);
     }
   }
 

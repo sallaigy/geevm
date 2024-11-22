@@ -9,11 +9,11 @@ types::JString utils::getStringValue(Instance* stringInstance)
 {
   assert(stringInstance->getClass()->className() == u"java/lang/String");
 
-  ArrayInstance* array = stringInstance->getFieldValue(u"value", u"[C").asReference()->asArrayInstance();
+  ArrayInstance* array = stringInstance->getFieldValue<Instance*>(u"value", u"[C")->asArrayInstance();
 
   types::JString result;
   for (Value ch : array->contents()) {
-    result += ch.asChar();
+    result += ch.get<char16_t>();
   }
 
   return result;

@@ -10,7 +10,7 @@ Instance::Instance(JClass* klass)
 Instance::Instance(Kind kind, JClass* klass)
   : mKind(kind), mClass(klass)
 {
-  mFields.resize(klass->fields().size(), Value::Int(0));
+  mFields.resize(klass->fields().size(), Value::from<int32_t>(0));
   for (const auto& [key, field] : klass->fields()) {
     if (!hasAccessFlag(field->accessFlags(), FieldAccessFlags::ACC_STATIC)) {
       mFields[field->offset()] = Value::defaultValue(field->fieldType());
