@@ -96,8 +96,8 @@ std::optional<Value> JavaThread::executeCall(JMethod* method, const std::vector<
       frame.storeGenericValue(i, args[i]);
     }
 
-    auto interpreter = createDefaultInterpreter();
-    returnValue = interpreter->execute(*this, method->getCode(), 0);
+    auto interpreter = createDefaultInterpreter(*this);
+    returnValue = interpreter->execute(method->getCode(), 0);
   }
 
   mCallStack.pop_back();
