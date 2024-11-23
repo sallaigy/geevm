@@ -28,21 +28,60 @@ enum class Predicate
 class DefaultInterpreter : public Interpreter
 {
 public:
-  std::optional<Value> execute(JavaThread& thread, const Code& code, std::size_t startPc) override;
+  explicit DefaultInterpreter(JavaThread& thread)
+    : mThread(thread)
+  {
+  }
+
+  std::optional<Value> execute(const Code& code, std::size_t startPc) override;
 
 private:
-  void invoke(JavaThread& thread, JMethod* method);
-  void handleErrorAsException(JavaThread& thread, const VmError& error);
+  void invoke(JMethod* method);
+  void handleErrorAsException(const VmError& error);
 
   void integerComparison(Predicate predicate, CodeCursor& cursor, CallFrame& frame);
   void integerComparisonToZero(Predicate predicate, CodeCursor& cursor, CallFrame& frame);
+
+  std::optional<types::u2> tryHandleException(Instance* exception, RuntimeConstantPool& rt, const Code& code, size_t pc);
+
+  template<JvmType T>
+  void loadAndPush(CallFrame& frame, types::u2 index)
+  {
+    T val = frame.loadValue<T>(index);
+    frame.pushOperand<T>(val);
+  }
+
+  template<JvmType T>
+  void popAndStore(CallFrame& frame, types::u2 index)
+  {
+    T val = frame.popOperand<T>();
+    frame.storeValue<T>(index, val);
+  }
+
+  template<JvmType T>
+  void arrayLoad(CallFrame& frame);
+
+  template<JvmType T>
+  void arrayStore(CallFrame& frame);
+
+  template<JvmType T>
+  void add(CallFrame& frame);
+
+  template<JvmType T>
+  void sub(CallFrame& frame);
+
+  template<JvmType T>
+  void mul(CallFrame& frame);
+
+private:
+  JavaThread& mThread;
 };
 
 } // namespace
 
-std::unique_ptr<Interpreter> geevm::createDefaultInterpreter()
+std::unique_ptr<Interpreter> geevm::createDefaultInterpreter(JavaThread& thread)
 {
-  return std::make_unique<DefaultInterpreter>();
+  return std::make_unique<DefaultInterpreter>(thread);
 }
 
 static void notImplemented(Opcode opcode)
@@ -50,13 +89,13 @@ static void notImplemented(Opcode opcode)
   throw std::runtime_error("Opcode not implemented: " + opcodeToString(opcode));
 }
 
-std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code& code, std::size_t startPc)
+std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t startPc)
 {
   CodeCursor cursor(code.bytes(), startPc);
 
   while (cursor.hasNext()) {
     Opcode opcode = cursor.next();
-    CallFrame& frame = thread.currentFrame();
+    CallFrame& frame = mThread.currentFrame();
     RuntimeConstantPool& runtimeConstantPool = frame.currentClass()->runtimeConstantPool();
 
     switch (opcode) {
@@ -138,188 +177,39 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
 
         break;
       }
-      case Opcode::ILOAD: frame.pushOperand(frame.loadValue<int32_t>(cursor.readU1())); break;
-      case Opcode::LLOAD: {
-        auto index = cursor.readU1();
-        frame.pushOperand(frame.loadValue<int64_t>(index));
-        break;
-      }
-      case Opcode::FLOAD: notImplemented(opcode); break;
-      case Opcode::DLOAD: notImplemented(opcode); break;
-      case Opcode::ALOAD: frame.pushOperand(frame.loadValue<Instance*>(cursor.readU1())); break;
-      case Opcode::ILOAD_0: frame.pushOperand(frame.loadValue<int32_t>(0)); break;
-      case Opcode::ILOAD_1: frame.pushOperand(frame.loadValue<int32_t>(1)); break;
-      case Opcode::ILOAD_2: frame.pushOperand(frame.loadValue<int32_t>(2)); break;
-      case Opcode::ILOAD_3: frame.pushOperand(frame.loadValue<int32_t>(3)); break;
-      case Opcode::LLOAD_0: frame.pushOperand(frame.loadValue<int64_t>(0)); break;
-      case Opcode::LLOAD_1: frame.pushOperand(frame.loadValue<int64_t>(1)); break;
-      case Opcode::LLOAD_2: frame.pushOperand(frame.loadValue<int64_t>(2)); break;
-      case Opcode::LLOAD_3: frame.pushOperand(frame.loadValue<int64_t>(3)); break;
-      case Opcode::FLOAD_0: frame.pushOperand(frame.loadValue<float>(0)); break;
-      case Opcode::FLOAD_1: frame.pushOperand(frame.loadValue<float>(1)); break;
-      case Opcode::FLOAD_2: frame.pushOperand(frame.loadValue<float>(2)); break;
-      case Opcode::FLOAD_3: frame.pushOperand(frame.loadValue<float>(3)); break;
-      case Opcode::DLOAD_0: frame.pushOperand(frame.loadValue<double>(0)); break;
-      case Opcode::DLOAD_1: frame.pushOperand(frame.loadValue<double>(1)); break;
-      case Opcode::DLOAD_2: frame.pushOperand(frame.loadValue<double>(2)); break;
-      case Opcode::DLOAD_3: frame.pushOperand(frame.loadValue<double>(3)); break;
-      case Opcode::ALOAD_0: frame.pushOperand(frame.loadValue<Instance*>(0)); break;
-      case Opcode::ALOAD_1: frame.pushOperand(frame.loadValue<Instance*>(1)); break;
-      case Opcode::ALOAD_2: frame.pushOperand(frame.loadValue<Instance*>(2)); break;
-      case Opcode::ALOAD_3: frame.pushOperand(frame.loadValue<Instance*>(3)); break;
-      case Opcode::IALOAD: {
-        int32_t index = frame.popOperand<int32_t>();
-        Instance* arrayRef = frame.popOperand<Instance*>();
-
-        if (arrayRef == nullptr) {
-          thread.throwException(u"java/lang/NullPointerException");
-          break;
-        }
-
-        ArrayInstance* array = arrayRef->asArrayInstance();
-        auto element = array->getArrayElement<int32_t>(index);
-        if (!element) {
-          thread.throwException(element.error().exception(), element.error().message());
-          break;
-        }
-
-        frame.pushOperand<int32_t>(*element);
-        break;
-      }
-      case Opcode::LALOAD: {
-        int32_t index = frame.popOperand<int32_t>();
-        Instance* arrayRef = frame.popOperand<Instance*>();
-
-        if (arrayRef == nullptr) {
-          thread.throwException(u"java/lang/NullPointerException");
-          break;
-        }
-
-        ArrayInstance* array = arrayRef->asArrayInstance();
-        auto element = array->getArrayElement<int64_t>(index);
-        if (!element) {
-          thread.throwException(element.error().exception(), element.error().message());
-          break;
-        }
-
-        frame.pushOperand<int64_t>(*element);
-        break;
-      }
-      case Opcode::FALOAD: {
-        int32_t index = frame.popOperand<int32_t>();
-        Instance* arrayRef = frame.popOperand<Instance*>();
-
-        if (arrayRef == nullptr) {
-          thread.throwException(u"java/lang/NullPointerException");
-          break;
-        }
-
-        ArrayInstance* array = arrayRef->asArrayInstance();
-        auto element = array->getArrayElement<float>(index);
-        if (!element) {
-          thread.throwException(element.error().exception(), element.error().message());
-          break;
-        }
-
-        frame.pushOperand<float>(*element);
-        break;
-      }
-      case Opcode::DALOAD: {
-        int32_t index = frame.popOperand<int32_t>();
-        Instance* arrayRef = frame.popOperand<Instance*>();
-
-        if (arrayRef == nullptr) {
-          thread.throwException(u"java/lang/NullPointerException");
-          break;
-        }
-
-        ArrayInstance* array = arrayRef->asArrayInstance();
-        auto element = array->getArrayElement<double>(index);
-        if (!element) {
-          thread.throwException(element.error().exception(), element.error().message());
-          break;
-        }
-
-        frame.pushOperand<double>(*element);
-        break;
-      }
-      case Opcode::AALOAD: {
-        int32_t index = frame.popOperand<int32_t>();
-        Instance* arrayRef = frame.popOperand<Instance*>();
-
-        if (arrayRef == nullptr) {
-          thread.throwException(u"java/lang/NullPointerException");
-          break;
-        }
-
-        ArrayInstance* array = arrayRef->asArrayInstance();
-        auto res = array->getArrayElement<Instance*>(index);
-        if (!res) {
-          this->handleErrorAsException(thread, res.error());
-          break;
-        }
-
-        frame.pushOperand<Instance*>(*res);
-        break;
-      }
-      case Opcode::BALOAD: {
-        int32_t index = frame.popOperand<int32_t>();
-        Instance* arrayRef = frame.popOperand<Instance*>();
-        if (arrayRef == nullptr) {
-          thread.throwException(u"java/lang/NullPointerException");
-          break;
-        }
-
-        ArrayInstance* array = arrayRef->asArrayInstance();
-        auto res = array->getArrayElement<int8_t>(index);
-        if (!res) {
-          this->handleErrorAsException(thread, res.error());
-          break;
-        }
-
-        frame.pushOperand<int32_t>(static_cast<int32_t>(*res));
-
-        break;
-      }
-      case Opcode::CALOAD: {
-        int32_t index = frame.popOperand<int32_t>();
-        Instance* arrayRef = frame.popOperand<Instance*>();
-
-        if (arrayRef == nullptr) {
-          thread.throwException(u"java/lang/NullPointerException");
-          break;
-        }
-
-        ArrayInstance* array = arrayRef->asArrayInstance();
-        auto value = array->getArrayElement<char16_t>(index);
-        if (!value) {
-          this->handleErrorAsException(thread, value.error());
-          break;
-        }
-
-        frame.pushOperand<int32_t>((static_cast<int32_t>(*value)));
-
-        break;
-      }
-      case Opcode::SALOAD: {
-        int32_t index = frame.popOperand<int32_t>();
-        Instance* arrayRef = frame.popOperand<Instance*>();
-        if (arrayRef == nullptr) {
-          thread.throwException(u"java/lang/NullPointerException");
-          break;
-        }
-
-        ArrayInstance* array = arrayRef->asArrayInstance();
-        auto res = array->getArrayElement<int16_t>(index);
-        if (!res) {
-          this->handleErrorAsException(thread, res.error());
-          break;
-        }
-
-        frame.pushOperand<int32_t>(static_cast<int32_t>(*res));
-
-        break;
-      }
+      case Opcode::ILOAD: loadAndPush<int32_t>(frame, cursor.readU1()); break;
+      case Opcode::LLOAD: loadAndPush<int64_t>(frame, cursor.readU1()); break;
+      case Opcode::FLOAD: loadAndPush<float>(frame, cursor.readU1()); break;
+      case Opcode::DLOAD: loadAndPush<double>(frame, cursor.readU1()); break;
+      case Opcode::ALOAD: loadAndPush<Instance*>(frame, cursor.readU1()); break;
+      case Opcode::ILOAD_0: loadAndPush<int32_t>(frame, 0); break;
+      case Opcode::ILOAD_1: loadAndPush<int32_t>(frame, 1); break;
+      case Opcode::ILOAD_2: loadAndPush<int32_t>(frame, 2); break;
+      case Opcode::ILOAD_3: loadAndPush<int32_t>(frame, 3); break;
+      case Opcode::LLOAD_0: loadAndPush<int64_t>(frame, 0); break;
+      case Opcode::LLOAD_1: loadAndPush<int64_t>(frame, 1); break;
+      case Opcode::LLOAD_2: loadAndPush<int64_t>(frame, 2); break;
+      case Opcode::LLOAD_3: loadAndPush<int64_t>(frame, 3); break;
+      case Opcode::FLOAD_0: loadAndPush<float>(frame, 0); break;
+      case Opcode::FLOAD_1: loadAndPush<float>(frame, 1); break;
+      case Opcode::FLOAD_2: loadAndPush<float>(frame, 2); break;
+      case Opcode::FLOAD_3: loadAndPush<float>(frame, 3); break;
+      case Opcode::DLOAD_0: loadAndPush<double>(frame, 0); break;
+      case Opcode::DLOAD_1: loadAndPush<double>(frame, 1); break;
+      case Opcode::DLOAD_2: loadAndPush<double>(frame, 2); break;
+      case Opcode::DLOAD_3: loadAndPush<double>(frame, 3); break;
+      case Opcode::ALOAD_0: loadAndPush<Instance*>(frame, 0); break;
+      case Opcode::ALOAD_1: loadAndPush<Instance*>(frame, 1); break;
+      case Opcode::ALOAD_2: loadAndPush<Instance*>(frame, 2); break;
+      case Opcode::ALOAD_3: loadAndPush<Instance*>(frame, 3); break;
+      case Opcode::IALOAD: arrayLoad<int32_t>(frame); break;
+      case Opcode::LALOAD: arrayLoad<int64_t>(frame); break;
+      case Opcode::FALOAD: arrayLoad<float>(frame); break;
+      case Opcode::DALOAD: arrayLoad<double>(frame); break;
+      case Opcode::AALOAD: arrayLoad<Instance*>(frame); break;
+      case Opcode::BALOAD: arrayLoad<int8_t>(frame); break;
+      case Opcode::CALOAD: arrayLoad<char16_t>(frame); break;
+      case Opcode::SALOAD: arrayLoad<int16_t>(frame); break;
       case Opcode::ISTORE: {
         auto index = cursor.readU1();
         frame.storeValue(index, frame.popOperand<int32_t>());
@@ -337,112 +227,39 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         frame.storeValue(index, frame.popOperand<Instance*>());
         break;
       }
-      case Opcode::ISTORE_0: frame.storeValue<int32_t>(0, frame.popOperand<int32_t>()); break;
-      case Opcode::ISTORE_1: frame.storeValue<int32_t>(1, frame.popOperand<int32_t>()); break;
-      case Opcode::ISTORE_2: frame.storeValue<int32_t>(2, frame.popOperand<int32_t>()); break;
-      case Opcode::ISTORE_3: frame.storeValue<int32_t>(3, frame.popOperand<int32_t>()); break;
-      case Opcode::LSTORE_0: frame.storeValue<int64_t>(0, frame.popOperand<int64_t>()); break;
-      case Opcode::LSTORE_1: frame.storeValue<int64_t>(1, frame.popOperand<int64_t>()); break;
-      case Opcode::LSTORE_2: frame.storeValue<int64_t>(2, frame.popOperand<int64_t>()); break;
-      case Opcode::LSTORE_3: frame.storeValue<int64_t>(3, frame.popOperand<int64_t>()); break;
-      case Opcode::FSTORE_0: frame.storeValue<float>(0, frame.popOperand<float>()); break;
-      case Opcode::FSTORE_1: frame.storeValue<float>(1, frame.popOperand<float>()); break;
-      case Opcode::FSTORE_2: frame.storeValue<float>(2, frame.popOperand<float>()); break;
-      case Opcode::FSTORE_3: frame.storeValue<float>(3, frame.popOperand<float>()); break;
-      case Opcode::DSTORE_0: frame.storeValue<double>(0, frame.popOperand<double>()); break;
-      case Opcode::DSTORE_1: frame.storeValue<double>(1, frame.popOperand<double>()); break;
-      case Opcode::DSTORE_2: frame.storeValue<double>(2, frame.popOperand<double>()); break;
-      case Opcode::DSTORE_3: frame.storeValue<double>(3, frame.popOperand<double>()); break;
-      case Opcode::ASTORE_0: frame.storeValue<Instance*>(0, frame.popOperand<Instance*>()); break;
-      case Opcode::ASTORE_1: frame.storeValue<Instance*>(1, frame.popOperand<Instance*>()); break;
-      case Opcode::ASTORE_2: frame.storeValue<Instance*>(2, frame.popOperand<Instance*>()); break;
-      case Opcode::ASTORE_3: frame.storeValue<Instance*>(3, frame.popOperand<Instance*>()); break;
-      case Opcode::IASTORE: {
-        int32_t value = frame.popOperand<int32_t>();
-        int32_t index = frame.popOperand<int32_t>();
-        Instance* arrayRef = frame.popOperand<Instance*>();
-
-        if (arrayRef == nullptr) {
-          thread.throwException(u"java/lang/NullPointerException");
-          break;
-        }
-
-        ArrayInstance* array = arrayRef->asArrayInstance();
-        auto result = array->setArrayElement(index, value);
-        if (!result) {
-          thread.throwException(u"java/lang/ArrayIndexOutOfBoundsException");
-          break;
-        }
-
-        break;
-      }
-      case Opcode::LASTORE: {
-        int64_t value = frame.popOperand<int64_t>();
-        int32_t index = frame.popOperand<int32_t>();
-        Instance* arrayRef = frame.popOperand<Instance*>();
-
-        if (arrayRef == nullptr) {
-          thread.throwException(u"java/lang/NullPointerException");
-          break;
-        }
-
-        ArrayInstance* array = arrayRef->asArrayInstance();
-        auto result = array->setArrayElement(index, Value::from<int64_t>(value));
-
-        if (!result) {
-          thread.throwException(u"java/lang/ArrayIndexOutOfBoundsException");
-          break;
-        }
-
-        break;
-      }
-      case Opcode::FASTORE: {
-        float value = frame.popOperand<float>();
-        int32_t index = frame.popOperand<int32_t>();
-        Instance* arrayRef = frame.popOperand<Instance*>();
-
-        if (arrayRef == nullptr) {
-          thread.throwException(u"java/lang/NullPointerException");
-          break;
-        }
-
-        ArrayInstance* array = arrayRef->asArrayInstance();
-        auto result = array->setArrayElement(index, Value::from<float>(value));
-
-        if (!result) {
-          thread.throwException(u"java/lang/ArrayIndexOutOfBoundsException");
-          break;
-        }
-
-        break;
-      }
-      case Opcode::DASTORE: {
-        double value = frame.popOperand<double>();
-        int32_t index = frame.popOperand<int32_t>();
-        Instance* arrayRef = frame.popOperand<Instance*>();
-
-        if (arrayRef == nullptr) {
-          thread.throwException(u"java/lang/NullPointerException");
-          break;
-        }
-
-        ArrayInstance* array = arrayRef->asArrayInstance();
-        auto result = array->setArrayElement(index, Value::from<double>(value));
-
-        if (!result) {
-          thread.throwException(u"java/lang/ArrayIndexOutOfBoundsException");
-          break;
-        }
-
-        break;
-      }
+      case Opcode::ISTORE_0: popAndStore<int32_t>(frame, 0); break;
+      case Opcode::ISTORE_1: popAndStore<int32_t>(frame, 1); break;
+      case Opcode::ISTORE_2: popAndStore<int32_t>(frame, 2); break;
+      case Opcode::ISTORE_3: popAndStore<int32_t>(frame, 3); break;
+      case Opcode::LSTORE_0: popAndStore<int64_t>(frame, 0); break;
+      case Opcode::LSTORE_1: popAndStore<int64_t>(frame, 1); break;
+      case Opcode::LSTORE_2: popAndStore<int64_t>(frame, 2); break;
+      case Opcode::LSTORE_3: popAndStore<int64_t>(frame, 3); break;
+      case Opcode::FSTORE_0: popAndStore<float>(frame, 0); break;
+      case Opcode::FSTORE_1: popAndStore<float>(frame, 1); break;
+      case Opcode::FSTORE_2: popAndStore<float>(frame, 2); break;
+      case Opcode::FSTORE_3: popAndStore<float>(frame, 3); break;
+      case Opcode::DSTORE_0: popAndStore<double>(frame, 0); break;
+      case Opcode::DSTORE_1: popAndStore<double>(frame, 1); break;
+      case Opcode::DSTORE_2: popAndStore<double>(frame, 2); break;
+      case Opcode::DSTORE_3: popAndStore<double>(frame, 3); break;
+      case Opcode::ASTORE_0: popAndStore<Instance*>(frame, 0); break;
+      case Opcode::ASTORE_1: popAndStore<Instance*>(frame, 1); break;
+      case Opcode::ASTORE_2: popAndStore<Instance*>(frame, 2); break;
+      case Opcode::ASTORE_3: popAndStore<Instance*>(frame, 3); break;
+      // Array store
+      //==--------------------------------------------------------------------==
+      case Opcode::IASTORE: arrayStore<int32_t>(frame); break;
+      case Opcode::LASTORE: arrayStore<int64_t>(frame); break;
+      case Opcode::FASTORE: arrayStore<float>(frame); break;
+      case Opcode::DASTORE: arrayStore<double>(frame); break;
       case Opcode::AASTORE: {
         Instance* value = frame.popOperand<Instance*>();
         int32_t index = frame.popOperand<int32_t>();
         Instance* arrayRef = frame.popOperand<Instance*>();
 
         if (arrayRef == nullptr) {
-          thread.throwException(u"java/lang/NullPointerException");
+          mThread.throwException(u"java/lang/NullPointerException");
           break;
         }
 
@@ -454,13 +271,13 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
           assert(arrayElementClass);
 
           if (!elementClass->isInstanceOf(*arrayElementClass)) {
-            thread.throwException(u"java/lang/ArrayStoreException");
+            mThread.throwException(u"java/lang/ArrayStoreException");
             break;
           }
         }
 
         if (auto res = array->setArrayElement(index, Value::from<Instance*>(value)); !res) {
-          this->handleErrorAsException(thread, res.error());
+          this->handleErrorAsException(res.error());
           break;
         }
 
@@ -472,7 +289,7 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         Instance* arrayRef = frame.popOperand<Instance*>();
 
         if (arrayRef == nullptr) {
-          thread.throwException(u"java/lang/NullPointerException");
+          mThread.throwException(u"java/lang/NullPointerException");
           break;
         }
 
@@ -480,7 +297,7 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
 
         int8_t byteValue = static_cast<int8_t>(value & 0x000000FF);
         if (auto res = array->setArrayElement<int8_t>(index, byteValue); !res) {
-          this->handleErrorAsException(thread, res.error());
+          this->handleErrorAsException(res.error());
           break;
         }
 
@@ -492,14 +309,14 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         Instance* arrayRef = frame.popOperand<Instance*>();
 
         if (arrayRef == nullptr) {
-          thread.throwException(u"java/lang/NullPointerException");
+          mThread.throwException(u"java/lang/NullPointerException");
           break;
         }
 
         ArrayInstance* array = arrayRef->asArrayInstance();
 
         if (auto res = array->setArrayElement<char16_t>(index, static_cast<char16_t>(value)); !res) {
-          this->handleErrorAsException(thread, res.error());
+          this->handleErrorAsException(res.error());
           break;
         }
 
@@ -511,7 +328,7 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         Instance* arrayRef = frame.popOperand<Instance*>();
 
         if (arrayRef == nullptr) {
-          thread.throwException(u"java/lang/NullPointerException");
+          mThread.throwException(u"java/lang/NullPointerException");
           break;
         }
 
@@ -519,7 +336,7 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
 
         int16_t shortValue = static_cast<int16_t>(value & 0x0000FFFF);
         if (auto res = array->setArrayElement<int16_t>(index, shortValue); !res) {
-          this->handleErrorAsException(thread, res.error());
+          this->handleErrorAsException(res.error());
           break;
         }
 
@@ -567,121 +384,24 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
       case Opcode::DUP2_X1: notImplemented(opcode); break;
       case Opcode::DUP2_X2: notImplemented(opcode); break;
       case Opcode::SWAP: notImplemented(opcode); break;
-      case Opcode::IADD: {
-        int32_t value2 = frame.popOperand<int32_t>();
-        int32_t value1 = frame.popOperand<int32_t>();
-
-        int32_t result = value2 + value1;
-
-        frame.pushOperand<int32_t>(result);
-        break;
-      }
-      case Opcode::LADD: {
-        int64_t value2 = frame.popOperand<int64_t>();
-        int64_t value1 = frame.popOperand<int64_t>();
-
-        frame.pushOperand<int64_t>(value1 + value2);
-        break;
-      }
-      case Opcode::FADD: {
-        float value2 = frame.popOperand<float>();
-        float value1 = frame.popOperand<float>();
-
-        // TODO: Value set conversion
-
-        float result = value1 + value2;
-
-        frame.pushOperand<float>(result);
-
-        break;
-      }
-      case Opcode::DADD: {
-        double value2 = frame.popOperand<double>();
-        double value1 = frame.popOperand<double>();
-
-        double result = value1 + value2;
-
-        frame.pushOperand<double>(result);
-
-        break;
-      }
-      case Opcode::ISUB: {
-        int32_t value2 = frame.popOperand<int32_t>();
-        int32_t value1 = frame.popOperand<int32_t>();
-
-        int32_t result = value1 - value2;
-
-        frame.pushOperand<int32_t>(result);
-        break;
-      }
-      case Opcode::LSUB: {
-        int64_t value2 = frame.popOperand<int64_t>();
-        int64_t value1 = frame.popOperand<int64_t>();
-
-        int64_t result = value1 - value2;
-
-        frame.pushOperand<int64_t>(result);
-        break;
-      }
-      case Opcode::FSUB: {
-        float value2 = frame.popOperand<float>();
-        float value1 = frame.popOperand<float>();
-
-        // TODO: Value set conversion
-
-        float result = value1 - value2;
-
-        frame.pushOperand<float>(result);
-
-        break;
-      }
-      case Opcode::DSUB: {
-        float value2 = frame.popOperand<double>();
-        float value1 = frame.popOperand<double>();
-
-        // TODO: Value set conversion
-
-        double result = value1 - value2;
-
-        frame.pushOperand<double>(result);
-
-        break;
-      }
-      case Opcode::IMUL: {
-        int32_t value2 = frame.popOperand<int32_t>();
-        int32_t value1 = frame.popOperand<int32_t>();
-        frame.pushOperand<int32_t>(value1 * value2);
-
-        break;
-      }
-      case Opcode::LMUL: {
-        int64_t value2 = frame.popOperand<int64_t>();
-        int64_t value1 = frame.popOperand<int64_t>();
-
-        int64_t result = value1 * value2;
-
-        frame.pushOperand<int64_t>(result);
-        break;
-      }
-      case Opcode::FMUL: {
-        float value2 = frame.popOperand<float>();
-        float value1 = frame.popOperand<float>();
-        frame.pushOperand<float>((value1 * value2));
-
-        break;
-      }
-      case Opcode::DMUL: {
-        double value2 = frame.popOperand<double>();
-        double value1 = frame.popOperand<double>();
-        frame.pushOperand<double>((value1 * value2));
-        break;
-      }
+      case Opcode::IADD: add<int32_t>(frame); break;
+      case Opcode::LADD: add<int64_t>(frame); break;
+      case Opcode::FADD: add<float>(frame); break;
+      case Opcode::DADD: add<double>(frame); break;
+      case Opcode::ISUB: sub<int32_t>(frame); break;
+      case Opcode::LSUB: sub<int64_t>(frame); break;
+      case Opcode::FSUB: sub<float>(frame); break;
+      case Opcode::DSUB: sub<double>(frame); break;
+      case Opcode::IMUL: mul<int32_t>(frame); break;
+      case Opcode::LMUL: mul<int64_t>(frame); break;
+      case Opcode::FMUL: mul<float>(frame); break;
+      case Opcode::DMUL: mul<double>(frame); break;
       case Opcode::IDIV: {
         int32_t value2 = frame.popOperand<int32_t>();
         int32_t value1 = frame.popOperand<int32_t>();
 
         if (value2 == 0) {
-          thread.throwException(u"java/lang/ArithmeticException", u"Divison by zero");
+          mThread.throwException(u"java/lang/ArithmeticException", u"Divison by zero");
           break;
         }
 
@@ -693,7 +413,7 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         int64_t value1 = frame.popOperand<int64_t>();
 
         if (value2 == 0) {
-          thread.throwException(u"java/lang/ArithmeticException", u"Divison by zero");
+          mThread.throwException(u"java/lang/ArithmeticException", u"Divison by zero");
           break;
         }
 
@@ -895,7 +615,7 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         if (value1 > value2) {
           frame.pushOperand<int32_t>(1);
         } else if (value1 < value2) {
-          frame.pushOperand<int32_t>((-1));
+          frame.pushOperand<int32_t>(-1);
         } else {
           frame.pushOperand<int32_t>(0);
         }
@@ -999,7 +719,7 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         JField* field = runtimeConstantPool.getFieldRef(index);
 
         JClass* klass = field->getClass();
-        klass->initialize(thread);
+        klass->initialize(mThread);
 
         Value value = klass->getStaticFieldValue(field->offset());
         frame.pushGenericOperand(value);
@@ -1011,7 +731,7 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         JField* field = runtimeConstantPool.getFieldRef(index);
 
         JClass* klass = field->getClass();
-        klass->initialize(thread);
+        klass->initialize(mThread);
 
         klass->setStaticFieldValue(field->offset(), frame.popGenericOperand());
 
@@ -1049,7 +769,7 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         int numArgs = baseMethod->descriptor().parameters().size();
         auto objectRef = frame.peek(numArgs).get<Instance*>();
         if (objectRef == nullptr) {
-          thread.throwException(u"java/lang/NullPointerException");
+          mThread.throwException(u"java/lang/NullPointerException");
           break;
         }
 
@@ -1058,7 +778,7 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
 
         assert(targetMethod.has_value());
 
-        this->invoke(thread, *targetMethod);
+        this->invoke(*targetMethod);
 
         break;
       }
@@ -1066,7 +786,7 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         auto index = cursor.readU2();
         JMethod* method = runtimeConstantPool.getMethodRef(index);
 
-        this->invoke(thread, method);
+        this->invoke(method);
 
         break;
       }
@@ -1075,9 +795,9 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         JMethod* method = runtimeConstantPool.getMethodRef(index);
         assert(method->isStatic());
 
-        method->getClass()->initialize(thread);
+        method->getClass()->initialize(mThread);
 
-        this->invoke(thread, method);
+        this->invoke(method);
 
         break;
       }
@@ -1096,7 +816,7 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         JClass* target = objectRef.get<Instance*>()->getClass();
         auto method = target->getVirtualMethod(methodRef->name(), methodRef->rawDescriptor());
 
-        this->invoke(thread, *method);
+        this->invoke(*method);
         break;
       }
       case Opcode::INVOKEDYNAMIC: notImplemented(opcode); break;
@@ -1104,16 +824,16 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         auto index = cursor.readU2();
         auto className = frame.currentClass()->constantPool().getClassName(index);
 
-        auto klass = thread.resolveClass(types::JString{className});
+        auto klass = mThread.resolveClass(types::JString{className});
         if (!klass) {
-          this->handleErrorAsException(thread, klass.error());
+          this->handleErrorAsException(klass.error());
           break;
         }
 
-        (*klass)->initialize(thread);
+        (*klass)->initialize(mThread);
 
         if (auto instanceClass = (*klass)->asInstanceClass(); instanceClass != nullptr) {
-          Instance* instance = thread.heap().allocate(instanceClass);
+          Instance* instance = mThread.heap().allocate(instanceClass);
           frame.pushOperand<Instance*>(instance);
         } else {
           assert(false && "TODO new with array class");
@@ -1151,18 +871,18 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
           default: assert(false && "impossible"); break;
         }
 
-        auto arrayClass = thread.resolveClass(arrayClsName);
+        auto arrayClass = mThread.resolveClass(arrayClsName);
         if (!arrayClass) {
-          this->handleErrorAsException(thread, arrayClass.error());
+          this->handleErrorAsException(arrayClass.error());
           break;
         }
 
         if (count < 0) {
-          thread.throwException(u"java/lang/NegativeArraySizeException", u"");
+          mThread.throwException(u"java/lang/NegativeArraySizeException", u"");
           break;
         }
 
-        ArrayInstance* newInstance = thread.heap().allocateArray((*arrayClass)->asArrayClass(), count);
+        ArrayInstance* newInstance = mThread.heap().allocateArray((*arrayClass)->asArrayClass(), count);
         frame.pushOperand<Instance*>(newInstance);
 
         break;
@@ -1173,34 +893,34 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
 
         auto klass = runtimeConstantPool.getClass(index);
         if (!klass) {
-          this->handleErrorAsException(thread, klass.error());
+          this->handleErrorAsException(klass.error());
           break;
         }
 
-        auto arrayClass = thread.resolveClass(u"[L" + types::JString{(*klass)->className()} + u";");
+        auto arrayClass = mThread.resolveClass(u"[L" + types::JString{(*klass)->className()} + u";");
         if (!arrayClass) {
-          this->handleErrorAsException(thread, arrayClass.error());
+          this->handleErrorAsException(arrayClass.error());
           break;
         }
 
         if (count < 0) {
-          thread.throwException(u"java/lang/NegativeArraySizeException", u"");
+          mThread.throwException(u"java/lang/NegativeArraySizeException", u"");
           break;
         }
 
-        ArrayInstance* array = thread.heap().allocateArray((*arrayClass)->asArrayClass(), count);
+        ArrayInstance* array = mThread.heap().allocateArray((*arrayClass)->asArrayClass(), count);
         frame.pushOperand<Instance*>(array);
 
         break;
       }
       case Opcode::ARRAYLENGTH: {
         ArrayInstance* arrayRef = frame.popOperand<Instance*>()->asArrayInstance();
-        frame.pushOperand<int32_t>((arrayRef->length()));
+        frame.pushOperand<int32_t>(arrayRef->length());
         break;
       }
       case Opcode::ATHROW: {
         auto exception = frame.popOperand<Instance*>();
-        thread.throwException(exception);
+        mThread.throwException(exception);
         break;
       }
       case Opcode::CHECKCAST: {
@@ -1211,14 +931,14 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         } else {
           auto klass = runtimeConstantPool.getClass(index);
           if (!klass) {
-            this->handleErrorAsException(thread, klass.error());
+            this->handleErrorAsException(klass.error());
             break;
           }
 
           JClass* classToCheck = objectRef->getClass();
           if (!classToCheck->isInstanceOf(*klass)) {
             types::JString message = u"class " + classToCheck->javaClassName() + u" cannot be cast to class " + (*klass)->javaClassName();
-            thread.throwException(u"java/lang/ClassCastException", message);
+            mThread.throwException(u"java/lang/ClassCastException", message);
           } else {
             frame.pushOperand<Instance*>(objectRef);
           }
@@ -1234,7 +954,7 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
         } else {
           auto klass = runtimeConstantPool.getClass(index);
           if (!klass) {
-            this->handleErrorAsException(thread, klass.error());
+            this->handleErrorAsException(klass.error());
             break;
           }
 
@@ -1292,39 +1012,16 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
     }
 
     // Handle exception
-    if (auto exception = thread.currentException(); exception != nullptr) {
+    if (auto exception = mThread.currentException(); exception != nullptr) {
       size_t pc = cursor.position() - 1;
 
-      bool handled = false;
-      for (auto& entry : code.exceptionTable()) {
-        if (pc < entry.startPc || pc >= entry.endPc) {
-          // The exception handler is not active
-          continue;
-        }
+      auto newPc = this->tryHandleException(exception, runtimeConstantPool, code, pc);
 
-        bool caught = false;
-        if (entry.catchType != 0) {
-          auto exceptionClass = runtimeConstantPool.getClass(entry.catchType);
-
-          assert(exceptionClass.has_value());
-          if (exception->getClass()->isInstanceOf(*exceptionClass)) {
-            caught = true;
-          }
-        } else {
-          caught = true;
-        }
-
-        if (caught) {
-          handled = true;
-          cursor.set(entry.handlerPc);
-          break;
-        }
-      }
-
-      if (!handled) {
-        return std::nullopt;
+      if (newPc.has_value()) {
+        cursor.set(newPc.value());
+        mThread.clearException();
       } else {
-        thread.clearException();
+        return std::nullopt;
       }
     }
   }
@@ -1332,33 +1029,62 @@ std::optional<Value> DefaultInterpreter::execute(JavaThread& thread, const Code&
   assert(false && "Should be unreachable");
 }
 
+std::optional<types::u2> DefaultInterpreter::tryHandleException(Instance* exception, RuntimeConstantPool& rt, const Code& code, size_t pc)
+{
+  for (auto& entry : code.exceptionTable()) {
+    if (pc < entry.startPc || pc >= entry.endPc) {
+      // The exception handler is not active
+      continue;
+    }
+
+    bool caught = false;
+    if (entry.catchType != 0) {
+      auto exceptionClass = rt.getClass(entry.catchType);
+
+      assert(exceptionClass.has_value());
+      if (exception->getClass()->isInstanceOf(*exceptionClass)) {
+        caught = true;
+      }
+    } else {
+      caught = true;
+    }
+
+    if (caught) {
+      return entry.handlerPc;
+    }
+  }
+
+  return std::nullopt;
+}
+
 static bool compareInt(Predicate predicate, int32_t val1, int32_t val2)
 {
   switch (predicate) {
-    case Predicate::Eq: return val1 == val2;
-    case Predicate::NotEq: return val1 != val2;
-    case Predicate::Gt: return val1 > val2;
-    case Predicate::Lt: return val1 < val2;
-    case Predicate::GtEq: return val1 >= val2;
-    case Predicate::LtEq: return val1 <= val2;
+    using enum Predicate;
+    case Eq: return val1 == val2;
+    case NotEq: return val1 != val2;
+    case Gt: return val1 > val2;
+    case Lt: return val1 < val2;
+    case GtEq: return val1 >= val2;
+    case LtEq: return val1 <= val2;
   }
 
   std::unreachable();
 }
 
-void DefaultInterpreter::invoke(JavaThread& thread, JMethod* method)
+void DefaultInterpreter::invoke(JMethod* method)
 {
-  auto returnValue = thread.invoke(method);
-  assert((method->isVoid() || thread.currentException() != nullptr) || returnValue.has_value());
+  auto returnValue = mThread.invoke(method);
+  assert((method->isVoid() || mThread.currentException() != nullptr) || returnValue.has_value());
 
   if (returnValue.has_value()) {
-    thread.currentFrame().pushGenericOperand(*returnValue);
+    mThread.currentFrame().pushGenericOperand(*returnValue);
   }
 }
 
-void DefaultInterpreter::handleErrorAsException(JavaThread& thread, const VmError& error)
+void DefaultInterpreter::handleErrorAsException(const VmError& error)
 {
-  thread.throwException(error.exception(), error.message());
+  mThread.throwException(error.exception(), error.message());
 }
 
 void DefaultInterpreter::integerComparison(Predicate predicate, CodeCursor& cursor, CallFrame& frame)
@@ -1386,4 +1112,82 @@ void DefaultInterpreter::integerComparisonToZero(Predicate predicate, CodeCursor
   if (compareInt(predicate, val1, 0)) {
     cursor.set(opcodePos + offset);
   }
+}
+
+template<JvmType T>
+void DefaultInterpreter::arrayLoad(CallFrame& frame)
+{
+  int32_t index = frame.popOperand<int32_t>();
+  Instance* arrayRef = frame.popOperand<Instance*>();
+
+  if (arrayRef == nullptr) {
+    mThread.throwException(u"java/lang/NullPointerException");
+    return;
+  }
+
+  ArrayInstance* array = arrayRef->asArrayInstance();
+  auto element = array->getArrayElement<T>(index);
+  if (!element) {
+    this->handleErrorAsException(element.error());
+    return;
+  }
+
+  if constexpr (StoredAsInt<T>) {
+    frame.pushOperand<int32_t>(static_cast<int32_t>(*element));
+  } else {
+    frame.pushOperand<T>(*element);
+  }
+}
+
+template<JvmType T>
+void DefaultInterpreter::arrayStore(CallFrame& frame)
+{
+  T value = frame.popOperand<T>();
+  int32_t index = frame.popOperand<int32_t>();
+  Instance* arrayRef = frame.popOperand<Instance*>();
+
+  if (arrayRef == nullptr) {
+    mThread.throwException(u"java/lang/NullPointerException");
+    return;
+  }
+
+  ArrayInstance* array = arrayRef->asArrayInstance();
+  auto result = array->setArrayElement<T>(index, value);
+
+  if (!result) {
+    mThread.throwException(u"java/lang/ArrayIndexOutOfBoundsException");
+  }
+}
+
+template<JvmType T>
+void DefaultInterpreter::add(CallFrame& frame)
+{
+  T value2 = frame.popOperand<T>();
+  T value1 = frame.popOperand<T>();
+
+  T result = value2 + value1;
+
+  frame.pushOperand<T>(result);
+}
+
+template<JvmType T>
+void DefaultInterpreter::sub(CallFrame& frame)
+{
+  T value2 = frame.popOperand<T>();
+  T value1 = frame.popOperand<T>();
+
+  T result = value1 - value2;
+
+  frame.pushOperand<T>(result);
+}
+
+template<JvmType T>
+void DefaultInterpreter::mul(CallFrame& frame)
+{
+  T value2 = frame.popOperand<T>();
+  T value1 = frame.popOperand<T>();
+
+  T result = value2 * value1;
+
+  frame.pushOperand<T>(result);
 }
