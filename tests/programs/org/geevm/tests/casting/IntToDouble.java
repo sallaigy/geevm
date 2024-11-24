@@ -1,0 +1,19 @@
+package org.geevm.tests.casting;
+
+import org.geevm.tests.Printer;
+
+public class IntToDouble {
+
+    public static void main(String[] args) {
+        castAndPrint(12345); // 12345.0
+        castAndPrint(-12345); // -12345.0
+        castAndPrint(16777216); // 1.6777216E7
+        castAndPrint(16777217); // 1.6777217E7
+        castAndPrint(Integer.MAX_VALUE); // 2.147483647E9
+        castAndPrint(Integer.MIN_VALUE); // -2.147483648E9
+    }
+
+    public static void castAndPrint(int val) {
+        Printer.println((double) val);
+    }
+}

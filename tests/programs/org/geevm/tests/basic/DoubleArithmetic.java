@@ -49,6 +49,9 @@ public class DoubleArithmetic {
         Printer.println(div(Double.NEGATIVE_INFINITY, 2.25)); // -inf
 
         Printer.println(mod(10.5, 2.25)); // 1.5
+        Printer.println(mod(10.5, -2.25)); // 1.5
+        Printer.println(mod(-10.5, 2.25)); // -1.5
+        Printer.println(mod(-10.5, -2.25)); // -1.5
     }
 
     public static double add(double x, double y) {

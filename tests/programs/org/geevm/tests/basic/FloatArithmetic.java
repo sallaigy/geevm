@@ -49,6 +49,9 @@ public class FloatArithmetic {
         Printer.println(div(Float.NEGATIVE_INFINITY, 2.25f)); // -inf
 
         Printer.println(mod(10.5f, 2.25f)); // 1.5
+        Printer.println(mod(10.5f, -2.25f)); // 1.5
+        Printer.println(mod(-10.5f, 2.25f)); // -1.5
+        Printer.println(mod(-10.5f, -2.25f)); // -1.5
     }
 
     public static float add(float x, float y) {

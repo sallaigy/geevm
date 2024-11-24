@@ -102,6 +102,9 @@ nan
 inf
 -inf
 1.5
+1.5
+-1.5
+-1.5
 '''
 
         self.execute_tests('simple_math_programs', [
@@ -215,6 +218,36 @@ Caught ArrayIndexOutOfBoundsException
                      stdout='1\nj=3\njj=4\n3\n')
         ])
 
+    def casting(self):
+        self.execute_tests('casting', [
+            TestCase('casting.IntToByte', stdout='100\n-126\n126\n'),
+            TestCase('casting.IntToShort', stdout='100\n-30536\n30536\n'),
+            TestCase('casting.IntToChar', stdout='A\nB\nﾾ\n'),
+            TestCase('casting.IntToLong', stdout='100\n-2147483648\n2147483647\n'),
+            TestCase('casting.IntToFloat',
+                     stdout='12345\n-12345\n1.67772e+07\n1.67772e+07\n2.14748e+09\n-2.14748e+09\n'),
+            TestCase('casting.IntToDouble',
+                     stdout='12345\n-12345\n1.67772e+07\n1.67772e+07\n2.14748e+09\n-2.14748e+09\n'),
+            TestCase('casting.LongToInt',
+                     stdout='100\n2147483647\n-2147483648\n0\n-1\n'),
+            TestCase('casting.LongToFloat',
+                     stdout='12345\n-12345\n-2.14748e+09\n2.14748e+09\n-9.22337e+18\n9.22337e+18\n'),
+            TestCase('casting.LongToDouble',
+                     stdout='12345\n-12345\n-2.14748e+09\n2.14748e+09\n-9.22337e+18\n9.22337e+18\n'),
+            TestCase('casting.FloatToInt',
+                     stdout='42\n-42\n0\n2147483647\n0\n-2147483648\n2147483647\n-2147483648\n0\n2147483647\n-2147483648\n'),
+            TestCase('casting.FloatToLong',
+                     stdout='42\n-42\n0\n9223372036854775807\n0\n-9223372036854775808\n9223372036854775807\n-9223372036854775808\n0\n9223372036854775807\n-9223372036854775808\n'),
+            TestCase('casting.FloatToDouble',
+                     stdout='42.9\n-42.9\n0\n1.4013e-45\n3.40282e+38\n-3.40282e+38\ninf\n-inf\nnan\n0.1\n'),
+            TestCase('casting.DoubleToInt',
+                     stdout='42\n-42\n0\n2147483647\n0\n-2147483648\n2147483647\n-2147483648\n0\n2147483647\n-2147483648\n'),
+            TestCase('casting.DoubleToLong',
+                     stdout='42\n-42\n0\n9223372036854775807\n0\n-9223372036854775808\n9223372036854775807\n-9223372036854775808\n0\n9223372036854775807\n-9223372036854775808\n'),
+            TestCase('casting.DoubleToFloat',
+                     stdout='42.9\n-42.9\n0\n0\ninf\n-inf\ninf\n-inf\nnan\n0.1\n'),
+        ])
+
     def run(self):
         self.failures = []
         self.simple_math_programs()
@@ -222,6 +255,7 @@ Caught ArrayIndexOutOfBoundsException
         self.arrays()
         self.oop_programs()
         self.init()
+        self.casting()
         self.exceptions()
         self.errors()
         self.reflection()
