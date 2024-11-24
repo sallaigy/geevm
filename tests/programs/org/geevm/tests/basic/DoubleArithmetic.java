@@ -52,6 +52,16 @@ public class DoubleArithmetic {
         Printer.println(mod(10.5, -2.25)); // 1.5
         Printer.println(mod(-10.5, 2.25)); // -1.5
         Printer.println(mod(-10.5, -2.25)); // -1.5
+
+        Printer.println(neg(10.5)); // -10.5
+        Printer.println(neg(-10.5)); // 10.5
+        Printer.println(neg(+0.0)); // -0.0
+        Printer.println(neg(-0.0)); // 0.0
+        Printer.println(neg(Double.MIN_VALUE)); // -1.4E-45
+        Printer.println(neg(Double.MAX_VALUE)); // -3.4028235E38
+        Printer.println(neg(Double.NaN)); // NaN
+        Printer.println(neg(Double.NEGATIVE_INFINITY)); // Infinity
+        Printer.println(neg(Double.POSITIVE_INFINITY)); // -Infinity
     }
 
     public static double add(double x, double y) {
@@ -72,6 +82,10 @@ public class DoubleArithmetic {
 
     public static double mod(double x, double y) {
         return x % y;
+    }
+
+    public static double neg(double x) {
+        return -x;
     }
 
 }
