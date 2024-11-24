@@ -52,6 +52,16 @@ public class FloatArithmetic {
         Printer.println(mod(10.5f, -2.25f)); // 1.5
         Printer.println(mod(-10.5f, 2.25f)); // -1.5
         Printer.println(mod(-10.5f, -2.25f)); // -1.5
+
+        Printer.println(neg(10.5f)); // -10.5
+        Printer.println(neg(-10.5f)); // 10.5
+        Printer.println(neg(+0.0f)); // -0.0
+        Printer.println(neg(-0.0f)); // 0.0
+        Printer.println(neg(Float.MIN_VALUE)); // -1.4E-45
+        Printer.println(neg(Float.MAX_VALUE)); // -3.4028235E38
+        Printer.println(neg(Float.NaN)); // NaN
+        Printer.println(neg(Float.NEGATIVE_INFINITY)); // Infinity
+        Printer.println(neg(Float.POSITIVE_INFINITY)); // -Infinity
     }
 
     public static float add(float x, float y) {
@@ -72,6 +82,10 @@ public class FloatArithmetic {
 
     public static float mod(float x, float y) {
         return x % y;
+    }
+
+    public static float neg(float x) {
+        return -x;
     }
 
 }

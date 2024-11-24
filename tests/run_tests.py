@@ -64,7 +64,16 @@ class JavaIntegrationTest:
                               timeout=10)
 
     def simple_math_programs(self):
-        expected_float_results = '''12.75
+        self.execute_tests('simple_math_programs', [
+            TestCase('basic.Count', '10\n'),
+            TestCase('basic.StaticCalls', '15\n'),
+            TestCase('basic.IntegerArithmetic',
+                     '13\n-2147483648\n7\n2147483647\n30\n3\n-3\n-3\n3\n1\n1\n-1\n-1\n-10\n10\n0\n-2147483648\n-2147483647\n'),
+            TestCase('basic.LongArithmetic',
+                     '13\n-9223372036854775808\n7\n9223372036854775807\n30\n3\n-3\n-3\n3\n1\n1\n-1\n-1\n-10\n10\n0\n-9223372036854775808\n-9223372036854775807\n'),
+            # The format between System.out.println and the debug printer is different.
+            # This will have to be adjusted once we support System.out
+            TestCase('basic.FloatArithmetic', '''12.75
 nan
 nan
 -nan
@@ -105,17 +114,67 @@ inf
 1.5
 -1.5
 -1.5
-'''
-
-        self.execute_tests('simple_math_programs', [
-            TestCase('basic.Count', '10\n'),
-            TestCase('basic.StaticCalls', '15\n'),
-            TestCase('basic.IntegerArithmetic', '13\n7\n30\n3\n-3\n-3\n3\n1\n1\n-1\n-1\n'),
-            TestCase('basic.LongArithmetic', '13\n7\n30\n3\n-3\n-3\n3\n1\n1\n-1\n-1\n'),
-            # The format between System.out.println and the debug printer is different.
-            # This will have to be adjusted once we support System.out
-            TestCase('basic.FloatArithmetic', expected_float_results),
-            TestCase('basic.DoubleArithmetic', expected_float_results),
+-10.5
+10.5
+-0
+0
+-1.4013e-45
+-3.40282e+38
+-nan
+inf
+-inf
+'''),
+            TestCase('basic.DoubleArithmetic', '''12.75
+nan
+nan
+-nan
+inf
+-inf
+0
+0
+-0
+2.25
+2.25
+0
+nan
+8.25
+23.625
+-23.625
+-23.625
+23.625
+nan
+inf
+-inf
+-inf
+inf
+inf
+-inf
+inf
+inf
+-nan
+-nan
+4.66667
+nan
+nan
+-nan
+-0
+0
+inf
+-inf
+1.5
+1.5
+-1.5
+-1.5
+-10.5
+10.5
+-0
+0
+-4.94066e-324
+-1.79769e+308
+-nan
+inf
+-inf
+'''),
             TestCase('basic.StaticCallsToAnotherClass', '15\n'),
             TestCase('basic.StaticFields', '540\n'),
             TestCase('basic.IntegerComparisons', '0\n3\n5\n1\n2\n5\n2\n3\n4\n'),
