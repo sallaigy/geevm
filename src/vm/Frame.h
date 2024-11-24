@@ -30,6 +30,12 @@ concept CategoryOneJvmType = JvmType<T> && !CategoryTwoJvmType<T>;
 template<class T>
 concept StoredAsInt = JvmType<T> && is_one_of<T, std::int8_t, std::int16_t, char16_t>();
 
+template<class T>
+concept JavaFloatType = is_one_of<T, float, double>();
+
+template<class T>
+concept JavaIntegerType = is_one_of<T, int8_t, int16_t, int32_t, int64_t>();
+
 class Value
 {
 public:
@@ -165,9 +171,9 @@ public:
     return value;
   }
 
-  Value peek(int entry = 0)
+  Value peek(int32_t entry = 0)
   {
-    int idx = mOperandStack.size() - 1 - entry;
+    int32_t idx = static_cast<int32_t>(mOperandStack.size()) - 1 - entry;
     assert(idx >= 0);
     return mOperandStack[idx];
   }
