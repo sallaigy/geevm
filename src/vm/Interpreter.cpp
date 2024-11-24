@@ -39,45 +39,65 @@ private:
   void invoke(JMethod* method);
   void handleErrorAsException(const VmError& error);
 
-  void integerComparison(Predicate predicate, CodeCursor& cursor, CallFrame& frame);
-  void integerComparisonToZero(Predicate predicate, CodeCursor& cursor, CallFrame& frame);
+  void integerComparison(Predicate predicate, CodeCursor& cursor);
+  void integerComparisonToZero(Predicate predicate, CodeCursor& cursor);
 
   std::optional<types::u2> tryHandleException(Instance* exception, RuntimeConstantPool& rt, const Code& code, size_t pc);
 
-  template<JvmType T>
-  void loadAndPush(CallFrame& frame, types::u2 index)
+  CallFrame& currentFrame()
   {
-    T val = frame.loadValue<T>(index);
-    frame.pushOperand<T>(val);
+    assert(!mThread.callStack().empty());
+    return mThread.currentFrame();
   }
 
   template<JvmType T>
-  void popAndStore(CallFrame& frame, types::u2 index)
+  void loadAndPush(types::u2 index)
   {
-    T val = frame.popOperand<T>();
-    frame.storeValue<T>(index, val);
+    T val = currentFrame().loadValue<T>(index);
+    currentFrame().pushOperand<T>(val);
   }
 
   template<JvmType T>
-  void arrayLoad(CallFrame& frame);
+  void popAndStore(types::u2 index)
+  {
+    T val = currentFrame().popOperand<T>();
+    currentFrame().storeValue<T>(index, val);
+  }
 
   template<JvmType T>
-  void arrayStore(CallFrame& frame);
+  void arrayLoad();
 
   template<JvmType T>
-  void add(CallFrame& frame);
+  void arrayStore();
 
   template<JvmType T>
-  void sub(CallFrame& frame);
+  void add();
 
   template<JvmType T>
-  void mul(CallFrame& frame);
+  void sub();
+
+  template<JvmType T>
+  void mul();
+
+  template<JvmType T>
+  void div();
+
+  template<JvmType T>
+  void rem();
+
+  template<JvmType T>
+  void neg();
 
   template<JavaFloatType SourceTy, JvmType TargetTy>
-  void castFloatToInt(CallFrame& frame);
+  void castFloatToInt();
 
   template<JavaIntegerType SourceTy, JvmType TargetTy>
-  void castInteger(CallFrame& frame);
+  void castInteger();
+
+  template<JvmType T, int32_t NotEqualValue>
+  void compare();
+
+  void newArray(CodeCursor& cursor);
 
 private:
   JavaThread& mThread;
@@ -107,6 +127,9 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
     switch (opcode) {
       using enum Opcode;
       case NOP: notImplemented(opcode); break;
+      //==--------------------------------------------------------------------==
+      // Constant push
+      //==--------------------------------------------------------------------==
       case ACONST_NULL: frame.pushOperand<Instance*>(nullptr); break;
       case ICONST_M1: frame.pushOperand<int32_t>(-1); break;
       case ICONST_0: frame.pushOperand<int32_t>(0); break;
@@ -122,16 +145,8 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       case FCONST_2: frame.pushOperand<float>(2.0f); break;
       case DCONST_0: frame.pushOperand<double>(0.0); break;
       case DCONST_1: frame.pushOperand<double>(1.0); break;
-      case BIPUSH: {
-        auto byte = std::bit_cast<int8_t>(cursor.readU1());
-        frame.pushOperand<int32_t>(static_cast<int32_t>(byte));
-        break;
-      }
-      case SIPUSH: {
-        auto value = static_cast<int32_t>(std::bit_cast<int16_t>(cursor.readU2()));
-        frame.pushOperand<int32_t>(value);
-        break;
-      }
+      case BIPUSH: frame.pushOperand<int32_t>(std::bit_cast<int8_t>(cursor.readU1())); break;
+      case SIPUSH: frame.pushOperand<int32_t>(std::bit_cast<int16_t>(cursor.readU2())); break;
       case LDC: {
         types::u1 index = cursor.readU1();
         auto entry = frame.currentClass()->constantPool().getEntry(index);
@@ -184,159 +199,87 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
 
         break;
       }
-      case ILOAD: loadAndPush<int32_t>(frame, cursor.readU1()); break;
-      case LLOAD: loadAndPush<int64_t>(frame, cursor.readU1()); break;
-      case FLOAD: loadAndPush<float>(frame, cursor.readU1()); break;
-      case DLOAD: loadAndPush<double>(frame, cursor.readU1()); break;
-      case ALOAD: loadAndPush<Instance*>(frame, cursor.readU1()); break;
-      case ILOAD_0: loadAndPush<int32_t>(frame, 0); break;
-      case ILOAD_1: loadAndPush<int32_t>(frame, 1); break;
-      case ILOAD_2: loadAndPush<int32_t>(frame, 2); break;
-      case ILOAD_3: loadAndPush<int32_t>(frame, 3); break;
-      case LLOAD_0: loadAndPush<int64_t>(frame, 0); break;
-      case LLOAD_1: loadAndPush<int64_t>(frame, 1); break;
-      case LLOAD_2: loadAndPush<int64_t>(frame, 2); break;
-      case LLOAD_3: loadAndPush<int64_t>(frame, 3); break;
-      case FLOAD_0: loadAndPush<float>(frame, 0); break;
-      case FLOAD_1: loadAndPush<float>(frame, 1); break;
-      case FLOAD_2: loadAndPush<float>(frame, 2); break;
-      case FLOAD_3: loadAndPush<float>(frame, 3); break;
-      case DLOAD_0: loadAndPush<double>(frame, 0); break;
-      case DLOAD_1: loadAndPush<double>(frame, 1); break;
-      case DLOAD_2: loadAndPush<double>(frame, 2); break;
-      case DLOAD_3: loadAndPush<double>(frame, 3); break;
-      case ALOAD_0: loadAndPush<Instance*>(frame, 0); break;
-      case ALOAD_1: loadAndPush<Instance*>(frame, 1); break;
-      case ALOAD_2: loadAndPush<Instance*>(frame, 2); break;
-      case ALOAD_3: loadAndPush<Instance*>(frame, 3); break;
-      case IALOAD: arrayLoad<int32_t>(frame); break;
-      case LALOAD: arrayLoad<int64_t>(frame); break;
-      case FALOAD: arrayLoad<float>(frame); break;
-      case DALOAD: arrayLoad<double>(frame); break;
-      case AALOAD: arrayLoad<Instance*>(frame); break;
-      case BALOAD: arrayLoad<int8_t>(frame); break;
-      case CALOAD: arrayLoad<char16_t>(frame); break;
-      case SALOAD: arrayLoad<int16_t>(frame); break;
-      case ISTORE: popAndStore<int32_t>(frame, cursor.readU1()); break;
-      case LSTORE: popAndStore<int64_t>(frame, cursor.readU1()); break;
-      case FSTORE: popAndStore<float>(frame, cursor.readU1()); break;
-      case DSTORE: popAndStore<double>(frame, cursor.readU1()); break;
-      case ASTORE: popAndStore<Instance*>(frame, cursor.readU1()); break;
-      case ISTORE_0: popAndStore<int32_t>(frame, 0); break;
-      case ISTORE_1: popAndStore<int32_t>(frame, 1); break;
-      case ISTORE_2: popAndStore<int32_t>(frame, 2); break;
-      case ISTORE_3: popAndStore<int32_t>(frame, 3); break;
-      case LSTORE_0: popAndStore<int64_t>(frame, 0); break;
-      case LSTORE_1: popAndStore<int64_t>(frame, 1); break;
-      case LSTORE_2: popAndStore<int64_t>(frame, 2); break;
-      case LSTORE_3: popAndStore<int64_t>(frame, 3); break;
-      case FSTORE_0: popAndStore<float>(frame, 0); break;
-      case FSTORE_1: popAndStore<float>(frame, 1); break;
-      case FSTORE_2: popAndStore<float>(frame, 2); break;
-      case FSTORE_3: popAndStore<float>(frame, 3); break;
-      case DSTORE_0: popAndStore<double>(frame, 0); break;
-      case DSTORE_1: popAndStore<double>(frame, 1); break;
-      case DSTORE_2: popAndStore<double>(frame, 2); break;
-      case DSTORE_3: popAndStore<double>(frame, 3); break;
-      case ASTORE_0: popAndStore<Instance*>(frame, 0); break;
-      case ASTORE_1: popAndStore<Instance*>(frame, 1); break;
-      case ASTORE_2: popAndStore<Instance*>(frame, 2); break;
-      case ASTORE_3: popAndStore<Instance*>(frame, 3); break;
+      //==--------------------------------------------------------------------==
+      // Local variable load and push
+      //==--------------------------------------------------------------------==
+      case ILOAD: loadAndPush<int32_t>(cursor.readU1()); break;
+      case LLOAD: loadAndPush<int64_t>(cursor.readU1()); break;
+      case FLOAD: loadAndPush<float>(cursor.readU1()); break;
+      case DLOAD: loadAndPush<double>(cursor.readU1()); break;
+      case ALOAD: loadAndPush<Instance*>(cursor.readU1()); break;
+      case ILOAD_0: loadAndPush<int32_t>(0); break;
+      case ILOAD_1: loadAndPush<int32_t>(1); break;
+      case ILOAD_2: loadAndPush<int32_t>(2); break;
+      case ILOAD_3: loadAndPush<int32_t>(3); break;
+      case LLOAD_0: loadAndPush<int64_t>(0); break;
+      case LLOAD_1: loadAndPush<int64_t>(1); break;
+      case LLOAD_2: loadAndPush<int64_t>(2); break;
+      case LLOAD_3: loadAndPush<int64_t>(3); break;
+      case FLOAD_0: loadAndPush<float>(0); break;
+      case FLOAD_1: loadAndPush<float>(1); break;
+      case FLOAD_2: loadAndPush<float>(2); break;
+      case FLOAD_3: loadAndPush<float>(3); break;
+      case DLOAD_0: loadAndPush<double>(0); break;
+      case DLOAD_1: loadAndPush<double>(1); break;
+      case DLOAD_2: loadAndPush<double>(2); break;
+      case DLOAD_3: loadAndPush<double>(3); break;
+      case ALOAD_0: loadAndPush<Instance*>(0); break;
+      case ALOAD_1: loadAndPush<Instance*>(1); break;
+      case ALOAD_2: loadAndPush<Instance*>(2); break;
+      case ALOAD_3: loadAndPush<Instance*>(3); break;
+      //==--------------------------------------------------------------------==
+      // Array load
+      //==--------------------------------------------------------------------==
+      case IALOAD: arrayLoad<int32_t>(); break;
+      case LALOAD: arrayLoad<int64_t>(); break;
+      case FALOAD: arrayLoad<float>(); break;
+      case DALOAD: arrayLoad<double>(); break;
+      case AALOAD: arrayLoad<Instance*>(); break;
+      case BALOAD: arrayLoad<int8_t>(); break;
+      case CALOAD: arrayLoad<char16_t>(); break;
+      case SALOAD: arrayLoad<int16_t>(); break;
+      //==--------------------------------------------------------------------==
+      // Local variable store
+      //==--------------------------------------------------------------------==
+      case ISTORE: popAndStore<int32_t>(cursor.readU1()); break;
+      case LSTORE: popAndStore<int64_t>(cursor.readU1()); break;
+      case FSTORE: popAndStore<float>(cursor.readU1()); break;
+      case DSTORE: popAndStore<double>(cursor.readU1()); break;
+      case ASTORE: popAndStore<Instance*>(cursor.readU1()); break;
+      case ISTORE_0: popAndStore<int32_t>(0); break;
+      case ISTORE_1: popAndStore<int32_t>(1); break;
+      case ISTORE_2: popAndStore<int32_t>(2); break;
+      case ISTORE_3: popAndStore<int32_t>(3); break;
+      case LSTORE_0: popAndStore<int64_t>(0); break;
+      case LSTORE_1: popAndStore<int64_t>(1); break;
+      case LSTORE_2: popAndStore<int64_t>(2); break;
+      case LSTORE_3: popAndStore<int64_t>(3); break;
+      case FSTORE_0: popAndStore<float>(0); break;
+      case FSTORE_1: popAndStore<float>(1); break;
+      case FSTORE_2: popAndStore<float>(2); break;
+      case FSTORE_3: popAndStore<float>(3); break;
+      case DSTORE_0: popAndStore<double>(0); break;
+      case DSTORE_1: popAndStore<double>(1); break;
+      case DSTORE_2: popAndStore<double>(2); break;
+      case DSTORE_3: popAndStore<double>(3); break;
+      case ASTORE_0: popAndStore<Instance*>(0); break;
+      case ASTORE_1: popAndStore<Instance*>(1); break;
+      case ASTORE_2: popAndStore<Instance*>(2); break;
+      case ASTORE_3: popAndStore<Instance*>(3); break;
+      //==--------------------------------------------------------------------==
       // Array store
       //==--------------------------------------------------------------------==
-      case IASTORE: arrayStore<int32_t>(frame); break;
-      case LASTORE: arrayStore<int64_t>(frame); break;
-      case FASTORE: arrayStore<float>(frame); break;
-      case DASTORE: arrayStore<double>(frame); break;
-      case AASTORE: {
-        Instance* value = frame.popOperand<Instance*>();
-        int32_t index = frame.popOperand<int32_t>();
-        Instance* arrayRef = frame.popOperand<Instance*>();
-
-        if (arrayRef == nullptr) {
-          mThread.throwException(u"java/lang/NullPointerException");
-          break;
-        }
-
-        ArrayInstance* array = arrayRef->asArrayInstance();
-
-        if (value != nullptr) {
-          JClass* elementClass = value->getClass();
-          auto arrayElementClass = array->getClass()->asArrayClass()->elementClass();
-          assert(arrayElementClass);
-
-          if (!elementClass->isInstanceOf(*arrayElementClass)) {
-            mThread.throwException(u"java/lang/ArrayStoreException");
-            break;
-          }
-        }
-
-        if (auto res = array->setArrayElement(index, Value::from<Instance*>(value)); !res) {
-          this->handleErrorAsException(res.error());
-          break;
-        }
-
-        break;
-      }
-      case BASTORE: {
-        auto value = frame.popOperand<int32_t>();
-        auto index = frame.popOperand<int32_t>();
-        auto arrayRef = frame.popOperand<Instance*>();
-
-        if (arrayRef == nullptr) {
-          mThread.throwException(u"java/lang/NullPointerException");
-          break;
-        }
-
-        ArrayInstance* array = arrayRef->asArrayInstance();
-
-        auto byteValue = static_cast<int8_t>(value & 0x000000FF);
-        if (auto res = array->setArrayElement<int8_t>(index, byteValue); !res) {
-          this->handleErrorAsException(res.error());
-          break;
-        }
-
-        break;
-      }
-      case CASTORE: {
-        auto value = frame.popOperand<int32_t>();
-        auto index = frame.popOperand<int32_t>();
-        auto arrayRef = frame.popOperand<Instance*>();
-
-        if (arrayRef == nullptr) {
-          mThread.throwException(u"java/lang/NullPointerException");
-          break;
-        }
-
-        ArrayInstance* array = arrayRef->asArrayInstance();
-
-        if (auto res = array->setArrayElement<char16_t>(index, static_cast<char16_t>(value)); !res) {
-          this->handleErrorAsException(res.error());
-          break;
-        }
-
-        break;
-      }
-      case SASTORE: {
-        auto value = frame.popOperand<int32_t>();
-        auto index = frame.popOperand<int32_t>();
-        auto arrayRef = frame.popOperand<Instance*>();
-
-        if (arrayRef == nullptr) {
-          mThread.throwException(u"java/lang/NullPointerException");
-          break;
-        }
-
-        ArrayInstance* array = arrayRef->asArrayInstance();
-
-        int16_t shortValue = static_cast<int16_t>(value & 0x0000FFFF);
-        if (auto res = array->setArrayElement<int16_t>(index, shortValue); !res) {
-          this->handleErrorAsException(res.error());
-          break;
-        }
-
-        break;
-      }
+      case IASTORE: arrayStore<int32_t>(); break;
+      case LASTORE: arrayStore<int64_t>(); break;
+      case FASTORE: arrayStore<float>(); break;
+      case DASTORE: arrayStore<double>(); break;
+      case AASTORE: arrayStore<Instance*>(); break;
+      case BASTORE: arrayStore<int8_t>(); break;
+      case CASTORE: arrayStore<char16_t>(); break;
+      case SASTORE: arrayStore<int16_t>(); break;
+      //==--------------------------------------------------------------------==
+      // Stack manipulation
+      //==--------------------------------------------------------------------==
       case POP: {
         frame.popGenericOperand();
         break;
@@ -379,113 +322,33 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       case DUP2_X1: notImplemented(opcode); break;
       case DUP2_X2: notImplemented(opcode); break;
       case SWAP: notImplemented(opcode); break;
-      case IADD: add<int32_t>(frame); break;
-      case LADD: add<int64_t>(frame); break;
-      case FADD: add<float>(frame); break;
-      case DADD: add<double>(frame); break;
-      case ISUB: sub<int32_t>(frame); break;
-      case LSUB: sub<int64_t>(frame); break;
-      case FSUB: sub<float>(frame); break;
-      case DSUB: sub<double>(frame); break;
-      case IMUL: mul<int32_t>(frame); break;
-      case LMUL: mul<int64_t>(frame); break;
-      case FMUL: mul<float>(frame); break;
-      case DMUL: mul<double>(frame); break;
-      case IDIV: {
-        int32_t value2 = frame.popOperand<int32_t>();
-        int32_t value1 = frame.popOperand<int32_t>();
-
-        if (value2 == 0) {
-          mThread.throwException(u"java/lang/ArithmeticException", u"Divison by zero");
-          break;
-        }
-
-        frame.pushOperand<int32_t>(value1 / value2);
-        break;
-      }
-      case LDIV: {
-        int64_t value2 = frame.popOperand<int64_t>();
-        int64_t value1 = frame.popOperand<int64_t>();
-
-        if (value2 == 0) {
-          mThread.throwException(u"java/lang/ArithmeticException", u"Divison by zero");
-          break;
-        }
-
-        frame.pushOperand<int64_t>(value1 / value2);
-
-        break;
-      }
-      case FDIV: {
-        float value2 = frame.popOperand<float>();
-        float value1 = frame.popOperand<float>();
-
-        // TODO: Value set conversion
-
-        float result = value1 / value2;
-
-        frame.pushOperand<float>(result);
-
-        break;
-      }
-      case DDIV: {
-        double value2 = frame.popOperand<double>();
-        double value1 = frame.popOperand<double>();
-
-        // TODO: Value set conversion
-
-        double result = value1 / value2;
-
-        frame.pushOperand<double>(result);
-
-        break;
-      }
-      case IREM: {
-        int32_t value2 = frame.popOperand<int32_t>();
-        int32_t value1 = frame.popOperand<int32_t>();
-
-        int32_t result = value1 - (value1 / value2) * value2;
-
-        frame.pushOperand<int32_t>(result);
-        break;
-      }
-      case LREM: {
-        int64_t value2 = frame.popOperand<int64_t>();
-        int64_t value1 = frame.popOperand<int64_t>();
-
-        int64_t result = value1 - (value1 / value2) * value2;
-
-        frame.pushOperand<int64_t>(result);
-        break;
-      }
-      case FREM: {
-        float value2 = frame.popOperand<float>();
-        float value1 = frame.popOperand<float>();
-
-        // TODO: Value set conversion
-
-        float result = std::fmod(value1, value2);
-
-        frame.pushOperand<float>(result);
-
-        break;
-      }
-      case DREM: {
-        double value2 = frame.popOperand<double>();
-        double value1 = frame.popOperand<double>();
-
-        // TODO: Value set conversion
-
-        double result = std::fmod(value1, value2);
-
-        frame.pushOperand<double>(result);
-
-        break;
-      }
-      case INEG: notImplemented(opcode); break;
-      case LNEG: notImplemented(opcode); break;
-      case FNEG: notImplemented(opcode); break;
-      case DNEG: notImplemented(opcode); break;
+      //==--------------------------------------------------------------------==
+      // Arithmetic operators
+      //==--------------------------------------------------------------------==
+      case IADD: add<int32_t>(); break;
+      case LADD: add<int64_t>(); break;
+      case FADD: add<float>(); break;
+      case DADD: add<double>(); break;
+      case ISUB: sub<int32_t>(); break;
+      case LSUB: sub<int64_t>(); break;
+      case FSUB: sub<float>(); break;
+      case DSUB: sub<double>(); break;
+      case IMUL: mul<int32_t>(); break;
+      case LMUL: mul<int64_t>(); break;
+      case FMUL: mul<float>(); break;
+      case DMUL: mul<double>(); break;
+      case IDIV: div<int32_t>(); break;
+      case LDIV: div<int64_t>(); break;
+      case FDIV: div<float>(); break;
+      case DDIV: div<double>(); break;
+      case IREM: rem<int32_t>(); break;
+      case LREM: rem<int64_t>(); break;
+      case FREM: rem<float>(); break;
+      case DREM: rem<double>(); break;
+      case INEG: neg<int32_t>(); break;
+      case LNEG: neg<int64_t>(); break;
+      case FNEG: neg<float>(); break;
+      case DNEG: neg<double>(); break;
       case ISHL: {
         int32_t value2 = frame.popOperand<int32_t>();
         int32_t value1 = frame.popOperand<int32_t>();
@@ -502,7 +365,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
 
         uint32_t offset = std::bit_cast<uint32_t>(value2) & 0x0000003F;
 
-        frame.pushOperand<int64_t>((value1 << offset));
+        frame.pushOperand<int64_t>(value1 << offset);
 
         break;
       }
@@ -552,82 +415,47 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
 
         break;
       }
-      case I2L: castInteger<int32_t, int64_t>(frame); break;
-      case I2F: castInteger<int32_t, float>(frame); break;
-      case I2D: castInteger<int32_t, double>(frame); break;
-      case L2I: castInteger<int64_t, int32_t>(frame); break;
-      case L2F: castInteger<int64_t, float>(frame); break;
-      case L2D: castInteger<int64_t, double>(frame); break;
-      case F2I: castFloatToInt<float, int32_t>(frame); break;
-      case F2L: castFloatToInt<float, int64_t>(frame); break;
+      //==--------------------------------------------------------------------==
+      // Casts
+      //==--------------------------------------------------------------------==
+      case I2L: castInteger<int32_t, int64_t>(); break;
+      case I2F: castInteger<int32_t, float>(); break;
+      case I2D: castInteger<int32_t, double>(); break;
+      case L2I: castInteger<int64_t, int32_t>(); break;
+      case L2F: castInteger<int64_t, float>(); break;
+      case L2D: castInteger<int64_t, double>(); break;
+      case F2I: castFloatToInt<float, int32_t>(); break;
+      case F2L: castFloatToInt<float, int64_t>(); break;
       case F2D: frame.pushOperand<double>(static_cast<double>(frame.popOperand<float>())); break;
-      case D2I: castFloatToInt<double, int32_t>(frame); break;
-      case D2L: castFloatToInt<double, int64_t>(frame); break;
+      case D2I: castFloatToInt<double, int32_t>(); break;
+      case D2L: castFloatToInt<double, int64_t>(); break;
       case D2F: frame.pushOperand<float>(static_cast<float>(frame.popOperand<double>())); break;
-      case I2B: castInteger<int32_t, int8_t>(frame); break;
-      case I2C: castInteger<int32_t, char16_t>(frame); break;
-      case I2S: castInteger<int32_t, int16_t>(frame); break;
-      case LCMP: {
-        int64_t value2 = frame.popOperand<int64_t>();
-        int64_t value1 = frame.popOperand<int64_t>();
-
-        if (value1 > value2) {
-          frame.pushOperand<int32_t>(1);
-        } else if (value1 < value2) {
-          frame.pushOperand<int32_t>(-1);
-        } else {
-          frame.pushOperand<int32_t>(0);
-        }
-
-        break;
-      }
-      case FCMPL: {
-        float value2 = frame.popOperand<float>();
-        float value1 = frame.popOperand<float>();
-
-        if (value1 > value2) {
-          frame.pushOperand<int32_t>(1);
-        } else if (value1 == value2) {
-          // TODO: Is this IEE equality?
-          frame.pushOperand<int32_t>(0);
-        } else if (value1 < value2) {
-          frame.pushOperand<int32_t>((-1));
-        } else {
-          frame.pushOperand<int32_t>((-1));
-        }
-        break;
-      }
-      case FCMPG: {
-        float value2 = frame.popOperand<float>();
-        float value1 = frame.popOperand<float>();
-
-        if (value1 > value2) {
-          frame.pushOperand<int32_t>(1);
-        } else if (value1 == value2) {
-          // TODO: Is this IEE equality?
-          frame.pushOperand<int32_t>(0);
-        } else if (value1 < value2) {
-          frame.pushOperand<int32_t>((-1));
-        } else {
-          frame.pushOperand<int32_t>(1);
-        }
-
-        break;
-      }
-      case DCMPL: notImplemented(opcode); break;
-      case DCMPG: notImplemented(opcode); break;
-      case IFEQ: integerComparisonToZero(Predicate::Eq, cursor, frame); break;
-      case IFNE: integerComparisonToZero(Predicate::NotEq, cursor, frame); break;
-      case IFLT: integerComparisonToZero(Predicate::Lt, cursor, frame); break;
-      case IFGE: integerComparisonToZero(Predicate::GtEq, cursor, frame); break;
-      case IFGT: integerComparisonToZero(Predicate::Gt, cursor, frame); break;
-      case IFLE: integerComparisonToZero(Predicate::LtEq, cursor, frame); break;
-      case IF_ICMPEQ: integerComparison(Predicate::Eq, cursor, frame); break;
-      case IF_ICMPNE: integerComparison(Predicate::NotEq, cursor, frame); break;
-      case IF_ICMPLT: integerComparison(Predicate::Lt, cursor, frame); break;
-      case IF_ICMPGE: integerComparison(Predicate::GtEq, cursor, frame); break;
-      case IF_ICMPGT: integerComparison(Predicate::Gt, cursor, frame); break;
-      case IF_ICMPLE: integerComparison(Predicate::LtEq, cursor, frame); break;
+      case I2B: castInteger<int32_t, int8_t>(); break;
+      case I2C: castInteger<int32_t, char16_t>(); break;
+      case I2S: castInteger<int32_t, int16_t>(); break;
+      //==--------------------------------------------------------------------==
+      // Comparisons
+      //==--------------------------------------------------------------------==
+      case LCMP: compare<int64_t, 1>(); break;
+      case FCMPL: compare<float, -1>(); break;
+      case FCMPG: compare<float, 1>(); break;
+      case DCMPL: compare<double, -1>(); break;
+      case DCMPG: compare<double, 1>(); break;
+      case IFEQ: integerComparisonToZero(Predicate::Eq, cursor); break;
+      case IFNE: integerComparisonToZero(Predicate::NotEq, cursor); break;
+      case IFLT: integerComparisonToZero(Predicate::Lt, cursor); break;
+      case IFGE: integerComparisonToZero(Predicate::GtEq, cursor); break;
+      case IFGT: integerComparisonToZero(Predicate::Gt, cursor); break;
+      case IFLE: integerComparisonToZero(Predicate::LtEq, cursor); break;
+      //==--------------------------------------------------------------------==
+      // Jumps
+      //==--------------------------------------------------------------------==
+      case IF_ICMPEQ: integerComparison(Predicate::Eq, cursor); break;
+      case IF_ICMPNE: integerComparison(Predicate::NotEq, cursor); break;
+      case IF_ICMPLT: integerComparison(Predicate::Lt, cursor); break;
+      case IF_ICMPGE: integerComparison(Predicate::GtEq, cursor); break;
+      case IF_ICMPGT: integerComparison(Predicate::Gt, cursor); break;
+      case IF_ICMPLE: integerComparison(Predicate::LtEq, cursor); break;
       case IF_ACMPEQ: {
         auto opcodePos = cursor.position() - 1;
 
@@ -667,12 +495,18 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       case RET: notImplemented(opcode); break;
       case TABLESWITCH: notImplemented(opcode); break;
       case LOOKUPSWITCH: notImplemented(opcode); break;
+      //==--------------------------------------------------------------------==
+      // Returns
+      //==--------------------------------------------------------------------==
       case IRETURN: return Value::from<int32_t>(frame.popOperand<int32_t>());
       case LRETURN: return Value::from<int64_t>(frame.popOperand<int64_t>());
       case FRETURN: return Value::from<float>(frame.popOperand<float>());
       case DRETURN: return Value::from<double>(frame.popOperand<double>());
       case ARETURN: return Value::from<Instance*>(frame.popOperand<Instance*>());
       case RETURN: return std::nullopt;
+      //==--------------------------------------------------------------------==
+      // Field manipulation
+      //==--------------------------------------------------------------------==
       case GETSTATIC: {
         auto index = cursor.readU2();
         const JField* field = runtimeConstantPool.getFieldRef(index);
@@ -687,7 +521,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       }
       case PUTSTATIC: {
         auto index = cursor.readU2();
-        JField* field = runtimeConstantPool.getFieldRef(index);
+        const JField* field = runtimeConstantPool.getFieldRef(index);
 
         JClass* klass = field->getClass();
         klass->initialize(mThread);
@@ -698,8 +532,8 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       }
       case GETFIELD: {
         types::u2 index = cursor.readU2();
-        JField* field = runtimeConstantPool.getFieldRef(index);
-        Instance* objectRef = frame.popOperand<Instance*>();
+        const JField* field = runtimeConstantPool.getFieldRef(index);
+        auto objectRef = frame.popOperand<Instance*>();
 
         assert(objectRef->getClass()->isInstanceOf(field->getClass()));
 
@@ -721,6 +555,9 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
 
         break;
       }
+      //==--------------------------------------------------------------------==
+      // Invocations
+      //==--------------------------------------------------------------------==
       case INVOKEVIRTUAL: {
         auto index = cursor.readU2();
         const JMethod* baseMethod = runtimeConstantPool.getMethodRef(index);
@@ -762,7 +599,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       }
       case INVOKEINTERFACE: {
         auto index = cursor.readU2();
-        JMethod* methodRef = runtimeConstantPool.getMethodRef(index);
+        const JMethod* methodRef = runtimeConstantPool.getMethodRef(index);
 
         // Consume 'count'
         cursor.readU1();
@@ -779,6 +616,9 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         break;
       }
       case INVOKEDYNAMIC: notImplemented(opcode); break;
+      //==--------------------------------------------------------------------==
+      // OOP
+      //==--------------------------------------------------------------------==
       case NEW: {
         auto index = cursor.readU2();
         auto className = frame.currentClass()->constantPool().getClassName(index);
@@ -800,52 +640,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
 
         break;
       }
-      case NEWARRAY: {
-        enum class ArrayType
-        {
-          T_BOOLEAN = 4,
-          T_CHAR = 5,
-          T_FLOAT = 6,
-          T_DOUBLE = 7,
-          T_BYTE = 8,
-          T_SHORT = 9,
-          T_INT = 10,
-          T_LONG = 11,
-        };
-
-        auto atype = static_cast<ArrayType>(cursor.readU1());
-        int32_t count = frame.popOperand<int32_t>();
-
-        types::JString arrayClsName;
-
-        switch (atype) {
-          case ArrayType::T_BOOLEAN: arrayClsName = u"[Z"; break;
-          case ArrayType::T_CHAR: arrayClsName = u"[C"; break;
-          case ArrayType::T_FLOAT: arrayClsName = u"[F"; break;
-          case ArrayType::T_DOUBLE: arrayClsName = u"[D"; break;
-          case ArrayType::T_BYTE: arrayClsName = u"[B"; break;
-          case ArrayType::T_SHORT: arrayClsName = u"[S"; break;
-          case ArrayType::T_INT: arrayClsName = u"[I"; break;
-          case ArrayType::T_LONG: arrayClsName = u"[J"; break;
-          default: assert(false && "impossible"); break;
-        }
-
-        auto arrayClass = mThread.resolveClass(arrayClsName);
-        if (!arrayClass) {
-          this->handleErrorAsException(arrayClass.error());
-          break;
-        }
-
-        if (count < 0) {
-          mThread.throwException(u"java/lang/NegativeArraySizeException", u"");
-          break;
-        }
-
-        ArrayInstance* newInstance = mThread.heap().allocateArray((*arrayClass)->asArrayClass(), count);
-        frame.pushOperand<Instance*>(newInstance);
-
-        break;
-      }
+      case NEWARRAY: newArray(cursor); break;
       case ANEWARRAY: {
         auto index = cursor.readU2();
         int32_t count = frame.popOperand<int32_t>();
@@ -1046,12 +841,12 @@ void DefaultInterpreter::handleErrorAsException(const VmError& error)
   mThread.throwException(error.exception(), error.message());
 }
 
-void DefaultInterpreter::integerComparison(Predicate predicate, CodeCursor& cursor, CallFrame& frame)
+void DefaultInterpreter::integerComparison(Predicate predicate, CodeCursor& cursor)
 {
   auto opcodePos = cursor.position() - 1;
 
-  auto val2 = frame.popOperand<int32_t>();
-  auto val1 = frame.popOperand<int32_t>();
+  auto val2 = currentFrame().popOperand<int32_t>();
+  auto val1 = currentFrame().popOperand<int32_t>();
 
   auto offset = std::bit_cast<int16_t>(cursor.readU2());
 
@@ -1060,11 +855,10 @@ void DefaultInterpreter::integerComparison(Predicate predicate, CodeCursor& curs
   }
 }
 
-void DefaultInterpreter::integerComparisonToZero(Predicate predicate, CodeCursor& cursor, CallFrame& frame)
+void DefaultInterpreter::integerComparisonToZero(Predicate predicate, CodeCursor& cursor)
 {
   auto opcodePos = cursor.position() - 1;
-
-  auto val1 = frame.popOperand<int32_t>();
+  auto val1 = currentFrame().popOperand<int32_t>();
 
   auto offset = std::bit_cast<int16_t>(cursor.readU2());
 
@@ -1074,10 +868,10 @@ void DefaultInterpreter::integerComparisonToZero(Predicate predicate, CodeCursor
 }
 
 template<JvmType T>
-void DefaultInterpreter::arrayLoad(CallFrame& frame)
+void DefaultInterpreter::arrayLoad()
 {
-  int32_t index = frame.popOperand<int32_t>();
-  Instance* arrayRef = frame.popOperand<Instance*>();
+  auto index = currentFrame().popOperand<int32_t>();
+  auto arrayRef = currentFrame().popOperand<Instance*>();
 
   if (arrayRef == nullptr) {
     mThread.throwException(u"java/lang/NullPointerException");
@@ -1092,18 +886,24 @@ void DefaultInterpreter::arrayLoad(CallFrame& frame)
   }
 
   if constexpr (StoredAsInt<T>) {
-    frame.pushOperand<int32_t>(static_cast<int32_t>(*element));
+    currentFrame().pushOperand<int32_t>(static_cast<int32_t>(*element));
   } else {
-    frame.pushOperand<T>(*element);
+    currentFrame().pushOperand<T>(*element);
   }
 }
 
 template<JvmType T>
-void DefaultInterpreter::arrayStore(CallFrame& frame)
+void DefaultInterpreter::arrayStore()
 {
-  T value = frame.popOperand<T>();
-  int32_t index = frame.popOperand<int32_t>();
-  Instance* arrayRef = frame.popOperand<Instance*>();
+  T value;
+  if constexpr (StoredAsInt<T>) {
+    value = static_cast<T>(currentFrame().popOperand<int32_t>());
+  } else {
+    value = currentFrame().popOperand<T>();
+  }
+
+  auto index = currentFrame().popOperand<int32_t>();
+  auto arrayRef = currentFrame().popOperand<Instance*>();
 
   if (arrayRef == nullptr) {
     mThread.throwException(u"java/lang/NullPointerException");
@@ -1111,50 +911,101 @@ void DefaultInterpreter::arrayStore(CallFrame& frame)
   }
 
   ArrayInstance* array = arrayRef->asArrayInstance();
-  auto result = array->setArrayElement<T>(index, value);
 
+  if constexpr (std::is_same_v<std::remove_const_t<T>, Instance*>) {
+    if (value != nullptr) {
+      const JClass* elementClass = value->getClass();
+      auto arrayElementClass = array->getClass()->asArrayClass()->elementClass();
+      assert(arrayElementClass);
+
+      if (!elementClass->isInstanceOf(*arrayElementClass)) {
+        mThread.throwException(u"java/lang/ArrayStoreException");
+      }
+    }
+  }
+
+  JvmExpected<void> result = array->setArrayElement<T>(index, value);
   if (!result) {
-    mThread.throwException(u"java/lang/ArrayIndexOutOfBoundsException");
+    this->handleErrorAsException(result.error());
   }
 }
 
 template<JvmType T>
-void DefaultInterpreter::add(CallFrame& frame)
+void DefaultInterpreter::add()
 {
-  T value2 = frame.popOperand<T>();
-  T value1 = frame.popOperand<T>();
+  T value2 = currentFrame().popOperand<T>();
+  T value1 = currentFrame().popOperand<T>();
 
   T result = value2 + value1;
 
-  frame.pushOperand<T>(result);
+  currentFrame().pushOperand<T>(result);
 }
 
 template<JvmType T>
-void DefaultInterpreter::sub(CallFrame& frame)
+void DefaultInterpreter::sub()
 {
-  T value2 = frame.popOperand<T>();
-  T value1 = frame.popOperand<T>();
+  T value2 = currentFrame().popOperand<T>();
+  T value1 = currentFrame().popOperand<T>();
 
   T result = value1 - value2;
 
-  frame.pushOperand<T>(result);
+  currentFrame().pushOperand<T>(result);
 }
 
 template<JvmType T>
-void DefaultInterpreter::mul(CallFrame& frame)
+void DefaultInterpreter::mul()
 {
-  T value2 = frame.popOperand<T>();
-  T value1 = frame.popOperand<T>();
+  T value2 = currentFrame().popOperand<T>();
+  T value1 = currentFrame().popOperand<T>();
 
   T result = value2 * value1;
 
-  frame.pushOperand<T>(result);
+  currentFrame().pushOperand<T>(result);
+}
+
+template<JvmType T>
+void DefaultInterpreter::div()
+{
+  T value2 = currentFrame().popOperand<T>();
+  T value1 = currentFrame().popOperand<T>();
+
+  if constexpr (JavaIntegerType<T>) {
+    if (value2 == 0) {
+      mThread.throwException(u"java/lang/ArithmeticException", u"Divison by zero");
+    }
+  }
+
+  T result = value1 / value2;
+  currentFrame().pushOperand<T>(result);
+}
+
+template<JvmType T>
+void DefaultInterpreter::rem()
+{
+  T value2 = currentFrame().popOperand<T>();
+  T value1 = currentFrame().popOperand<T>();
+
+  if constexpr (JavaIntegerType<T>) {
+    T result = value1 - (value1 / value2) * value2;
+    currentFrame().pushOperand<T>(result);
+  } else {
+    T result = std::fmod(value1, value2);
+    currentFrame().pushOperand<T>(result);
+  }
+}
+
+template<JvmType T>
+void DefaultInterpreter::neg()
+{
+  T value = currentFrame().popOperand<T>();
+  T result = -value;
+  currentFrame().pushOperand<T>(result);
 }
 
 template<JavaFloatType SourceTy, JvmType TargetTy>
-void DefaultInterpreter::castFloatToInt(CallFrame& frame)
+void DefaultInterpreter::castFloatToInt()
 {
-  auto value = frame.popOperand<SourceTy>();
+  auto value = currentFrame().popOperand<SourceTy>();
 
   TargetTy result;
   if (std::isnan(value)) {
@@ -1170,17 +1021,81 @@ void DefaultInterpreter::castFloatToInt(CallFrame& frame)
     }
   }
 
-  frame.pushOperand<TargetTy>(result);
+  currentFrame().pushOperand<TargetTy>(result);
 }
 
 template<JavaIntegerType SourceTy, JvmType TargetTy>
-void DefaultInterpreter::castInteger(CallFrame& frame)
+void DefaultInterpreter::castInteger()
 {
-  auto value = frame.popOperand<SourceTy>();
+  auto value = currentFrame().popOperand<SourceTy>();
 
   if constexpr (StoredAsInt<TargetTy>) {
-    frame.pushOperand<int32_t>(static_cast<TargetTy>(value));
+    currentFrame().pushOperand<int32_t>(static_cast<TargetTy>(value));
   } else {
-    frame.pushOperand<TargetTy>(static_cast<TargetTy>(value));
+    currentFrame().pushOperand<TargetTy>(static_cast<TargetTy>(value));
   }
+}
+
+template<JvmType T, int32_t NotEqualValue>
+void DefaultInterpreter::compare()
+{
+  T value2 = currentFrame().popOperand<T>();
+  T value1 = currentFrame().popOperand<T>();
+
+  if (value1 > value2) {
+    currentFrame().pushOperand<int32_t>(1);
+  } else if (value1 == value2) {
+    currentFrame().pushOperand<int32_t>(0);
+  } else if (value1 < value2) {
+    currentFrame().pushOperand<int32_t>(-1);
+  } else {
+    // This is only possible for floating-point comparisons (NaN comparisons are always false).
+    currentFrame().pushOperand<int32_t>(NotEqualValue);
+  }
+}
+
+void DefaultInterpreter::newArray(CodeCursor& cursor)
+{
+  enum class ArrayType
+  {
+    T_BOOLEAN = 4,
+    T_CHAR = 5,
+    T_FLOAT = 6,
+    T_DOUBLE = 7,
+    T_BYTE = 8,
+    T_SHORT = 9,
+    T_INT = 10,
+    T_LONG = 11,
+  };
+
+  auto arrayType = static_cast<ArrayType>(cursor.readU1());
+  auto count = currentFrame().popOperand<int32_t>();
+
+  types::JString arrayClsName;
+
+  switch (arrayType) {
+    case ArrayType::T_BOOLEAN: arrayClsName = u"[Z"; break;
+    case ArrayType::T_CHAR: arrayClsName = u"[C"; break;
+    case ArrayType::T_FLOAT: arrayClsName = u"[F"; break;
+    case ArrayType::T_DOUBLE: arrayClsName = u"[D"; break;
+    case ArrayType::T_BYTE: arrayClsName = u"[B"; break;
+    case ArrayType::T_SHORT: arrayClsName = u"[S"; break;
+    case ArrayType::T_INT: arrayClsName = u"[I"; break;
+    case ArrayType::T_LONG: arrayClsName = u"[J"; break;
+    default: assert(false && "impossible"); break;
+  }
+
+  auto arrayClass = mThread.resolveClass(arrayClsName);
+  if (!arrayClass) {
+    this->handleErrorAsException(arrayClass.error());
+    return;
+  }
+
+  if (count < 0) {
+    mThread.throwException(u"java/lang/NegativeArraySizeException", u"");
+    return;
+  }
+
+  ArrayInstance* newInstance = mThread.heap().allocateArray((*arrayClass)->asArrayClass(), count);
+  currentFrame().pushOperand<Instance*>(newInstance);
 }
