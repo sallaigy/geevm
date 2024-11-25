@@ -36,16 +36,14 @@ set(GEEVM_SOURCES
 
 add_library(geevm ${GEEVM_SOURCES})
 
-target_include_directories(geevm PUBLIC src)
-target_link_libraries(geevm libzip::zip)
-
+include(CTest)
 enable_testing()
 add_subdirectory(src/unit_tests)
+add_subdirectory(tests)
+
+target_include_directories(geevm PUBLIC src)
+target_link_libraries(geevm libzip::zip)
 
 add_executable(java src/bin/java.cpp)
 target_link_libraries(java geevm)
 target_include_directories(java PUBLIC src)
-
-include(CTest)
-enable_testing()
-add_subdirectory(tests)
