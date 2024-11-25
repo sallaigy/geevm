@@ -1,6 +1,7 @@
+// RUN: %compile -d %t "%s" | FileCheck "%s"
 package org.geevm.tests.basic;
 
-import org.geevm.tests.Printer;
+import org.geevm.util.Printer;
 
 public class StaticFields {
 
@@ -18,7 +19,7 @@ public class StaticFields {
             }
         }
 
-        // Should print 540
+        // CHECK: 540
         Printer.println(sum);
     }
 

@@ -1,6 +1,7 @@
+// RUN: %compile -d %t "%s" | FileCheck "%s"
 package org.geevm.tests.exceptions;
 
-import org.geevm.tests.Printer;
+import org.geevm.util.Printer;
 
 public class SimpleException {
     public static void main(String[] args) {
@@ -9,6 +10,7 @@ public class SimpleException {
                 throw new IllegalStateException("Exception thrown and caught in the same method.");
             }
         } catch (Exception ex) {
+            // CHECK: Caught exception: Exception thrown and caught in the same method.
             Printer.println("Caught exception: " + ex.getMessage());
         }
     }

@@ -1,6 +1,7 @@
+// RUN: %compile -d %t "%s" | FileCheck "%s"
 package org.geevm.tests.basic;
 
-import org.geevm.tests.Printer;
+import org.geevm.util.Printer;
 
 public class StaticCalls {
 
@@ -13,7 +14,7 @@ public class StaticCalls {
             sum = inc(sum, i);
         }
 
-        // Should print 15
+        // CHECK: 15
         Printer.println(sum);
     }
 

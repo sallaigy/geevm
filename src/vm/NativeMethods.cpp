@@ -103,13 +103,13 @@ static std::optional<Value> geevm_test_print(JavaThread& thread, CallFrame& fram
 void Vm::registerNatives()
 {
   // Temporary printing methods 'org.geethread.tests.basic.Printer'
-  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/tests/Printer", u"println", u"(I)V"}, geevm_test_print);
-  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/tests/Printer", u"println", u"(C)V"}, geevm_test_print);
-  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/tests/Printer", u"println", u"(J)V"}, geevm_test_print);
-  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/tests/Printer", u"println", u"(F)V"}, geevm_test_print);
-  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/tests/Printer", u"println", u"(D)V"}, geevm_test_print);
-  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/tests/Printer", u"println", u"(Z)V"}, geevm_test_print);
-  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/tests/Printer", u"println", u"(Ljava/lang/String;)V"}, geevm_test_print);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/util/Printer", u"println", u"(I)V"}, geevm_test_print);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/util/Printer", u"println", u"(C)V"}, geevm_test_print);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/util/Printer", u"println", u"(J)V"}, geevm_test_print);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/util/Printer", u"println", u"(F)V"}, geevm_test_print);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/util/Printer", u"println", u"(D)V"}, geevm_test_print);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/util/Printer", u"println", u"(Z)V"}, geevm_test_print);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"org/geevm/util/Printer", u"println", u"(Ljava/lang/String;)V"}, geevm_test_print);
 
   // java.lang.Object
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Object", u"registerNatives", u"()V"}, noop);
