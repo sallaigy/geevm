@@ -1,24 +1,25 @@
+// RUN: %compile -d %t "%s" 2>&1 | FileCheck "%s"
 package org.geevm.tests.strings;
 
-import org.geevm.tests.Printer;
+import org.geevm.util.Printer;
 
 public class StringEquals {
     public static void main(String[] args) {
-        // true
+        // CHECK: true
         Printer.println("abc" == "abc");
-        // false
+        // CHECK-NEXT: false
         Printer.println("abc" != "abc");
-        // false
+        // CHECK-NEXT: false
         Printer.println("abc" == "xyz");
-        // true
+        // CHECK-NEXT: true
         Printer.println("abc" != "xyz");
-        // true
+        // CHECK-NEXT: true
         Printer.println("abc".equals("abc"));
-        // false
+        // CHECK-NEXT: false
         Printer.println("abc".equals("xyz"));
-        // true
+        // CHECK-NEXT: true
         Printer.println("abc" == ("a" + "b" + "c").intern());
-        // false
+        // CHECK-NEXT: false
         Printer.println("abc" == ("x" + "y" + "z").intern());
     }
 }

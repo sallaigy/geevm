@@ -6,6 +6,12 @@ set(CMAKE_CXX_STANDARD 23)
 include(FetchContent)
 
 find_package(libzip CONFIG REQUIRED)
+find_package(Python3 COMPONENTS Interpreter)
+find_package(Java 1.8 EXACT REQUIRED)
+
+get_filename_component(REAL_JAVAC ${Java_JAVAC_EXECUTABLE} REALPATH)
+cmake_path(GET REAL_JAVAC PARENT_PATH JAVA_BIN_DIR)
+cmake_path(GET JAVA_BIN_DIR PARENT_PATH JAVA_HOME)
 
 file(GLOB_RECURSE
   GEEVM_COMMON_SOURCES
@@ -40,4 +46,6 @@ add_executable(java src/bin/java.cpp)
 target_link_libraries(java geevm)
 target_include_directories(java PUBLIC src)
 
-add_subdirectory(tests/programs)
+include(CTest)
+enable_testing()
+add_subdirectory(tests)

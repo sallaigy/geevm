@@ -1,6 +1,7 @@
+// RUN: %compile -d %t  "%s" | FileCheck "%s"
 package org.geevm.tests.basic;
 
-import org.geevm.tests.Printer;
+import org.geevm.util.Printer;
 
 public class Count {
 
@@ -13,6 +14,7 @@ public class Count {
             sum += 1;
         }
 
+        // CHECK: 10
         Printer.println(sum);
     }
 

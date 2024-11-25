@@ -1,6 +1,7 @@
+// RUN: %compile -d %t "%s" | FileCheck "%s"
 package org.geevm.tests.casting;
 
-import org.geevm.tests.Printer;
+import org.geevm.util.Printer;
 
 public class IntToLong {
 
@@ -9,9 +10,9 @@ public class IntToLong {
         int maxVal = Integer.MAX_VALUE;
         int basic = 100;
 
-        castAndPrint(basic); // 100
-        castAndPrint(minVal); // -2147483648
-        castAndPrint(maxVal); // 2147483647
+        castAndPrint(basic); // CHECK: 100
+        castAndPrint(minVal); // CHECK-NEXT: -2147483648
+        castAndPrint(maxVal); // CHECK-NEXT: 2147483647
     }
 
     public static void castAndPrint(int val) {

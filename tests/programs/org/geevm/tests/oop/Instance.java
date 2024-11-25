@@ -1,6 +1,7 @@
+// RUN: %compile -d %t "%s" | FileCheck "%s"
 package org.geevm.tests.oop;
 
-import org.geevm.tests.Printer;
+import org.geevm.util.Printer;
 
 public class Instance {
 
@@ -11,7 +12,7 @@ public class Instance {
         Instance instance = new Instance();
         int sum = instance.getNumber();
 
-        // Should print 42
+        // CHECK: 42
         Printer.println(sum);
     }
 

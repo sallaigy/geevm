@@ -1,18 +1,17 @@
+// RUN: %compile -d %t "%s" | FileCheck "%s"
 package org.geevm.tests.casting;
 
-import org.geevm.tests.Printer;
+import org.geevm.util.Printer;
 
 public class IntToByte {
 
     public static void main(String[] args) {
-        int normalValue = 100;
-        castAndPrint(normalValue); // 100
-
-        int overflowValue = 130;
-        castAndPrint(overflowValue); // -126
-
-        int underflowValue = -130;
-        castAndPrint(underflowValue); // 126
+        // CHECK: 100
+        castAndPrint(100);
+        // CHECK-NEXT: -126
+        castAndPrint(130);
+        // CHECK-NEXT: 126
+        castAndPrint(-130);
     }
 
     public static void castAndPrint(int val) {

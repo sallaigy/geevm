@@ -1,13 +1,23 @@
+// RUN: %compile -d %t "%s" | FileCheck "%s"
 package org.geevm.tests.basic;
 
-import org.geevm.tests.Printer;
+import org.geevm.util.Printer;
 
 public class IntegerComparisons {
 
     public static void main(String[] args) {
-        compare(0, 1); // prints 035
-        compare(1, 0); // prints 125
-        compare(1, 1); // prints 234 
+         // CHECK: 0
+         // CHECK-NEXT: 3
+         // CHECK-NEXT: 5
+        compare(0, 1);
+         // CHECK-NEXT: 1
+         // CHECK-NEXT: 2
+         // CHECK-NEXT: 5
+        compare(1, 0);
+         // CHECK-NEXT: 2
+         // CHECK-NEXT: 3
+         // CHECK-NEXT: 4
+        compare(1, 1);
     }
 
     private static void compare(int a, int b) {

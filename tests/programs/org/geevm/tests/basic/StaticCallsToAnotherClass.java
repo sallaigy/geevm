@@ -1,6 +1,11 @@
+// RUN: split-file %s %t
+// RUN: %compile --no-copy-sources -d %t -m org.geevm.tests.basic.StaticCallsToAnotherClass %t/org/geevm/tests/basic/MathHelper.java \
+// RUN: | FileCheck "%s"
+
+//--- org/geevm/tests/basic/StaticCallsToAnotherClass.java
 package org.geevm.tests.basic;
 
-import org.geevm.tests.Printer;
+import org.geevm.util.Printer;
 
 public class StaticCallsToAnotherClass {
 
@@ -12,8 +17,26 @@ public class StaticCallsToAnotherClass {
             sum = MathHelper.inc(sum, i);
         }
 
-        // Should print 15
+        // CHECK: 15
         Printer.println(sum);
+    }
+
+}
+
+//--- org/geevm/tests/basic/MathHelper.java
+package org.geevm.tests.basic;
+
+class MathHelper {
+
+    public static int ten() {
+        return 10;
+    }
+
+    public static int inc(int v, int i) {
+        if (i % 2 == 0) {
+            return v + 1;
+        }
+        return v + 2;
     }
 
 }
