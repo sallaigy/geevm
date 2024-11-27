@@ -17,5 +17,4 @@ public class ClassMetadata {
         // CHECK-NEXT: org.geevm.tests.reflection.ClassMetadata
         Printer.println(cls.getName());
     }
-
 }
