@@ -63,15 +63,37 @@ void JClass::prepare(BootstrapClassLoader& classLoader, JavaHeap& heap)
     auto& elementType = arrayClass->elementType();
     if (auto primitiveType = elementType.asPrimitive(); primitiveType) {
       if (elementType.dimensions() != 1) {
-        assert(false && "TODO");
+        ArrayClass* inner = nullptr;
+        for (int i = elementType.dimensions() - 1; i > 0; i--) {
+          types::JStringRef nestedName = mClassName;
+          nestedName.remove_prefix(i);
+          auto loaded = classLoader.loadClass(types::JString{nestedName});
+          assert(loaded);
+
+          (*loaded)->prepare(classLoader, heap);
+          if (inner != nullptr) {
+            inner->mElementClass = *loaded;
+          }
+
+          inner = (*loaded)->asArrayClass();
+        }
+        arrayClass->mElementClass = inner;
       }
     } else if (auto objectName = elementType.asObjectName(); objectName) {
-      auto loaded = classLoader.loadClass(*objectName);
-      if (!loaded) {
-        // FIXME
-        assert(false);
+      if (elementType.dimensions() != 1) {
+        types::JStringRef nestedClassName = mClassName;
+        nestedClassName.remove_prefix(1);
+
+        auto inner = classLoader.loadClass(types::JString{nestedClassName});
+        assert(inner.has_value());
+
+        arrayClass->mElementClass = *inner;
+      } else {
+        auto loaded = classLoader.loadClass(*objectName);
+        assert(loaded);
+
+        arrayClass->mElementClass = *loaded;
       }
-      arrayClass->mElementClass = *loaded;
     }
   } else if (auto instanceClass = this->asInstanceClass(); instanceClass != nullptr) {
     if (auto superClass = instanceClass->constantPool().getOptionalClassName(instanceClass->mClassFile->superClass())) {
