@@ -39,9 +39,6 @@ private:
   void invoke(JMethod* method);
   void handleErrorAsException(const VmError& error);
 
-  void integerComparison(Predicate predicate, CodeCursor& cursor);
-  void integerComparisonToZero(Predicate predicate, CodeCursor& cursor);
-
   std::optional<types::u2> tryHandleException(Instance* exception, RuntimeConstantPool& rt, const Code& code, size_t pc);
 
   CallFrame& currentFrame()
@@ -71,15 +68,6 @@ private:
   void arrayStore();
 
   template<JvmType T>
-  void add();
-
-  template<JvmType T>
-  void sub();
-
-  template<JvmType T>
-  void mul();
-
-  template<JvmType T>
   void div();
 
   template<JvmType T>
@@ -87,6 +75,12 @@ private:
 
   template<JvmType T>
   void neg();
+
+  template<JvmType T, class F>
+  void simpleOp();
+
+  template<JavaIntegerType T, class ShiftType, uint32_t OffsetMask, bool IsLeft>
+  void shift();
 
   template<JavaFloatType SourceTy, JvmType TargetTy>
   void castFloatToInt();
@@ -96,6 +90,12 @@ private:
 
   template<JvmType T, int32_t NotEqualValue>
   void compare();
+
+  template<JvmType T, class Func>
+  void binaryJumpIf(CodeCursor& cursor);
+
+  template<JvmType T, auto CheckedValue, class Func>
+  void unaryJumpIf(CodeCursor& cursor);
 
   void newArray(CodeCursor& cursor);
 
@@ -284,7 +284,14 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         frame.popGenericOperand();
         break;
       }
-      case POP2: notImplemented(opcode); break;
+      case POP2: {
+        Value value = frame.popGenericOperand();
+        if (!value.isCategoryTwo()) {
+          frame.popGenericOperand();
+        }
+
+        break;
+      }
       case DUP: {
         // TOOD: Duplicate instead of pop / push
         auto value = frame.popGenericOperand();
@@ -325,18 +332,18 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       //==--------------------------------------------------------------------==
       // Arithmetic operators
       //==--------------------------------------------------------------------==
-      case IADD: add<int32_t>(); break;
-      case LADD: add<int64_t>(); break;
-      case FADD: add<float>(); break;
-      case DADD: add<double>(); break;
-      case ISUB: sub<int32_t>(); break;
-      case LSUB: sub<int64_t>(); break;
-      case FSUB: sub<float>(); break;
-      case DSUB: sub<double>(); break;
-      case IMUL: mul<int32_t>(); break;
-      case LMUL: mul<int64_t>(); break;
-      case FMUL: mul<float>(); break;
-      case DMUL: mul<double>(); break;
+      case IADD: simpleOp<int32_t, std::plus<int32_t>>(); break;
+      case LADD: simpleOp<int64_t, std::plus<int64_t>>(); break;
+      case FADD: simpleOp<float, std::plus<float>>(); break;
+      case DADD: simpleOp<double, std::plus<double>>(); break;
+      case ISUB: simpleOp<int32_t, std::minus<int32_t>>(); break;
+      case LSUB: simpleOp<int64_t, std::minus<int64_t>>(); break;
+      case FSUB: simpleOp<float, std::minus<float>>(); break;
+      case DSUB: simpleOp<double, std::minus<double>>(); break;
+      case IMUL: simpleOp<int32_t, std::multiplies<int32_t>>(); break;
+      case LMUL: simpleOp<int64_t, std::multiplies<int64_t>>(); break;
+      case FMUL: simpleOp<float, std::multiplies<float>>(); break;
+      case DMUL: simpleOp<double, std::multiplies<double>>(); break;
       case IDIV: div<int32_t>(); break;
       case LDIV: div<int64_t>(); break;
       case FDIV: div<float>(); break;
@@ -349,64 +356,24 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       case LNEG: neg<int64_t>(); break;
       case FNEG: neg<float>(); break;
       case DNEG: neg<double>(); break;
-      case ISHL: {
-        int32_t value2 = frame.popOperand<int32_t>();
-        int32_t value1 = frame.popOperand<int32_t>();
-
-        uint32_t offset = std::bit_cast<uint32_t>(value2) & 0x0000001F;
-
-        frame.pushOperand<int32_t>(value1 << offset);
-
-        break;
-      }
-      case LSHL: {
-        int32_t value2 = frame.popOperand<int32_t>();
-        int64_t value1 = frame.popOperand<int64_t>();
-
-        uint32_t offset = std::bit_cast<uint32_t>(value2) & 0x0000003F;
-
-        frame.pushOperand<int64_t>(value1 << offset);
-
-        break;
-      }
-      case ISHR: notImplemented(opcode); break;
-      case LSHR: notImplemented(opcode); break;
-      case IUSHR: {
-        int32_t value2 = frame.popOperand<int32_t>();
-        int32_t value1 = frame.popOperand<int32_t>();
-
-        uint32_t offset = std::bit_cast<uint32_t>(value2) & 0x0000001F;
-
-        // TODO: Is this working according to spec?
-        frame.pushOperand<int32_t>((value1 >> offset));
-        break;
-      }
-      case LUSHR: notImplemented(opcode); break;
-      case IAND: {
-        int32_t value2 = frame.popOperand<int32_t>();
-        int32_t value1 = frame.popOperand<int32_t>();
-
-        frame.pushOperand<int32_t>((value1 & value2));
-        break;
-      }
-      case LAND: {
-        int64_t value2 = frame.popOperand<int64_t>();
-        int64_t value1 = frame.popOperand<int64_t>();
-
-        frame.pushOperand<int64_t>((value1 & value2));
-        break;
-      }
-      case IOR: notImplemented(opcode); break;
-      case LOR: notImplemented(opcode); break;
-      case IXOR: {
-        int32_t value2 = frame.popOperand<int32_t>();
-        int32_t value1 = frame.popOperand<int32_t>();
-
-        frame.pushOperand<int32_t>((value1 ^ value2));
-
-        break;
-      }
-      case LXOR: notImplemented(opcode); break;
+      //==--------------------------------------------------------------------==
+      // Bit-shift operators
+      //==--------------------------------------------------------------------==
+      case ISHL: shift<int32_t, int32_t, 0x1F, true>(); break;
+      case LSHL: shift<int64_t, int64_t, 0x3F, true>(); break;
+      case ISHR: shift<int32_t, int32_t, 0x1F, false>(); break;
+      case LSHR: shift<int64_t, int64_t, 0x3F, false>(); break;
+      case IUSHR: shift<int32_t, uint32_t, 0x1F, false>(); break;
+      case LUSHR: shift<int64_t, uint64_t, 0x3F, false>(); break;
+      //==--------------------------------------------------------------------==
+      // Bit logic operators
+      //==--------------------------------------------------------------------==
+      case IAND: simpleOp<int32_t, std::bit_and<int32_t>>(); break;
+      case LAND: simpleOp<int64_t, std::bit_and<int64_t>>(); break;
+      case IOR: simpleOp<int32_t, std::bit_or<int32_t>>(); break;
+      case LOR: simpleOp<int64_t, std::bit_or<int64_t>>(); break;
+      case IXOR: simpleOp<int32_t, std::bit_xor<int32_t>>(); break;
+      case LXOR: simpleOp<int64_t, std::bit_xor<int64_t>>(); break;
       case IINC: {
         types::u1 index = cursor.readU1();
         auto constValue = static_cast<int32_t>(std::bit_cast<int8_t>(cursor.readU1()));
@@ -441,49 +408,23 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       case FCMPG: compare<float, 1>(); break;
       case DCMPL: compare<double, -1>(); break;
       case DCMPG: compare<double, 1>(); break;
-      case IFEQ: integerComparisonToZero(Predicate::Eq, cursor); break;
-      case IFNE: integerComparisonToZero(Predicate::NotEq, cursor); break;
-      case IFLT: integerComparisonToZero(Predicate::Lt, cursor); break;
-      case IFGE: integerComparisonToZero(Predicate::GtEq, cursor); break;
-      case IFGT: integerComparisonToZero(Predicate::Gt, cursor); break;
-      case IFLE: integerComparisonToZero(Predicate::LtEq, cursor); break;
+      case IFEQ: unaryJumpIf<int32_t, 0, std::equal_to<int32_t>>(cursor); break;
+      case IFNE: unaryJumpIf<int32_t, 0, std::not_equal_to<int32_t>>(cursor); break;
+      case IFLT: unaryJumpIf<int32_t, 0, std::less<int32_t>>(cursor); break;
+      case IFGE: unaryJumpIf<int32_t, 0, std::greater_equal<int32_t>>(cursor); break;
+      case IFGT: unaryJumpIf<int32_t, 0, std::greater<int32_t>>(cursor); break;
+      case IFLE: unaryJumpIf<int32_t, 0, std::less_equal<int32_t>>(cursor); break;
       //==--------------------------------------------------------------------==
       // Jumps
       //==--------------------------------------------------------------------==
-      case IF_ICMPEQ: integerComparison(Predicate::Eq, cursor); break;
-      case IF_ICMPNE: integerComparison(Predicate::NotEq, cursor); break;
-      case IF_ICMPLT: integerComparison(Predicate::Lt, cursor); break;
-      case IF_ICMPGE: integerComparison(Predicate::GtEq, cursor); break;
-      case IF_ICMPGT: integerComparison(Predicate::Gt, cursor); break;
-      case IF_ICMPLE: integerComparison(Predicate::LtEq, cursor); break;
-      case IF_ACMPEQ: {
-        auto opcodePos = cursor.position() - 1;
-
-        Instance* value2 = frame.popOperand<Instance*>();
-        Instance* value1 = frame.popOperand<Instance*>();
-
-        auto offset = std::bit_cast<int16_t>(cursor.readU2());
-
-        if (value1 == value2) {
-          cursor.set(opcodePos + offset);
-        }
-
-        break;
-      }
-      case IF_ACMPNE: {
-        auto opcodePos = cursor.position() - 1;
-
-        Instance* value2 = frame.popOperand<Instance*>();
-        Instance* value1 = frame.popOperand<Instance*>();
-
-        auto offset = std::bit_cast<int16_t>(cursor.readU2());
-
-        if (value1 != value2) {
-          cursor.set(opcodePos + offset);
-        }
-
-        break;
-      }
+      case IF_ICMPEQ: binaryJumpIf<int32_t, std::equal_to<int32_t>>(cursor); break;
+      case IF_ICMPNE: binaryJumpIf<int32_t, std::not_equal_to<int32_t>>(cursor); break;
+      case IF_ICMPLT: binaryJumpIf<int32_t, std::less<int32_t>>(cursor); break;
+      case IF_ICMPGE: binaryJumpIf<int32_t, std::greater_equal<int32_t>>(cursor); break;
+      case IF_ICMPGT: binaryJumpIf<int32_t, std::greater<int32_t>>(cursor); break;
+      case IF_ICMPLE: binaryJumpIf<int32_t, std::less_equal<int32_t>>(cursor); break;
+      case IF_ACMPEQ: binaryJumpIf<Instance*, std::equal_to<Instance*>>(cursor); break;
+      case IF_ACMPNE: binaryJumpIf<Instance*, std::not_equal_to<Instance*>>(cursor); break;
       case GOTO: {
         auto opcodePos = cursor.position() - 1;
         auto offset = std::bit_cast<int16_t>(cursor.readU2());
@@ -535,9 +476,10 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         const JField* field = runtimeConstantPool.getFieldRef(index);
         auto objectRef = frame.popOperand<Instance*>();
 
-        assert(objectRef->getClass()->isInstanceOf(field->getClass()));
-
-        // TODO: Null check
+        if (objectRef == nullptr) {
+          mThread.throwException(u"java/lang/NullPointerException");
+          break;
+        }
 
         assert(objectRef->getClass()->isInstanceOf(field->getClass()));
         frame.pushGenericOperand(objectRef->getFieldValue(field->name(), field->descriptor()));
@@ -548,9 +490,14 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         auto field = runtimeConstantPool.getFieldRef(index);
 
         Value value = frame.popGenericOperand();
-        Instance* objectRef = frame.popOperand<Instance*>();
-        assert(objectRef->getClass()->isInstanceOf(field->getClass()));
+        auto objectRef = frame.popOperand<Instance*>();
 
+        if (objectRef == nullptr) {
+          mThread.throwException(u"java/lang/NullPointerException");
+          break;
+        }
+
+        assert(objectRef->getClass()->isInstanceOf(field->getClass()));
         objectRef->setFieldValue(field->name(), field->descriptor(), value);
 
         break;
@@ -757,11 +704,15 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
 
         break;
       }
+      case IFNULL: unaryJumpIf<Instance*, nullptr, std::equal_to<Instance*>>(cursor); break;
+      case IFNONNULL: unaryJumpIf<Instance*, nullptr, std::not_equal_to<Instance*>>(cursor); break;
       case GOTO_W: notImplemented(opcode); break;
       case JSR_W: notImplemented(opcode); break;
-      case BREAKPOINT: notImplemented(opcode); break;
-      case IMPDEP1: notImplemented(opcode); break;
-      case IMPDEP2: notImplemented(opcode); break;
+      case BREAKPOINT:
+      case IMPDEP1:
+      case IMPDEP2:
+        // Reserved opcodes
+        break;
       default: assert(false && "Unknown opcode!");
     }
 
@@ -841,32 +792,6 @@ void DefaultInterpreter::handleErrorAsException(const VmError& error)
   mThread.throwException(error.exception(), error.message());
 }
 
-void DefaultInterpreter::integerComparison(Predicate predicate, CodeCursor& cursor)
-{
-  auto opcodePos = cursor.position() - 1;
-
-  auto val2 = currentFrame().popOperand<int32_t>();
-  auto val1 = currentFrame().popOperand<int32_t>();
-
-  auto offset = std::bit_cast<int16_t>(cursor.readU2());
-
-  if (compareInt(predicate, val1, val2)) {
-    cursor.set(opcodePos + offset);
-  }
-}
-
-void DefaultInterpreter::integerComparisonToZero(Predicate predicate, CodeCursor& cursor)
-{
-  auto opcodePos = cursor.position() - 1;
-  auto val1 = currentFrame().popOperand<int32_t>();
-
-  auto offset = std::bit_cast<int16_t>(cursor.readU2());
-
-  if (compareInt(predicate, val1, 0)) {
-    cursor.set(opcodePos + offset);
-  }
-}
-
 template<JvmType T>
 void DefaultInterpreter::arrayLoad()
 {
@@ -931,39 +856,6 @@ void DefaultInterpreter::arrayStore()
 }
 
 template<JvmType T>
-void DefaultInterpreter::add()
-{
-  T value2 = currentFrame().popOperand<T>();
-  T value1 = currentFrame().popOperand<T>();
-
-  T result = value2 + value1;
-
-  currentFrame().pushOperand<T>(result);
-}
-
-template<JvmType T>
-void DefaultInterpreter::sub()
-{
-  T value2 = currentFrame().popOperand<T>();
-  T value1 = currentFrame().popOperand<T>();
-
-  T result = value1 - value2;
-
-  currentFrame().pushOperand<T>(result);
-}
-
-template<JvmType T>
-void DefaultInterpreter::mul()
-{
-  T value2 = currentFrame().popOperand<T>();
-  T value1 = currentFrame().popOperand<T>();
-
-  T result = value2 * value1;
-
-  currentFrame().pushOperand<T>(result);
-}
-
-template<JvmType T>
 void DefaultInterpreter::div()
 {
   T value2 = currentFrame().popOperand<T>();
@@ -1000,6 +892,63 @@ void DefaultInterpreter::neg()
   T value = currentFrame().popOperand<T>();
   T result = -value;
   currentFrame().pushOperand<T>(result);
+}
+
+template<JvmType T, class F>
+void DefaultInterpreter::simpleOp()
+{
+  T value2 = currentFrame().popOperand<T>();
+  T value1 = currentFrame().popOperand<T>();
+
+  T result = F{}(value1, value2);
+  currentFrame().pushOperand<T>(result);
+}
+
+template<JavaIntegerType T, class ShiftType, uint32_t OffsetMask, bool IsLeft>
+void DefaultInterpreter::shift()
+{
+  auto value2 = currentFrame().popOperand<int32_t>();
+  auto value1 = currentFrame().popOperand<T>();
+
+  auto target = std::bit_cast<ShiftType>(value1);
+  auto offset = std::bit_cast<uint32_t>(value2) & OffsetMask;
+
+  T result;
+  if constexpr (IsLeft) {
+    result = static_cast<T>(target << offset);
+  } else {
+    result = static_cast<T>(target >> offset);
+  }
+
+  currentFrame().pushOperand<T>(result);
+}
+
+template<JvmType T, class Func>
+void DefaultInterpreter::binaryJumpIf(CodeCursor& cursor)
+{
+  auto opcodePos = cursor.position() - 1;
+
+  auto val2 = currentFrame().popOperand<T>();
+  auto val1 = currentFrame().popOperand<T>();
+
+  auto offset = std::bit_cast<int16_t>(cursor.readU2());
+
+  if (Func{}(val1, val2)) {
+    cursor.set(opcodePos + offset);
+  }
+}
+
+template<JvmType T, auto CheckedValue, class Func>
+void DefaultInterpreter::unaryJumpIf(CodeCursor& cursor)
+{
+  auto opcodePos = cursor.position() - 1;
+  auto value = currentFrame().popOperand<T>();
+
+  auto offset = std::bit_cast<int16_t>(cursor.readU2());
+
+  if (Func{}(value, static_cast<T>(CheckedValue))) {
+    cursor.set(opcodePos + offset);
+  }
 }
 
 template<JavaFloatType SourceTy, JvmType TargetTy>
