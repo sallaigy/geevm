@@ -681,27 +681,43 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       }
 
       case WIDE: notImplemented(opcode); break;
-      case MULTIANEWARRAY: notImplemented(opcode); break;
-      case IFNULL: {
-        auto opcodePos = cursor.position() - 1;
-        auto offset = std::bit_cast<int16_t>(cursor.readU2());
+      case MULTIANEWARRAY: {
+        uint16_t index = cursor.readU2();
+        uint8_t dimensions = cursor.readU1();
 
-        Instance* value = frame.popOperand<Instance*>();
-        if (value == nullptr) {
-          cursor.set(opcodePos + offset);
+        auto klass = runtimeConstantPool.getClass(index);
+        if (!klass) {
+          this->handleErrorAsException(klass.error());
+          break;
         }
 
-        break;
-      }
-      case IFNONNULL: {
-        auto opcodePos = cursor.position() - 1;
-        auto offset = std::bit_cast<int16_t>(cursor.readU2());
-
-        Instance* value = frame.popOperand<Instance*>();
-        if (value != nullptr) {
-          cursor.set(opcodePos + offset);
+        std::vector<int32_t> dimensionCounts;
+        for (uint8_t dim = 0; dim < dimensions; dim++) {
+          dimensionCounts.push_back(frame.popOperand<int32_t>());
         }
 
+        std::optional<JClass*> elementClass = (*klass)->asArrayClass()->elementClass();
+        assert(elementClass.has_value());
+
+        auto makeInnerArray = [this](auto& self, std::vector<int32_t> dimensionCounts, ArrayClass* arrayClass) -> ArrayInstance* {
+          auto count = dimensionCounts.back();
+          dimensionCounts.pop_back();
+
+          ArrayInstance* newArray = mThread.heap().allocateArray(arrayClass, count);
+          if (!dimensionCounts.empty()) {
+            ArrayClass* innerArrayClass = (*arrayClass->elementClass())->asArrayClass();
+            for (int32_t i = 0; i < count; i++) {
+              auto innerArray = self(self, dimensionCounts, innerArrayClass);
+              newArray->setArrayElement(i, Value::from<Instance*>(innerArray));
+            }
+          }
+
+          return newArray;
+        };
+
+        ArrayInstance* result = makeInnerArray(makeInnerArray, dimensionCounts, (*klass)->asArrayClass());
+
+        frame.pushOperand<Instance*>(result);
         break;
       }
       case IFNULL: unaryJumpIf<Instance*, nullptr, std::equal_to<Instance*>>(cursor); break;
