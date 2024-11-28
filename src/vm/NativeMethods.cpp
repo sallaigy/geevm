@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <csignal>
 #include <iostream>
+#include <unordered_set>
 #include <utility>
 
 using namespace geevm;
@@ -32,17 +33,24 @@ std::optional<NativeMethodHandle> NativeMethodRegistry::get(JMethod* method) con
 
 static std::optional<Value> noop(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> return_nullptr(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> return_false(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  return Value::from<int32_t>(0);
+}
 
 static std::optional<Value> java_lang_Object_hashCode(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> java_lang_Object_getClass(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> java_lang_Object_wait(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> java_lang_System_initProperties(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> java_lang_System_arraycopy(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> java_lang_System_nanoTime(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 
 static std::optional<Value> java_lang_Class_getPrimitiveClass(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> java_lang_Class_isPrimitive(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> java_lang_Class_desiredAssertionStatus0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> java_lang_Class_getName0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> java_lang_Class_forName0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> java_lang_Class_initClassName(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> java_lang_Class_getDeclaredFields0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 
 static std::optional<Value> java_lang_Float_floatToRawIntBits(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
@@ -51,7 +59,11 @@ static std::optional<Value> java_lang_Double_longBitsToDouble(JavaThread& thread
 
 static std::optional<Value> sun_misc_Unsafe_arrayBaseOffset(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> sun_misc_Unsafe_objectFieldOffset(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
-static std::optional<Value> sun_misc_Unsafe_compareAndSwapObject(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> sun_misc_Unsafe_storeFence(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> jdk_internal_util_SystemProps_Raw_platformProperties(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> jdk_internal_util_SystemProps_Raw_vmProperties(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> jdk_internal_misc_CDS_getRandomSeedForDumping(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> jdk_internal_misc_Unsafe_compareAndSetInt(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 
 static std::optional<Value> sun_reflect_Reflection_getCallerClass(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> java_security_AccessController_doPrivileged(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
@@ -60,11 +72,16 @@ static std::optional<Value> java_lang_Thread_currentThread(JavaThread& thread, C
 static std::optional<Value> java_lang_Thread_isAlive(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> java_lang_Thread_start0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 
+static std::optional<Value> java_lang_Runtime_availableProcessors(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> java_lang_Runtime_maxMemory(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+
 static std::optional<Value> java_lang_Throwable_fillInStackTrace(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> java_lang_Throwable_getStackTraceDepth(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> java_lang_Throwable_getStackTraceElement(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> java_lang_StackTraceElement_initStackTraceElements(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 
 static std::optional<Value> java_lang_String_intern(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> java_lang_StringUTF16_isBigEndian(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 
 static std::optional<Value> geevm_test_print(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
@@ -124,11 +141,13 @@ void Vm::registerNatives()
                                       java_lang_System_initProperties);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/System", u"arraycopy", u"(Ljava/lang/Object;ILjava/lang/Object;II)V"},
                                       java_lang_System_arraycopy);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/System", u"nanoTime", u"()J"}, java_lang_System_nanoTime);
 
   // java.lang.Class
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Class", u"registerNatives", u"()V"}, noop);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Class", u"getPrimitiveClass", u"(Ljava/lang/String;)Ljava/lang/Class;"},
                                       java_lang_Class_getPrimitiveClass);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Class", u"isPrimitive", u"()Z"}, java_lang_Class_isPrimitive);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Class", u"desiredAssertionStatus0", u"(Ljava/lang/Class;)Z"},
                                       java_lang_Class_desiredAssertionStatus0);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Class", u"getName0", u"()Ljava/lang/String;"}, java_lang_Class_getName0);
@@ -137,12 +156,14 @@ void Vm::registerNatives()
       java_lang_Class_forName0);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Class", u"getDeclaredFields0", u"(Z)[Ljava/lang/reflect/Field;"},
                                       java_lang_Class_getDeclaredFields0);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Class", u"initClassName", u"()Ljava/lang/String;"}, java_lang_Class_initClassName);
 
   // java.lang.ClassLoader
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/ClassLoader", u"registerNatives", u"()V"}, noop);
 
   // java.lang.String
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/String", u"intern", u"()Ljava/lang/String;"}, java_lang_String_intern);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/StringUTF16", u"isBigEndian", u"()Z"}, java_lang_StringUTF16_isBigEndian);
 
   // java.lang.Thread
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Thread", u"registerNatives", u"()V"}, noop);
@@ -150,6 +171,10 @@ void Vm::registerNatives()
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Thread", u"setPriority0", u"(I)V"}, noop);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Thread", u"isAlive", u"()Z"}, java_lang_Thread_isAlive);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Thread", u"start0", u"()V"}, java_lang_Thread_start0);
+
+  // java.lang.Runtime
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Runtime", u"availableProcessors", u"()I"}, java_lang_Runtime_availableProcessors);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Runtime", u"maxMemory", u"()J"}, java_lang_Runtime_maxMemory);
 
   // java.lang.Float
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Float", u"floatToRawIntBits", u"(F)I"}, java_lang_Float_floatToRawIntBits);
@@ -159,21 +184,39 @@ void Vm::registerNatives()
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Double", u"longBitsToDouble", u"(J)D"}, java_lang_Double_longBitsToDouble);
 
   // sun.misc.VM
-  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"sun/misc/VM", u"initialize", u"()V"}, noop);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/VM", u"initialize", u"()V"}, noop);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/CDS", u"isDumpingClassList0", u"()Z"}, return_false);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/CDS", u"isDumpingArchive0", u"()Z"}, return_false);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/CDS", u"isSharingEnabled0", u"()Z"}, return_false);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/CDS", u"getRandomSeedForDumping", u"()J"},
+                                      jdk_internal_misc_CDS_getRandomSeedForDumping);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/CDS", u"initializeFromArchive", u"(Ljava/lang/Class;)V"}, noop);
 
   // sun.misc.Unsafe
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"sun/misc/Unsafe", u"registerNatives", u"()V"}, noop);
-  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"sun/misc/Unsafe", u"arrayBaseOffset", u"(Ljava/lang/Class;)I"}, sun_misc_Unsafe_arrayBaseOffset);
-  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"sun/misc/Unsafe", u"arrayIndexScale", u"(Ljava/lang/Class;)I"}, sun_misc_Unsafe_arrayBaseOffset);
-  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"sun/misc/Unsafe", u"addressSize", u"()I"}, sun_misc_Unsafe_arrayBaseOffset);
-  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"sun/misc/Unsafe", u"objectFieldOffset", u"(Ljava/lang/reflect/Field;)J"},
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/Unsafe", u"registerNatives", u"()V"}, noop);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/Unsafe", u"arrayBaseOffset0", u"(Ljava/lang/Class;)I"},
+                                      sun_misc_Unsafe_arrayBaseOffset);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/Unsafe", u"arrayIndexScale0", u"(Ljava/lang/Class;)I"},
+                                      sun_misc_Unsafe_arrayBaseOffset);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/Unsafe", u"arrayIndexScale", u"(Ljava/lang/Class;)I"},
+                                      sun_misc_Unsafe_arrayBaseOffset);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/Unsafe", u"addressSize", u"()I"}, sun_misc_Unsafe_arrayBaseOffset);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/util/SystemProps$Raw", u"platformProperties", u"()[Ljava/lang/String;"},
+                                      jdk_internal_util_SystemProps_Raw_platformProperties);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/util/SystemProps$Raw", u"vmProperties", u"()[Ljava/lang/String;"},
+                                      jdk_internal_util_SystemProps_Raw_vmProperties);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/Unsafe", u"objectFieldOffset1", u"(Ljava/lang/Class;Ljava/lang/String;)J"},
                                       sun_misc_Unsafe_objectFieldOffset);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/Unsafe", u"storeFence", u"()V"}, sun_misc_Unsafe_storeFence);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/Unsafe", u"compareAndSetInt", u"(Ljava/lang/Object;JII)Z"},
+                                      jdk_internal_misc_Unsafe_compareAndSetInt);
   // mNativeMethods.registerNativeMethod(
   //     ClassNameAndDescriptor{u"sun/misc/Unsafe", u"compareAndSwapObject", u"(Ljava/lang/Object;JLjava/lang/Object;Ljava/lang/Object;)Z"},
   //     sun_misc_Unsafe_compareAndSwapObject);
 
   // sun.reflect.Reflection
-  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"sun/reflect/Reflection", u"getCallerClass", u"()Ljava/lang/Class;"},
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/reflect/Reflection", u"getCallerClass", u"()Ljava/lang/Class;"},
                                       sun_reflect_Reflection_getCallerClass);
 
   // java.io.FileInputStream
@@ -201,6 +244,11 @@ void Vm::registerNatives()
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Throwable", u"getStackTraceDepth", u"()I"}, java_lang_Throwable_getStackTraceDepth);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Throwable", u"getStackTraceElement", u"(I)Ljava/lang/StackTraceElement;"},
                                       java_lang_Throwable_getStackTraceElement);
+
+  // java.lang.StackTraceElement
+  mNativeMethods.registerNativeMethod(
+      ClassNameAndDescriptor{u"java/lang/StackTraceElement", u"initStackTraceElements", u"([Ljava/lang/StackTraceElement;Ljava/lang/Throwable;)V"},
+      java_lang_StackTraceElement_initStackTraceElements);
 }
 
 std::optional<Value> noop(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
@@ -240,12 +288,7 @@ std::optional<Value> java_lang_Class_desiredAssertionStatus0(JavaThread& thread,
 std::optional<Value> java_lang_Class_getPrimitiveClass(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
   auto stringObject = args[0].get<Instance*>();
-  auto charArray = stringObject->getFieldValue<Instance*>(u"value", u"[C")->asArrayInstance();
-
-  types::JString buffer;
-  for (Value v : charArray->contents()) {
-    buffer += v.get<char16_t>();
-  }
+  types::JString buffer = utils::getStringValue(stringObject);
 
   if (buffer == u"float") {
     auto klass = thread.resolveClass(u"java/lang/Float");
@@ -256,9 +299,28 @@ std::optional<Value> java_lang_Class_getPrimitiveClass(JavaThread& thread, CallF
   } else if (buffer == u"int") {
     auto klass = thread.resolveClass(u"java/lang/Integer");
     return Value::from((*klass)->classInstance());
+  } else if (buffer == u"byte") {
+    auto klass = thread.resolveClass(u"java/lang/Byte");
+    return Value::from((*klass)->classInstance());
+  } else if (buffer == u"char") {
+    auto klass = thread.resolveClass(u"java/lang/Character");
+    return Value::from((*klass)->classInstance());
   } else {
     assert(false && "Unknown primitive class");
   }
+}
+
+std::optional<Value> java_lang_Class_isPrimitive(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  auto classObject = args[0].get<Instance*>()->asClassInstance();
+  const types::JString& className = classObject->target()->className();
+
+  static std::unordered_set<types::JString> klassNames = {
+      u"java/lang/Boolean", u"java/Lang/Float", u"java/lang/Double",  u"java/lang/Byte",
+      u"java/lang/Char",    u"java/lang/Short", u"java/lang/Integer", u"java/lang/Long",
+  };
+
+  return klassNames.find(className) == klassNames.end() ? Value::from<int32_t>(0) : Value::from<int32_t>(1);
 }
 
 std::optional<Value> java_lang_Class_getName0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
@@ -281,18 +343,26 @@ std::optional<Value> java_lang_Class_forName0(JavaThread& thread, CallFrame& fra
   Instance* classLoader = args[2].get<Instance*>();
 
   assert(classLoader == nullptr && "TODO: Support non-boostrap classloader");
-  auto charArray = name->getFieldValue<Instance*>(u"value", u"[C")->asArrayInstance();
-
-  types::JString nameStr = u"";
-  for (Value value : charArray->contents()) {
-    nameStr += value.get<char16_t>();
-  }
+  types::JString nameStr = utils::getStringValue(name);
 
   auto loaded = thread.resolveClass(nameStr);
   if (!loaded) {
     // TODO: throw exception
   }
   return Value::from((*loaded)->classInstance());
+}
+
+std::optional<Value> java_lang_Class_initClassName(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  ClassInstance* cls = args[0].get<Instance*>()->asClassInstance();
+  assert(cls != nullptr);
+
+  auto name = cls->target()->className();
+  std::ranges::replace(name, u'/', u'.');
+
+  Instance* str = thread.heap().intern(name);
+
+  return Value::from(str);
 }
 
 std::optional<Value> java_lang_Class_getDeclaredFields0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
@@ -364,6 +434,14 @@ std::optional<Value> java_lang_System_arraycopy(JavaThread& thread, CallFrame& f
   return std::nullopt;
 }
 
+std::optional<Value> java_lang_System_nanoTime(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  auto now = std::chrono::high_resolution_clock::now();
+  auto duration = now.time_since_epoch();
+
+  return Value::from<int64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count());
+}
+
 std::optional<Value> sun_misc_Unsafe_arrayBaseOffset(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
   return Value::from(0);
@@ -372,19 +450,18 @@ std::optional<Value> sun_misc_Unsafe_arrayBaseOffset(JavaThread& thread, CallFra
 std::optional<Value> sun_misc_Unsafe_objectFieldOffset(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
   // TODO
-  return Value::from(0);
+  return Value::from<int64_t>(0);
 }
 
-std::optional<Value> sun_misc_Unsafe_compareAndSwapObject(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+std::optional<Value> sun_misc_Unsafe_storeFence(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  Instance* obj = args[1].get<Instance*>();
-  int64_t offset = args[2].get<int64_t>();
-  // 'offset' is category 2, so we skip an index
-  Instance* expected = args[4].get<Instance*>();
-  Instance* target = args[5].get<Instance*>();
+  std::atomic_thread_fence(std::memory_order_acquire);
+  return std::nullopt;
+}
 
-  // FIXME
-  return Value::from(1);
+std::optional<Value> jdk_internal_misc_Unsafe_compareAndSetInt(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  return Value::from<int32_t>(1);
 }
 
 std::optional<Value> sun_reflect_Reflection_getCallerClass(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
@@ -449,6 +526,16 @@ std::optional<Value> java_lang_Thread_start0(JavaThread& thread, CallFrame& fram
   return std::nullopt;
 }
 
+std::optional<Value> java_lang_Runtime_availableProcessors(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  return Value::from(1);
+}
+
+std::optional<Value> java_lang_Runtime_maxMemory(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  return Value::from(2000);
+}
+
 std::optional<Value> java_lang_Throwable_fillInStackTrace(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
   Instance* exceptionInstance = args[0].get<Instance*>();
@@ -457,6 +544,7 @@ std::optional<Value> java_lang_Throwable_fillInStackTrace(JavaThread& thread, Ca
   // exceptionInstance->setFieldValue(u"stackTrace", u"[Ljava/lang/StackTraceElement;", Value::Reference(array));
   exceptionInstance->setFieldValue<Instance*>(u"stackTrace", u"[Ljava/lang/StackTraceElement;", nullptr);
   exceptionInstance->setFieldValue<Instance*>(u"backtrace", u"Ljava/lang/Object;", array);
+  exceptionInstance->setFieldValue<int32_t>(u"depth", u"I", array->asArrayInstance()->length());
 
   return Value::from(exceptionInstance);
 }
@@ -486,17 +574,63 @@ std::optional<Value> java_lang_Throwable_getStackTraceElement(JavaThread& thread
   return Value::from(*elem);
 }
 
+std::optional<Value> java_lang_StackTraceElement_initStackTraceElements(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  ArrayInstance* stackTraceArray = args[0].get<Instance*>()->asArrayInstance();
+  Instance* throwable = args[1].get<Instance*>();
+
+  auto storedBackTrace = throwable->getFieldValue<Instance*>(u"backtrace", u"Ljava/lang/Object;")->asArrayInstance();
+
+  assert(storedBackTrace->length() == stackTraceArray->length());
+
+  for (int32_t i = 0; i < stackTraceArray->length(); i++) {
+    stackTraceArray->asArrayInstance()->setArrayElement(i, *storedBackTrace->getArrayElement(i));
+  }
+
+  return std::nullopt;
+}
+
 std::optional<Value> java_lang_String_intern(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
   Instance* self = args.at(0).get<Instance*>();
-  auto& charArray = self->getFieldValue<Instance*>(u"value", u"[C")->asArrayInstance()->contents();
+  auto& stringBytes = self->getFieldValue<Instance*>(u"value", u"[B")->asArrayInstance()->contents();
 
-  types::JString str = u"";
-  for (auto value : charArray) {
-    str += value.get<char16_t>();
-  }
-
+  types::JString str = utils::getStringValue(self);
   Instance* interned = thread.heap().intern(str);
 
   return Value::from(interned);
+}
+
+std::optional<Value> java_lang_StringUTF16_isBigEndian(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  return Value::from<int32_t>(0);
+}
+
+std::optional<Value> jdk_internal_util_SystemProps_Raw_platformProperties(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  auto stringArrayCls = thread.resolveClass(u"[Ljava/lang/String;");
+
+  auto rawPropsCls = *thread.resolveClass(u"jdk/internal/util/SystemProps$Raw");
+  auto arrayLength = rawPropsCls->getStaticFieldValue<int32_t>(u"FIXED_LENGTH", u"I");
+
+  ArrayInstance* propsArray = thread.heap().allocateArray((*stringArrayCls)->asArrayClass(), arrayLength);
+
+  return Value::from<Instance*>(propsArray);
+}
+
+std::optional<Value> jdk_internal_util_SystemProps_Raw_vmProperties(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  auto stringArrayCls = thread.resolveClass(u"[Ljava/lang/String;");
+
+  auto rawPropsCls = *thread.resolveClass(u"jdk/internal/util/SystemProps$Raw");
+  auto arrayLength = 0;
+
+  ArrayInstance* propsArray = thread.heap().allocateArray((*stringArrayCls)->asArrayClass(), arrayLength);
+
+  return Value::from<Instance*>(propsArray);
+}
+
+std::optional<Value> jdk_internal_misc_CDS_getRandomSeedForDumping(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  return Value::from<int64_t>(0);
 }

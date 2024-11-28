@@ -39,7 +39,7 @@ TEST_F(ClassFileReaderTest, read_hello_world)
   ASSERT_NE(classFile, nullptr);
 
   EXPECT_EQ(classFile->minorVersion(), 0);
-  EXPECT_EQ(classFile->majorVersion(), 52);
+  EXPECT_EQ(classFile->majorVersion(), 61);
   EXPECT_EQ(classFile->accessFlags(), ClassAccessFlags::ACC_PUBLIC | ClassAccessFlags::ACC_SUPER);
 
   EXPECT_EQ(classFile->thisClass(), 5);
@@ -80,7 +80,7 @@ TEST_F(ClassFileReaderTest, read_fields)
   this->readClassFile("class_file/org/geevm/tests/classfile/Fields.class");
 
   EXPECT_EQ(classFile->minorVersion(), 0);
-  EXPECT_EQ(classFile->majorVersion(), 52);
+  EXPECT_EQ(classFile->majorVersion(), 61);
   EXPECT_EQ(classFile->accessFlags(), ClassAccessFlags::ACC_PUBLIC | ClassAccessFlags::ACC_SUPER);
 
   EXPECT_EQ(classFile->constantPool().getClassName(classFile->thisClass()), u"org/geevm/tests/classfile/Fields");
@@ -113,7 +113,7 @@ TEST_F(ClassFileReaderTest, read_inheritance)
   this->readClassFile("class_file/org/geevm/tests/classfile/Inheritance.class");
 
   EXPECT_EQ(classFile->minorVersion(), 0);
-  EXPECT_EQ(classFile->majorVersion(), 52);
+  EXPECT_EQ(classFile->majorVersion(), 61);
   EXPECT_EQ(classFile->accessFlags(), ClassAccessFlags::ACC_PUBLIC | ClassAccessFlags::ACC_SUPER);
 
   EXPECT_EQ(classFile->constantPool().getClassName(classFile->thisClass()), u"org/geevm/tests/classfile/Inheritance");
@@ -138,7 +138,7 @@ TEST_F(ClassFileReaderTest, read_methods)
   this->readClassFile("class_file/org/geevm/tests/classfile/Methods.class");
 
   EXPECT_EQ(classFile->minorVersion(), 0);
-  EXPECT_EQ(classFile->majorVersion(), 52);
+  EXPECT_EQ(classFile->majorVersion(), 61);
   EXPECT_EQ(classFile->accessFlags(), ClassAccessFlags::ACC_PUBLIC | ClassAccessFlags::ACC_SUPER | ClassAccessFlags::ACC_ABSTRACT);
 
   EXPECT_EQ(classFile->constantPool().getClassName(classFile->thisClass()), u"org/geevm/tests/classfile/Methods");
