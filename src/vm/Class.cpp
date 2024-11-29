@@ -199,7 +199,10 @@ void InstanceClass::linkFields()
       jfield = std::make_unique<JField>(field, this, types::JString{fieldName}, types::JString{descriptor}, *fieldType, instanceFieldOffset++);
     }
 
-    mFields.insert_or_assign(NameAndDescriptor{fieldName, descriptor}, std::move(jfield));
+    NameAndDescriptor key{fieldName, descriptor};
+    mFields.try_emplace(key, std::move(jfield));
+
+    // mFields.insert_or_assign(, std::move(jfield));
   }
 }
 
@@ -311,10 +314,26 @@ std::optional<JField*> JClass::lookupField(const types::JString& name, const typ
   return std::nullopt;
 }
 
+Value JClass::getStaticFieldValue(const types::JString& name, const types::JString& descriptor)
+{
+  NameAndDescriptor pair{name, descriptor};
+  size_t offset = mFields.at(pair)->offset();
+
+  return getStaticFieldValue(offset);
+}
+
 Value JClass::getStaticFieldValue(size_t offset)
 {
   assert(offset < mStaticFieldValues.size());
   return mStaticFieldValues[offset];
+}
+
+void JClass::setStaticFieldValue(const types::JString& name, const types::JString& descriptor, Value value)
+{
+  NameAndDescriptor pair{name, descriptor};
+  size_t offset = mFields.at(pair)->offset();
+
+  this->setStaticFieldValue(offset, value);
 }
 
 void JClass::setStaticFieldValue(size_t offset, Value value)

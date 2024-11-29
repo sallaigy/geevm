@@ -1,12 +1,17 @@
 #ifndef GEEVM_VM_CLASSPATH_H
 #define GEEVM_VM_CLASSPATH_H
 
+#include "common/JvmError.h"
 #include "common/Zip.h"
 
+#include <optional>
+#include <variant>
 #include <vector>
 
 namespace geevm
 {
+
+class InstanceClass;
 
 class ClassLocation
 {
@@ -35,14 +40,24 @@ public:
     using StorageTy = std::variant<std::string, std::unique_ptr<ZipArchive>>;
 
   public:
-    std::optional<ClassLocation> search(const std::string& name);
+    explicit Entry(StorageTy storage)
+      : mStorage(std::move(storage))
+    {
+    }
 
-    bool isDirectory() const;
-    bool isJar() const;
+    std::optional<ClassLocation> search(const types::JString& name);
+
+    std::optional<std::string> asDirectory();
+    std::optional<ZipArchive*> asJar();
 
   private:
     StorageTy mStorage;
   };
+
+  void addDirectory(const std::string& path);
+  void addJar(const std::string& path);
+
+  std::optional<ClassLocation> search(const types::JString& name);
 
 private:
   std::vector<Entry> mEntries;

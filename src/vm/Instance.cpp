@@ -30,6 +30,7 @@ void Instance::setFieldValue(types::JStringRef fieldName, types::JStringRef desc
 Value Instance::getFieldValue(types::JStringRef fieldName, types::JStringRef descriptor)
 {
   NameAndDescriptor key{fieldName, descriptor};
+
   assert(mClass->fields().contains(key));
   size_t offset = mClass->fields().at(key)->offset();
 

@@ -10,18 +10,6 @@
 
 using namespace geevm;
 
-static std::filesystem::path classNameToPath(types::JStringRef name)
-{
-  // Replace dot with slash
-  types::JString pathStr(name);
-  std::ranges::replace(pathStr, u'.', u'/');
-
-  namespace fs = std::filesystem;
-  auto path = fs::path{pathStr + u".class"};
-
-  return path;
-}
-
 JvmExpected<JClass*> BootstrapClassLoader::loadClass(const types::JString& name)
 {
   if (auto it = mClasses.find(name); it != mClasses.end()) {
@@ -33,23 +21,21 @@ JvmExpected<JClass*> BootstrapClassLoader::loadClass(const types::JString& name)
   }
 
   JvmExpected<std::unique_ptr<InstanceClass>> loadResult;
-  if (name.starts_with(u"java/") || name.starts_with(u"sun/") || name.starts_with(u"jdk/")) {
-    if (mBootstrapArchive == nullptr) {
-      mBootstrapArchive = ZipArchive::open(std::getenv("RT_JAR_PATH"));
-    }
+  std::optional<ClassLocation> location = mClassPath.search(name);
 
-    if (mBootstrapArchive == nullptr) {
-      return makeError<JClass*>(u"java/lang/NoClassDefFoundError");
-    }
-
-    ClassLocation location = ClassLocation::createJarLocation(mBootstrapArchive.get(), classNameToPath(name));
-    loadResult = location.resolve();
+  if (location.has_value()) {
+    loadResult = location->resolve();
   } else {
-    loadResult = mNextClassLoader->loadClass(name);
+    for (auto& classLoader : mClassLoaders) {
+      loadResult = classLoader->loadClass(name);
+      if (loadResult.has_value() && *loadResult != nullptr) {
+        break;
+      }
+    }
   }
 
   if (!loadResult) {
-    return makeError<InstanceClass*>(std::move(loadResult.error()));
+    return makeError<InstanceClass*>(loadResult.error());
   }
 
   auto [result, _] = mClasses.try_emplace(name, std::move(*loadResult));
@@ -81,10 +67,18 @@ JvmExpected<ArrayClass*> BootstrapClassLoader::loadArrayClass(const types::JStri
   return klass;
 }
 
+void BootstrapClassLoader::registerClassLoader(std::unique_ptr<ClassLoader> classLoader)
+{
+  mClassLoaders.emplace_back(std::move(classLoader));
+}
+
 JvmExpected<std::unique_ptr<InstanceClass>> BaseClassLoader::loadClass(const types::JString& name)
 {
-  // TODO: Load JARs
-  return ClassLocation::createFileLocation(classNameToPath(name)).resolve();
+  if (auto location = mClassPath.search(name); location) {
+    return location->resolve();
+  }
+
+  return nullptr;
 }
 
 ClassLocation ClassLocation::createJarLocation(ZipArchive* archive, const std::string& fileName)
@@ -128,6 +122,6 @@ JvmExpected<std::unique_ptr<InstanceClass>> ClassLocation::resolve()
 }
 
 BootstrapClassLoader::BootstrapClassLoader(Vm& vm)
-  : mVm(vm), mNextClassLoader(std::make_unique<BaseClassLoader>())
+  : mVm(vm)
 {
 }
