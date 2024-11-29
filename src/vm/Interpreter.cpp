@@ -476,7 +476,9 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
 
         std::vector<std::pair<int32_t, int32_t>> pairs;
         for (int32_t i = 0; i < numPairs; i++) {
-          pairs.emplace_back(cursor.readU4(), cursor.readU4());
+          auto matchValue = cursor.readU4();
+          auto offset = std::bit_cast<int32_t>(cursor.readU4());
+          pairs.emplace_back(matchValue, offset);
         }
 
         auto key = frame.popOperand<int32_t>();
