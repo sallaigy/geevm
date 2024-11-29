@@ -7,11 +7,15 @@ include(FetchContent)
 
 find_package(libzip CONFIG REQUIRED)
 find_package(Python3 COMPONENTS Interpreter)
-find_package(Java 1.8 EXACT REQUIRED)
+find_package(Java 17 EXACT REQUIRED)
 
 get_filename_component(REAL_JAVAC ${Java_JAVAC_EXECUTABLE} REALPATH)
 cmake_path(GET REAL_JAVAC PARENT_PATH JAVA_BIN_DIR)
 cmake_path(GET JAVA_BIN_DIR PARENT_PATH JAVA_HOME)
+
+if (NOT EXISTS ${CMAKE_BINARY_DIR}/jdk17)
+  execute_process(COMMAND ${JAVA_BIN_DIR}/jimage extract --dir=${CMAKE_BINARY_DIR}/jdk17 ${JAVA_HOME}/lib/modules)
+endif ()
 
 file(GLOB_RECURSE
   GEEVM_COMMON_SOURCES

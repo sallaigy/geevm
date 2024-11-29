@@ -18,7 +18,7 @@ class Vm
 {
 public:
   explicit Vm()
-    : mMainThread(*this), mHeap(*this), mBootstrapClassLoader(*this)
+    : mBootstrapClassLoader(*this), mMainThread(*this), mHeap(*this)
   {
   }
 
@@ -39,6 +39,11 @@ public:
   JavaThread& mainThread()
   {
     return mMainThread;
+  }
+
+  BootstrapClassLoader& bootstrapClassLoader()
+  {
+    return mBootstrapClassLoader;
   }
 
 private:

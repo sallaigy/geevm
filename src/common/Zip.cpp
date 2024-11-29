@@ -22,6 +22,8 @@ public:
 
   bool readAsBinary(const std::string& fileName, char** buffer, size_t* size) override;
 
+  bool containsFile(const std::string& fileName) override;
+
   ~ZipArchiveImpl() override;
 
 private:
@@ -39,6 +41,16 @@ std::unique_ptr<ZipArchive> ZipArchive::open(const std::string& name)
   }
 
   return std::make_unique<ZipArchiveImpl>(archive);
+}
+
+bool ZipArchiveImpl::containsFile(const std::string& fileName)
+{
+  int64_t fileIndex = zip_name_locate(mZip, fileName.c_str(), ZIP_FL_ENC_GUESS);
+  if (fileIndex == -1) {
+    return false;
+  }
+
+  return true;
 }
 
 bool ZipArchiveImpl::readAsBinary(const std::string& fileName, char** buffer, size_t* size)

@@ -434,8 +434,68 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       }
       case JSR: notImplemented(opcode); break;
       case RET: notImplemented(opcode); break;
-      case TABLESWITCH: notImplemented(opcode); break;
-      case LOOKUPSWITCH: notImplemented(opcode); break;
+      case TABLESWITCH: {
+        auto opcodePos = cursor.position() - 1;
+        while (cursor.position() % 4 != 0) {
+          cursor.next();
+        }
+
+        auto defaultOffset = std::bit_cast<int32_t>(cursor.readU4());
+        auto low = std::bit_cast<int32_t>(cursor.readU4());
+        auto high = std::bit_cast<int32_t>(cursor.readU4());
+        assert(low <= high);
+
+        int32_t count = high - low + 1;
+
+        std::vector<int32_t> table;
+        table.reserve(count);
+
+        for (int32_t i = 0; i < count; i++) {
+          int32_t offset = std::bit_cast<int32_t>(cursor.readU4());
+          table.push_back(offset);
+        }
+
+        auto index = frame.popOperand<int32_t>();
+        if (index < low || index > high) {
+          cursor.set(opcodePos + defaultOffset);
+        } else {
+          int32_t targetOffset = table.at(index - low);
+          cursor.set(opcodePos + targetOffset);
+        }
+
+        break;
+      }
+      case LOOKUPSWITCH: {
+        auto opcodePos = cursor.position() - 1;
+        while (cursor.position() % 4 != 0) {
+          cursor.next();
+        }
+
+        int32_t defaultOffset = std::bit_cast<int32_t>(cursor.readU4());
+        int32_t numPairs = std::bit_cast<int32_t>(cursor.readU4());
+
+        std::vector<std::pair<int32_t, int32_t>> pairs;
+        for (int32_t i = 0; i < numPairs; i++) {
+          pairs.emplace_back(cursor.readU4(), cursor.readU4());
+        }
+
+        auto key = frame.popOperand<int32_t>();
+        bool matched = false;
+
+        for (int32_t i = 0; i < numPairs; i++) {
+          if (pairs[i].first == key) {
+            cursor.set(opcodePos + pairs[i].second);
+            matched = true;
+            break;
+          }
+        }
+
+        if (!matched) {
+          cursor.set(opcodePos + defaultOffset);
+        }
+
+        break;
+      }
       //==--------------------------------------------------------------------==
       // Returns
       //==--------------------------------------------------------------------==
@@ -539,7 +599,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         assert(method->isStatic());
 
         method->getClass()->initialize(mThread);
-
+        // TODO: Initialization can fail with an exception - check before performing the invocation.
         this->invoke(method);
 
         break;

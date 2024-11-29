@@ -62,6 +62,20 @@ public:
     return std::get<T>(mStorage);
   }
 
+  Value widenToInt()
+  {
+    return std::visit(
+        [this](auto&& arg) -> Value {
+          using T = std::decay_t<decltype(arg)>;
+          if constexpr (StoredAsInt<T>) {
+            return Value::from(static_cast<int32_t>(arg));
+          } else {
+            return *this;
+          }
+        },
+        mStorage);
+  }
+
 public:
   Value(const Value& other) = default;
   Value& operator=(const Value& other) = default;
@@ -160,7 +174,8 @@ public:
 
   void pushGenericOperand(Value value)
   {
-    mOperandStack.push_back(value);
+    Value widenedValue = value.widenToInt();
+    mOperandStack.push_back(widenedValue);
   }
 
   Value popGenericOperand()

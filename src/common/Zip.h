@@ -14,6 +14,8 @@ public:
 
   ZipArchive& operator=(const ZipArchive&) = delete;
 
+  virtual bool containsFile(const std::string& fileName) = 0;
+
   /// Looks up the given file name in the archive, and puts its contents into \p buffer.
   /// The buffer is allocated inside the function call, and is up to the caller to free it.
   /// \returns true if the read is successful, false otherwise.
