@@ -3,12 +3,7 @@
 using namespace geevm;
 
 Instance::Instance(JClass* klass)
-  : Instance(Kind::Object, klass)
-{
-}
-
-Instance::Instance(Kind kind, JClass* klass)
-  : mKind(kind), mClass(klass)
+  : mClass(klass)
 {
   mFields.resize(klass->fields().size(), Value::from<int32_t>(0));
   for (const auto& [key, field] : klass->fields()) {
@@ -50,7 +45,7 @@ void* ArrayInstance::operator new(size_t base, size_t arrayLength)
 }
 
 ArrayInstance::ArrayInstance(ArrayClass* arrayClass, size_t length)
-  : Instance(Kind::Array, arrayClass), mLength(length), mStart(this->contentsStart())
+  : Instance(arrayClass), mLength(length), mStart(this->contentsStart())
 {
   for (int32_t i = 0; i < mLength; i++) {
     this->setArrayElement(i, Value::defaultValue(arrayClass->elementType()));
@@ -59,7 +54,7 @@ ArrayInstance::ArrayInstance(ArrayClass* arrayClass, size_t length)
 
 ArrayInstance* Instance::asArrayInstance()
 {
-  assert(mKind == Kind::Array);
+  assert(mClass->isArrayType());
   return static_cast<ArrayInstance*>(this);
 }
 
