@@ -21,13 +21,28 @@ public:
     EXPECT_EQ(classFile->constantPool().getString(field.descriptorIndex()), descriptor);
   }
 
-  void checkMethod(types::u2 index, const std::u16string& name, const std::u16string& descriptor, MethodAccessFlags accessFlags) const
+  ::testing::AssertionResult checkMethod(types::u2 index, const std::u16string& name, const std::u16string& descriptor, MethodAccessFlags accessFlags) const
   {
     const MethodInfo& method = classFile->methods()[index];
 
-    EXPECT_EQ(method.accessFlags(), accessFlags);
-    EXPECT_EQ(classFile->constantPool().getString(method.nameIndex()), name);
-    EXPECT_EQ(classFile->constantPool().getString(method.descriptorIndex()), descriptor);
+    if (method.accessFlags() != accessFlags) {
+      return ::testing::AssertionFailure() << "Method access flags mismatch:" << ::testing::PrintToString(method.accessFlags())
+                                           << " expected: " << ::testing::PrintToString(accessFlags);
+    }
+
+    auto actualName = classFile->constantPool().getString(method.nameIndex());
+    if (actualName != name) {
+      return ::testing::AssertionFailure() << "Method name mismatch:" << ::testing::PrintToString(actualName)
+                                           << " expected: " << ::testing::PrintToString(name);
+    }
+
+    auto actualDescriptor = classFile->constantPool().getString(method.descriptorIndex());
+    if (actualDescriptor != descriptor) {
+      return ::testing::AssertionFailure() << "Method descriptor mismatch:" << ::testing::PrintToString(actualDescriptor)
+                                           << " expected: " << ::testing::PrintToString(descriptor);
+    }
+
+    return ::testing::AssertionSuccess();
   }
 
   std::unique_ptr<geevm::ClassFile> classFile;
@@ -42,10 +57,10 @@ TEST_F(ClassFileReaderTest, read_hello_world)
   EXPECT_EQ(classFile->majorVersion(), 61);
   EXPECT_EQ(classFile->accessFlags(), ClassAccessFlags::ACC_PUBLIC | ClassAccessFlags::ACC_SUPER);
 
-  EXPECT_EQ(classFile->thisClass(), 5);
+  EXPECT_EQ(classFile->thisClass(), 21);
   EXPECT_EQ(classFile->constantPool().getClassName(classFile->thisClass()), u"org/geevm/tests/classfile/HelloWorld");
 
-  EXPECT_EQ(classFile->superClass(), 6);
+  EXPECT_EQ(classFile->superClass(), 2);
   EXPECT_EQ(classFile->constantPool().getClassName(classFile->superClass()), u"java/lang/Object");
 
   EXPECT_EQ(classFile->interfaces().size(), 0);
@@ -67,9 +82,9 @@ TEST_F(ClassFileReaderTest, read_hello_world)
   EXPECT_EQ(main.code().maxStack(), 2);
   EXPECT_EQ(main.code().maxLocals(), 1);
   EXPECT_EQ(main.code().bytes(), std::vector<types::u1>({
-                                     0xB2, 0x00, 0x02, // getstatic #2
-                                     0x12, 0x03,       // ldc #3
-                                     0xB6, 0x00, 0x04, // invokestatic #4
+                                     0xB2, 0x00, 0x07, // getstatic #7
+                                     0x12, 0x0D,       // ldc #13
+                                     0xB6, 0x00, 0x0F, // invokestatic #15
                                      0xB1              // return
                                  }));
   EXPECT_TRUE(main.code().exceptionTable().empty());
@@ -144,24 +159,23 @@ TEST_F(ClassFileReaderTest, read_methods)
   EXPECT_EQ(classFile->constantPool().getClassName(classFile->thisClass()), u"org/geevm/tests/classfile/Methods");
   EXPECT_EQ(classFile->constantPool().getClassName(classFile->superClass()), u"java/lang/Object");
 
-  EXPECT_EQ(classFile->methods().size(), 15);
-  checkMethod(0, u"<init>", u"()V", MethodAccessFlags::ACC_PUBLIC);
-  checkMethod(1, u"publicMethod", u"()V", MethodAccessFlags::ACC_PUBLIC);
-  checkMethod(2, u"protectedMethod", u"()V", MethodAccessFlags::ACC_PROTECTED);
-  checkMethod(3, u"privateMethod", u"()V", MethodAccessFlags::ACC_PRIVATE);
-  checkMethod(4, u"packageInternalMethod", u"()V", static_cast<MethodAccessFlags>(0x00));
-  checkMethod(5, u"staticMethod", u"()V", MethodAccessFlags::ACC_PUBLIC | MethodAccessFlags::ACC_STATIC);
-  checkMethod(6, u"finalMethod", u"()V", MethodAccessFlags::ACC_PUBLIC | MethodAccessFlags::ACC_FINAL);
-  checkMethod(7, u"synchronizedMethod", u"()V", MethodAccessFlags::ACC_PUBLIC | MethodAccessFlags::ACC_SYNCHRONIZED);
-  checkMethod(8, u"simpleMethod", u"(I)I", MethodAccessFlags::ACC_PUBLIC);
-  checkMethod(9, u"varArgsMethod", u"([Ljava/lang/String;)Ljava/lang/String;", MethodAccessFlags::ACC_PUBLIC | MethodAccessFlags::ACC_VARARGS);
-  checkMethod(10, u"abstractMethod", u"()V", MethodAccessFlags::ACC_PUBLIC | MethodAccessFlags::ACC_ABSTRACT);
-  checkMethod(11, u"strictFpMethod", u"()F", MethodAccessFlags::ACC_PUBLIC | MethodAccessFlags::ACC_STRICT);
-  checkMethod(12, u"nativeMethod", u"()V", MethodAccessFlags::ACC_PUBLIC | MethodAccessFlags::ACC_NATIVE);
-  checkMethod(13, u"methodWithExceptions", u"()V", MethodAccessFlags::ACC_PUBLIC | MethodAccessFlags::ACC_ABSTRACT);
-  checkMethod(14, u"genericMethod", u"(Ljava/lang/Object;)Ljava/lang/Object;", MethodAccessFlags::ACC_PUBLIC);
+  EXPECT_EQ(classFile->methods().size(), 14);
+  EXPECT_TRUE(checkMethod(0, u"<init>", u"()V", MethodAccessFlags::ACC_PUBLIC));
+  EXPECT_TRUE(checkMethod(1, u"publicMethod", u"()V", MethodAccessFlags::ACC_PUBLIC));
+  EXPECT_TRUE(checkMethod(2, u"protectedMethod", u"()V", MethodAccessFlags::ACC_PROTECTED));
+  EXPECT_TRUE(checkMethod(3, u"privateMethod", u"()V", MethodAccessFlags::ACC_PRIVATE));
+  EXPECT_TRUE(checkMethod(4, u"packageInternalMethod", u"()V", static_cast<MethodAccessFlags>(0x00)));
+  EXPECT_TRUE(checkMethod(5, u"staticMethod", u"()V", MethodAccessFlags::ACC_PUBLIC | MethodAccessFlags::ACC_STATIC));
+  EXPECT_TRUE(checkMethod(6, u"finalMethod", u"()V", MethodAccessFlags::ACC_PUBLIC | MethodAccessFlags::ACC_FINAL));
+  EXPECT_TRUE(checkMethod(7, u"synchronizedMethod", u"()V", MethodAccessFlags::ACC_PUBLIC | MethodAccessFlags::ACC_SYNCHRONIZED));
+  EXPECT_TRUE(checkMethod(8, u"simpleMethod", u"(I)I", MethodAccessFlags::ACC_PUBLIC));
+  EXPECT_TRUE(checkMethod(9, u"varArgsMethod", u"([Ljava/lang/String;)Ljava/lang/String;", MethodAccessFlags::ACC_PUBLIC | MethodAccessFlags::ACC_VARARGS));
+  EXPECT_TRUE(checkMethod(10, u"abstractMethod", u"()V", MethodAccessFlags::ACC_PUBLIC | MethodAccessFlags::ACC_ABSTRACT));
+  EXPECT_TRUE(checkMethod(11, u"nativeMethod", u"()V", MethodAccessFlags::ACC_PUBLIC | MethodAccessFlags::ACC_NATIVE));
+  EXPECT_TRUE(checkMethod(12, u"methodWithExceptions", u"()V", MethodAccessFlags::ACC_PUBLIC | MethodAccessFlags::ACC_ABSTRACT));
+  EXPECT_TRUE(checkMethod(13, u"genericMethod", u"(Ljava/lang/Object;)Ljava/lang/Object;", MethodAccessFlags::ACC_PUBLIC));
 
-  EXPECT_EQ(classFile->methods()[13].exceptions().size(), 2);
-  EXPECT_EQ(classFile->constantPool().getClassName(classFile->methods()[13].exceptions()[0]), u"java/io/IOException");
-  EXPECT_EQ(classFile->constantPool().getClassName(classFile->methods()[13].exceptions()[1]), u"org/geevm/tests/classfile/Methods$MyException");
+  EXPECT_EQ(classFile->methods()[12].exceptions().size(), 2);
+  EXPECT_EQ(classFile->constantPool().getClassName(classFile->methods()[12].exceptions()[0]), u"java/io/IOException");
+  EXPECT_EQ(classFile->constantPool().getClassName(classFile->methods()[12].exceptions()[1]), u"org/geevm/tests/classfile/Methods$MyException");
 }

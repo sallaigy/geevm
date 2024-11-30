@@ -37,9 +37,24 @@ Value Instance::getFieldValue(types::JStringRef fieldName, types::JStringRef des
   return mFields.at(offset);
 }
 
-ArrayInstance::ArrayInstance(ArrayClass* arrayClass, size_t length)
-  : Instance(Kind::Array, arrayClass), mContents(length, Value::defaultValue(arrayClass->elementType()))
+std::unique_ptr<ArrayInstance> ArrayInstance::create(ArrayClass* arrayClass, size_t length)
 {
+  ArrayInstance* array = new (length) ArrayInstance(arrayClass, length);
+  return std::unique_ptr<ArrayInstance>(array);
+}
+
+void* ArrayInstance::operator new(size_t base, size_t arrayLength)
+{
+  size_t size = base + arrayLength * sizeof(Value);
+  return ::operator new(size);
+}
+
+ArrayInstance::ArrayInstance(ArrayClass* arrayClass, size_t length)
+  : Instance(Kind::Array, arrayClass), mLength(length), mStart(this->contentsStart())
+{
+  for (int32_t i = 0; i < mLength; i++) {
+    this->setArrayElement(i, Value::defaultValue(arrayClass->elementType()));
+  }
 }
 
 ArrayInstance* Instance::asArrayInstance()
@@ -56,20 +71,20 @@ ClassInstance* Instance::asClassInstance()
 
 JvmExpected<Value> ArrayInstance::getArrayElement(int32_t index)
 {
-  if (index < 0 || index >= mContents.size()) {
+  if (index < 0 || index >= mLength) {
     return makeError<Value>(u"java/lang/ArrayIndexOutOfBoundsException");
   }
 
-  return mContents[index];
+  return *this->atIndex(index);
 }
 
 JvmExpected<void> ArrayInstance::setArrayElement(int32_t index, Value value)
 {
-  if (index < 0 || index >= mContents.size()) {
+  if (index < 0 || index >= mLength) {
     return makeError<void>(u"java/lang/ArrayIndexOutOfBoundsException");
   }
 
-  mContents[index] = value;
+  *this->atIndex(index) = value;
 
   return JvmExpected<void>{};
 }

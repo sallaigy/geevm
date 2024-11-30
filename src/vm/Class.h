@@ -130,7 +130,10 @@ public:
 
   /// Returns true iff this class represent an ordinary (nonarray) class that is not an interface.
   bool isClassType() const;
-  bool isArrayType() const;
+  bool isArrayType() const
+  {
+    return mKind == Kind::Array;
+  }
   bool isInterface() const;
 
   bool isInstanceOf(const JClass* other) const;

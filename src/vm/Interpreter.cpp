@@ -601,6 +601,10 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         assert(method->isStatic());
 
         method->getClass()->initialize(mThread);
+        if (mThread.currentException() != nullptr) {
+          break;
+        }
+
         // TODO: Initialization can fail with an exception - check before performing the invocation.
         this->invoke(method);
 

@@ -134,8 +134,7 @@ std::optional<Value> JavaThread::executeCall(JMethod* method, const std::vector<
       if (stackTrace != nullptr) {
         message += u"\n";
 
-        auto& arrayContents = stackTrace->asArrayInstance()->contents();
-        for (Value elem : arrayContents) {
+        for (Value elem : *stackTrace->asArrayInstance()) {
           auto toStringMethod = elem.get<Instance*>()->getClass()->getVirtualMethod(u"toString", u"()Ljava/lang/String;");
           auto ret = this->executeCall(*toStringMethod, {elem});
           assert(ret.has_value());
