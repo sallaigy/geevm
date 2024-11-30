@@ -24,9 +24,6 @@ public abstract class Methods {
   }
 
   public abstract void abstractMethod();
-  public strictfp float strictFpMethod() {
-    return 1.5f;
-  }
 
   public native void nativeMethod();
 

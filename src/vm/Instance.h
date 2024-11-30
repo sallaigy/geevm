@@ -6,6 +6,7 @@
 #include "vm/Frame.h"
 
 #include <cstdint>
+#include <span>
 #include <unordered_map>
 #include <vector>
 
@@ -69,6 +70,14 @@ class ArrayInstance : public Instance
 public:
   ArrayInstance(ArrayClass* arrayClass, size_t length);
 
+  static std::unique_ptr<ArrayInstance> create(ArrayClass* arrayClass, size_t length);
+
+  void* operator new(size_t base, size_t arraySize);
+  void operator delete(void* ptr)
+  {
+    ::operator delete(ptr);
+  }
+
   JvmExpected<Value> getArrayElement(int32_t index);
   JvmExpected<void> setArrayElement(int32_t index, Value value);
 
@@ -88,16 +97,43 @@ public:
 
   int32_t length() const
   {
-    return mContents.size();
+    return mLength;
   }
 
-  const std::vector<Value>& contents() const
+  using const_iterator = const Value*;
+  const_iterator begin() const
   {
-    return mContents;
+    return this->contentsStart();
+  }
+  const_iterator end() const
+  {
+    return this->contentsStart() + this->length();
+  }
+
+  std::span<Value> span()
+  {
+    return std::span<Value>(this->contentsStart(), static_cast<size_t>(this->length()));
   }
 
 private:
-  std::vector<Value> mContents;
+  Value* contentsStart()
+  {
+    return reinterpret_cast<Value*>(reinterpret_cast<char*>(this) + sizeof(ArrayInstance));
+  }
+
+  const Value* contentsStart() const
+  {
+    return reinterpret_cast<const Value*>(reinterpret_cast<const char*>(this) + sizeof(ArrayInstance));
+  }
+
+  Value* atIndex(size_t i)
+  {
+    return contentsStart() + i;
+  }
+
+private:
+  int32_t mLength;
+  Value* mStart;
 };
 
 /// An instance of java.lang.Class

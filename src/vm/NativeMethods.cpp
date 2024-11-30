@@ -58,12 +58,15 @@ static std::optional<Value> java_lang_Double_doubleToRawIntBits(JavaThread& thre
 static std::optional<Value> java_lang_Double_longBitsToDouble(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 
 static std::optional<Value> sun_misc_Unsafe_arrayBaseOffset(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> sun_misc_Unsafe_arrayIndexScale(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> sun_misc_Unsafe_objectFieldOffset(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> sun_misc_Unsafe_storeFence(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> jdk_internal_util_SystemProps_Raw_platformProperties(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> jdk_internal_util_SystemProps_Raw_vmProperties(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> jdk_internal_misc_CDS_getRandomSeedForDumping(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> jdk_internal_misc_Unsafe_compareAndSetInt(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> jdk_internal_misc_Unsafe_compareAndSetReference(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> jdk_internal_misc_Unsafe_getReferenceVolatile(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 
 static std::optional<Value> sun_reflect_Reflection_getCallerClass(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> java_security_AccessController_doPrivileged(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
@@ -198,9 +201,9 @@ void Vm::registerNatives()
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/Unsafe", u"arrayBaseOffset0", u"(Ljava/lang/Class;)I"},
                                       sun_misc_Unsafe_arrayBaseOffset);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/Unsafe", u"arrayIndexScale0", u"(Ljava/lang/Class;)I"},
-                                      sun_misc_Unsafe_arrayBaseOffset);
+                                      sun_misc_Unsafe_arrayIndexScale);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/Unsafe", u"arrayIndexScale", u"(Ljava/lang/Class;)I"},
-                                      sun_misc_Unsafe_arrayBaseOffset);
+                                      sun_misc_Unsafe_arrayIndexScale);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/Unsafe", u"addressSize", u"()I"}, sun_misc_Unsafe_arrayBaseOffset);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/util/SystemProps$Raw", u"platformProperties", u"()[Ljava/lang/String;"},
                                       jdk_internal_util_SystemProps_Raw_platformProperties);
@@ -211,6 +214,13 @@ void Vm::registerNatives()
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/Unsafe", u"storeFence", u"()V"}, sun_misc_Unsafe_storeFence);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/Unsafe", u"compareAndSetInt", u"(Ljava/lang/Object;JII)Z"},
                                       jdk_internal_misc_Unsafe_compareAndSetInt);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/Unsafe", u"compareAndSetLong", u"(Ljava/lang/Object;JJJ)Z"},
+                                      jdk_internal_misc_Unsafe_compareAndSetInt);
+  mNativeMethods.registerNativeMethod(
+      ClassNameAndDescriptor{u"jdk/internal/misc/Unsafe", u"compareAndSetReference", u"(Ljava/lang/Object;JLjava/lang/Object;Ljava/lang/Object;)Z"},
+      jdk_internal_misc_Unsafe_compareAndSetReference);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/Unsafe", u"getReferenceVolatile", u"(Ljava/lang/Object;J)Ljava/lang/Object;"},
+                                      jdk_internal_misc_Unsafe_getReferenceVolatile);
   // mNativeMethods.registerNativeMethod(
   //     ClassNameAndDescriptor{u"sun/misc/Unsafe", u"compareAndSwapObject", u"(Ljava/lang/Object;JLjava/lang/Object;Ljava/lang/Object;)Z"},
   //     sun_misc_Unsafe_compareAndSwapObject);
@@ -422,12 +432,12 @@ std::optional<Value> java_lang_System_arraycopy(JavaThread& thread, CallFrame& f
   int32_t targetPos = args[3].get<int32_t>();
   int32_t len = args[4].get<int32_t>();
 
-  auto& sourceArray = source->asArrayInstance()->contents();
-  assert(sourcePos < sourceArray.size());
+  auto sourceArray = source->asArrayInstance();
+  assert(sourcePos < sourceArray->length());
   assert(target != nullptr);
 
   for (int32_t i = 0; i < len; i++) {
-    Value value = sourceArray.at(sourcePos + i);
+    Value value = *sourceArray->getArrayElement(sourcePos + i);
     target->setArrayElement(targetPos + i, value);
   }
 
@@ -444,7 +454,20 @@ std::optional<Value> java_lang_System_nanoTime(JavaThread& thread, CallFrame& fr
 
 std::optional<Value> sun_misc_Unsafe_arrayBaseOffset(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  return Value::from(0);
+  ClassInstance* cls = args[1].get<Instance*>()->asClassInstance();
+  assert(cls->target()->isArrayType());
+
+  ArrayClass* arrayClass = cls->target()->asArrayClass();
+
+  return Value::from<int32_t>(sizeof(ArrayInstance));
+}
+
+std::optional<Value> sun_misc_Unsafe_arrayIndexScale(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  ClassInstance* clsInstance = args[1].get<Instance*>()->asClassInstance();
+  ArrayClass* arrayClass = clsInstance->target()->asArrayClass();
+
+  return Value::from<int32_t>(sizeof(Value));
 }
 
 std::optional<Value> sun_misc_Unsafe_objectFieldOffset(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
@@ -461,7 +484,41 @@ std::optional<Value> sun_misc_Unsafe_storeFence(JavaThread& thread, CallFrame& f
 
 std::optional<Value> jdk_internal_misc_Unsafe_compareAndSetInt(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  return Value::from<int32_t>(1);
+  Instance* object = args[1].get<Instance*>();
+  int64_t offset = args[2].get<int64_t>();
+  Value* expected = const_cast<Value*>(&args[4]);
+  Value* desired = const_cast<Value*>(&args[5]);
+
+  Value* target = reinterpret_cast<Value*>(reinterpret_cast<char*>(object) + offset);
+  std::atomic_ref<Value*> atomicRef(target);
+
+  bool success = atomicRef.compare_exchange_strong(expected, desired, std::memory_order_seq_cst);
+  return success ? Value::from<int32_t>(1) : Value::from<int32_t>(0);
+}
+
+std::optional<Value> jdk_internal_misc_Unsafe_compareAndSetReference(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  Instance* object = args[1].get<Instance*>();
+  int64_t offset = args[2].get<int64_t>();
+  Value* expected = const_cast<Value*>(&args[4]);
+  Value* desired = const_cast<Value*>(&args[5]);
+
+  Value* target = reinterpret_cast<Value*>(reinterpret_cast<char*>(object) + offset);
+  std::atomic_ref<Value*> atomicRef(target);
+
+  bool success = atomicRef.compare_exchange_strong(expected, desired, std::memory_order_seq_cst);
+  return success ? Value::from<int32_t>(1) : Value::from<int32_t>(0);
+}
+
+std::optional<Value> jdk_internal_misc_Unsafe_getReferenceVolatile(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  Instance* object = args[1].get<Instance*>();
+  int64_t offset = args[2].get<int64_t>();
+
+  Value* target = reinterpret_cast<Value*>(reinterpret_cast<char*>(object) + offset);
+  std::atomic_ref<Value*> atomicRef(target);
+
+  return *atomicRef.load();
 }
 
 std::optional<Value> sun_reflect_Reflection_getCallerClass(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
@@ -593,7 +650,6 @@ std::optional<Value> java_lang_StackTraceElement_initStackTraceElements(JavaThre
 std::optional<Value> java_lang_String_intern(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
   Instance* self = args.at(0).get<Instance*>();
-  auto& stringBytes = self->getFieldValue<Instance*>(u"value", u"[B")->asArrayInstance()->contents();
 
   types::JString str = utils::getStringValue(self);
   Instance* interned = thread.heap().intern(str);
@@ -623,9 +679,11 @@ std::optional<Value> jdk_internal_util_SystemProps_Raw_vmProperties(JavaThread& 
   auto stringArrayCls = thread.resolveClass(u"[Ljava/lang/String;");
 
   auto rawPropsCls = *thread.resolveClass(u"jdk/internal/util/SystemProps$Raw");
-  auto arrayLength = 0;
+  auto arrayLength = 2;
 
   ArrayInstance* propsArray = thread.heap().allocateArray((*stringArrayCls)->asArrayClass(), arrayLength);
+  propsArray->setArrayElement(0, thread.heap().intern(u"java.home"));
+  propsArray->setArrayElement(1, thread.heap().intern(u"/home/gyula/projects/geevm/cmake-build-debug/jdk17"));
 
   return Value::from<Instance*>(propsArray);
 }
