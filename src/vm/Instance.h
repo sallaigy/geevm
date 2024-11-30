@@ -22,16 +22,7 @@ class ClassInstance;
 class Instance
 {
 public:
-  enum class Kind
-  {
-    Object,
-    Array
-  };
-
   explicit Instance(JClass* klass);
-
-protected:
-  Instance(Kind kind, JClass* klass);
 
 public:
   JClass* getClass() const
@@ -60,7 +51,6 @@ public:
   virtual ~Instance() = default;
 
 protected:
-  const Kind mKind;
   JClass* mClass;
   std::vector<Value> mFields;
 };
@@ -141,7 +131,7 @@ class ClassInstance : public Instance
 {
 public:
   explicit ClassInstance(JClass* javaLangClass, JClass* target)
-    : Instance(Kind::Object, javaLangClass), mTarget(target)
+    : Instance(javaLangClass), mTarget(target)
   {
   }
 
