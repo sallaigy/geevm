@@ -62,6 +62,8 @@ public:
     return std::get<T>(mStorage);
   }
 
+  bool operator==(const Value&) const = default;
+
   Value widenToInt()
   {
     return std::visit(
