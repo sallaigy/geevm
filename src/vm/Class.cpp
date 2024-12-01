@@ -312,6 +312,17 @@ std::optional<JField*> JClass::lookupField(const types::JString& name, const typ
   return std::nullopt;
 }
 
+std::optional<JField*> JClass::lookupFieldByName(const types::JString& string)
+{
+  for (auto& [key, field] : mFields) {
+    if (key.first == string) {
+      return field.get();
+    }
+  }
+
+  return std::nullopt;
+}
+
 Value JClass::getStaticFieldValue(const types::JString& name, const types::JString& descriptor)
 {
   NameAndDescriptor pair{name, descriptor};

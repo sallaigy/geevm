@@ -7,6 +7,9 @@
 
 #include <algorithm>
 #include <csignal>
+#include <cstring>
+#include <fcntl.h>
+#include <filesystem>
 #include <iostream>
 #include <unordered_set>
 #include <utility>
@@ -68,6 +71,7 @@ static std::optional<Value> jdk_internal_misc_CDS_getRandomSeedForDumping(JavaTh
 static std::optional<Value> jdk_internal_misc_Unsafe_compareAndSetInt(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> jdk_internal_misc_Unsafe_compareAndSetReference(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> jdk_internal_misc_Unsafe_getReferenceVolatile(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> jdk_internal_misc_Unsafe_getIntVolatile(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 
 static std::optional<Value> sun_reflect_Reflection_getCallerClass(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> java_security_AccessController_doPrivileged(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
@@ -86,6 +90,15 @@ static std::optional<Value> java_lang_StackTraceElement_initStackTraceElements(J
 
 static std::optional<Value> java_lang_String_intern(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> java_lang_StringUTF16_isBigEndian(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+
+static std::optional<Value> java_io_FileDescriptor_getHandle(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> java_io_FileDescriptor_getAppend(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> java_lang_System_setIn0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> java_lang_System_setOut0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> java_lang_System_setErr0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+
+static std::optional<Value> jdk_internal_misc_Signal_findSignal0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> java_io_FileOutputStream_writeBytes(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 
 static std::optional<Value> geevm_test_print(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
@@ -138,6 +151,7 @@ void Vm::registerNatives()
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Object", u"getClass", u"()Ljava/lang/Class;"}, java_lang_Object_getClass);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Object", u"wait", u"(J)V"}, java_lang_Object_wait);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Object", u"wait", u"()V"}, java_lang_Object_wait);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Object", u"notifyAll", u"()V"}, java_lang_Object_wait);
 
   // java.lang.System
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/System", u"registerNatives", u"()V"}, noop);
@@ -146,6 +160,9 @@ void Vm::registerNatives()
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/System", u"arraycopy", u"(Ljava/lang/Object;ILjava/lang/Object;II)V"},
                                       java_lang_System_arraycopy);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/System", u"nanoTime", u"()J"}, java_lang_System_nanoTime);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/System", u"setIn0", u"(Ljava/io/InputStream;)V"}, java_lang_System_setIn0);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/System", u"setOut0", u"(Ljava/io/PrintStream;)V"}, java_lang_System_setOut0);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/System", u"setErr0", u"(Ljava/io/PrintStream;)V"}, java_lang_System_setErr0);
 
   // java.lang.Class
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Class", u"registerNatives", u"()V"}, noop);
@@ -222,6 +239,8 @@ void Vm::registerNatives()
       jdk_internal_misc_Unsafe_compareAndSetReference);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/Unsafe", u"getReferenceVolatile", u"(Ljava/lang/Object;J)Ljava/lang/Object;"},
                                       jdk_internal_misc_Unsafe_getReferenceVolatile);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/Unsafe", u"getIntVolatile", u"(Ljava/lang/Object;J)I"},
+                                      jdk_internal_misc_Unsafe_getIntVolatile);
   // mNativeMethods.registerNativeMethod(
   //     ClassNameAndDescriptor{u"sun/misc/Unsafe", u"compareAndSwapObject", u"(Ljava/lang/Object;JLjava/lang/Object;Ljava/lang/Object;)Z"},
   //     sun_misc_Unsafe_compareAndSwapObject);
@@ -260,6 +279,18 @@ void Vm::registerNatives()
   mNativeMethods.registerNativeMethod(
       ClassNameAndDescriptor{u"java/lang/StackTraceElement", u"initStackTraceElements", u"([Ljava/lang/StackTraceElement;Ljava/lang/Throwable;)V"},
       java_lang_StackTraceElement_initStackTraceElements);
+
+  // java.io.FileDescriptor
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/io/FileDescriptor", u"getHandle", u"(I)J"}, java_io_FileDescriptor_getHandle);
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/io/FileDescriptor", u"getAppend", u"(I)Z"}, java_io_FileDescriptor_getAppend);
+
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/ScopedMemoryAccess", u"registerNatives", u"()V"}, noop);
+
+  // jdk.internal.misc.Signal
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/Signal", u"findSignal0", u"(Ljava/lang/String;)I"},
+                                      jdk_internal_misc_Signal_findSignal0);
+
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/io/FileOutputStream", u"writeBytes", u"([BIIZ)V"}, java_io_FileOutputStream_writeBytes);
 }
 
 std::optional<Value> noop(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
@@ -473,8 +504,20 @@ std::optional<Value> sun_misc_Unsafe_arrayIndexScale(JavaThread& thread, CallFra
 
 std::optional<Value> sun_misc_Unsafe_objectFieldOffset(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  // TODO
-  return Value::from<int64_t>(0);
+  ClassInstance* cls = args[1].get<Instance*>()->asClassInstance();
+  Instance* name = args[2].get<Instance*>();
+
+  auto nameStr = utils::getStringValue(name);
+  auto field = cls->target()->lookupFieldByName(nameStr);
+
+  if (!field.has_value()) {
+    return Value::from<int64_t>(-1);
+  }
+
+  // TODO: If the target is java/lang/Class, this logic won't work
+  auto diff = sizeof(Instance) + (*field)->offset() * sizeof(Value);
+
+  return Value::from<int64_t>(static_cast<int64_t>(diff));
 }
 
 std::optional<Value> sun_misc_Unsafe_storeFence(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
@@ -487,31 +530,60 @@ std::optional<Value> jdk_internal_misc_Unsafe_compareAndSetInt(JavaThread& threa
 {
   Instance* object = args[1].get<Instance*>();
   int64_t offset = args[2].get<int64_t>();
-  Value* expected = const_cast<Value*>(&args[4]);
-  Value* desired = const_cast<Value*>(&args[5]);
+  Value expected = args[4];
+  Value desired = args[5];
 
   Value* target = reinterpret_cast<Value*>(reinterpret_cast<char*>(object) + offset);
-  std::atomic_ref<Value*> atomicRef(target);
 
-  bool success = atomicRef.compare_exchange_strong(expected, desired, std::memory_order_seq_cst);
-  return success ? Value::from<int32_t>(1) : Value::from<int32_t>(0);
+  if (*target == expected) {
+    *target = desired;
+    return Value::from<int32_t>(1);
+  } else {
+    return Value::from<int32_t>(0);
+  }
+
+  // std::atomic_ref<Value*> atomicRef(target);
+  //
+  // Value* expectedPtr = &expected;
+  // Value* desiredPtr = &desired;
+  //
+  // bool bitwise = std::memcmp(target, expectedPtr, sizeof(Value));
+  //
+  // bool success = atomicRef.compare_exchange_strong(expectedPtr, desiredPtr, std::memory_order_seq_cst);
+  // return success ? Value::from<int32_t>(1) : Value::from<int32_t>(0);
+  // if (*target == expected) {
+  // }
 }
 
 std::optional<Value> jdk_internal_misc_Unsafe_compareAndSetReference(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
   Instance* object = args[1].get<Instance*>();
   int64_t offset = args[2].get<int64_t>();
-  Value* expected = const_cast<Value*>(&args[4]);
-  Value* desired = const_cast<Value*>(&args[5]);
+  Value expected = args[4];
+  Value desired = args[5];
+
+  Value* target = reinterpret_cast<Value*>(reinterpret_cast<char*>(object) + offset);
+
+  if (*target == expected) {
+    *target = desired;
+    return Value::from<int32_t>(1);
+  } else {
+    return Value::from<int32_t>(0);
+  }
+}
+
+std::optional<Value> jdk_internal_misc_Unsafe_getReferenceVolatile(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  Instance* object = args[1].get<Instance*>();
+  int64_t offset = args[2].get<int64_t>();
 
   Value* target = reinterpret_cast<Value*>(reinterpret_cast<char*>(object) + offset);
   std::atomic_ref<Value*> atomicRef(target);
 
-  bool success = atomicRef.compare_exchange_strong(expected, desired, std::memory_order_seq_cst);
-  return success ? Value::from<int32_t>(1) : Value::from<int32_t>(0);
+  return *atomicRef.load();
 }
 
-std::optional<Value> jdk_internal_misc_Unsafe_getReferenceVolatile(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+std::optional<Value> jdk_internal_misc_Unsafe_getIntVolatile(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
   Instance* object = args[1].get<Instance*>();
   int64_t offset = args[2].get<int64_t>();
@@ -670,7 +742,19 @@ std::optional<Value> jdk_internal_util_SystemProps_Raw_platformProperties(JavaTh
   auto rawPropsCls = *thread.resolveClass(u"jdk/internal/util/SystemProps$Raw");
   auto arrayLength = rawPropsCls->getStaticFieldValue<int32_t>(u"FIXED_LENGTH", u"I");
 
+  namespace fs = std::filesystem;
+
+  auto temp = fs::temp_directory_path().u16string();
+
   ArrayInstance* propsArray = thread.heap().allocateArray((*stringArrayCls)->asArrayClass(), arrayLength);
+  propsArray->setArrayElement(18, thread.heap().intern(temp));
+  propsArray->setArrayElement(36, thread.heap().intern(temp));
+  propsArray->setArrayElement(37, thread.heap().intern(temp));
+  propsArray->setArrayElement(38, thread.heap().intern(u"user"));
+  propsArray->setArrayElement(4, thread.heap().intern(u"UTF-8"));
+  propsArray->setArrayElement(19, thread.heap().intern(u"\n"));
+  propsArray->setArrayElement(5, thread.heap().intern(u"/"));
+  propsArray->setArrayElement(23, thread.heap().intern(u":"));
 
   return Value::from<Instance*>(propsArray);
 }
@@ -692,4 +776,84 @@ std::optional<Value> jdk_internal_util_SystemProps_Raw_vmProperties(JavaThread& 
 std::optional<Value> jdk_internal_misc_CDS_getRandomSeedForDumping(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
   return Value::from<int64_t>(0);
+}
+
+std::optional<Value> java_io_FileDescriptor_getHandle(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  // This is only relevant for Windows
+  return Value::from<int64_t>(-1);
+}
+
+std::optional<Value> java_io_FileDescriptor_getAppend(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  int32_t fd = args[0].get<int32_t>();
+  if (fcntl(fd, F_GETFD) & O_APPEND) {
+    return Value::from<int32_t>(1);
+  }
+
+  return Value::from<int32_t>(0);
+}
+
+std::optional<Value> java_lang_System_setIn0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  auto systemCls = *thread.resolveClass(u"java/lang/System");
+  Instance* stream = args.at(0).get<Instance*>();
+
+  systemCls->setStaticFieldValue(u"in", u"Ljava/io/InputStream;", Value::from(stream));
+  return std::nullopt;
+}
+
+std::optional<Value> java_lang_System_setOut0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  auto systemCls = *thread.resolveClass(u"java/lang/System");
+  Instance* stream = args.at(0).get<Instance*>();
+
+  systemCls->setStaticFieldValue(u"out", u"Ljava/io/PrintStream;", Value::from(stream));
+  return std::nullopt;
+}
+
+std::optional<Value> java_lang_System_setErr0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  auto systemCls = *thread.resolveClass(u"java/lang/System");
+  Instance* stream = args.at(0).get<Instance*>();
+
+  systemCls->setStaticFieldValue(u"err", u"Ljava/io/PrintStream;", Value::from(stream));
+  return std::nullopt;
+}
+
+std::optional<Value> jdk_internal_misc_Signal_findSignal0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  Instance* sigName = args.at(0).get<Instance*>();
+
+  static std::unordered_map<types::JStringRef, int32_t> signalMap{{u"HUP", SIGHUP}};
+
+  auto nameStr = utils::getStringValue(sigName);
+
+  if (auto it = signalMap.find(nameStr); it != signalMap.end()) {
+    Value::from<int32_t>(it->second);
+  }
+
+  return Value::from<int32_t>(-1);
+}
+
+std::optional<Value> java_io_FileOutputStream_writeBytes(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  auto self = args.at(0).get<Instance*>();
+  auto bytes = args.at(1).get<Instance*>()->asArrayInstance();
+  auto offset = args.at(2).get<int32_t>();
+  auto length = args.at(3).get<int32_t>();
+  auto append = args.at(4).get<int32_t>() == 1;
+
+  auto descriptor = self->getFieldValue<Instance*>(u"fd", u"Ljava/io/FileDescriptor;");
+  auto fd = descriptor->getFieldValue<int32_t>(u"fd", u"I");
+
+  std::vector<int8_t> buffer;
+  for (auto& v : *bytes) {
+    buffer.push_back(v.get<int8_t>());
+  }
+
+  FILE* fp = fdopen(fd, "w");
+  fwrite(reinterpret_cast<char*>(buffer.data() + offset), sizeof(int8_t), length, fp);
+
+  return std::nullopt;
 }

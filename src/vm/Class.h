@@ -108,6 +108,7 @@ public:
   void setStaticFieldValue(size_t offset, Value value);
 
   std::optional<JField*> lookupField(const types::JString& name, const types::JString& descriptor);
+  std::optional<JField*> lookupFieldByName(const types::JString& string);
 
   const std::unordered_map<NameAndDescriptor, std::unique_ptr<JField>, PairHash>& fields() const
   {
