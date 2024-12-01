@@ -18,7 +18,7 @@ void Vm::initialize()
 
   auto threadGroupCls = this->requireClass(u"java/lang/ThreadGroup");
 
-  auto mainThreadGroup = heap().allocate(threadGroupCls->asInstanceClass());
+  auto mainThreadGroup = heap().allocate<Instance>(threadGroupCls->asInstanceClass());
   mainThreadGroup->setFieldValue<Instance*>(u"name", u"Ljava/lang/String;", mHeap.intern(u"main"));
   mainThreadGroup->setFieldValue<int32_t>(u"maxPriority", u"I", 10);
 

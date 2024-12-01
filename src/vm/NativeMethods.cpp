@@ -1,6 +1,7 @@
 #include "vm/NativeMethods.h"
 
 #include "VmUtils.h"
+#include "vm/Frame.h"
 #include "vm/Thread.h"
 #include "vm/Vm.h"
 

@@ -109,7 +109,7 @@ void JClass::prepare(BootstrapClassLoader& classLoader, JavaHeap& heap)
   }
 
   auto classClass = classLoader.loadClass(u"java/lang/Class");
-  mClassInstance = std::make_unique<ClassInstance>(*classClass, this);
+  mClassInstance = heap.allocate<ClassInstance>((*classClass)->asInstanceClass(), this);
 
   mStatus = Status::Prepared;
 }
@@ -201,8 +201,6 @@ void InstanceClass::linkFields()
 
     NameAndDescriptor key{fieldName, descriptor};
     mFields.try_emplace(key, std::move(jfield));
-
-    // mFields.insert_or_assign(, std::move(jfield));
   }
 }
 
@@ -468,4 +466,9 @@ void InstanceClass::initializeRuntimeConstantPool(StringHeap& stringHeap, Bootst
   if (mRuntimeConstantPool == nullptr) {
     mRuntimeConstantPool = std::make_unique<RuntimeConstantPool>(mClassFile->constantPool(), stringHeap, classLoader);
   }
+}
+
+Instance* JClass::classInstance() const
+{
+  return mClassInstance;
 }

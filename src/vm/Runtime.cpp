@@ -67,7 +67,7 @@ Instance* RuntimeConstantPool::getString(types::u2 index)
   assert(entry.tag == ConstantPool::Tag::CONSTANT_String);
 
   types::JStringRef utf8 = mConstantPool.getString(entry.data.stringInfo.stringIndex);
-  auto [res, _] = mStrings.try_emplace(index, mStringHeap.intern(utf8));
+  auto [res, _] = mStrings.try_emplace(index, mStringHeap.intern(types::JString{utf8}));
 
   return res->second;
 }
