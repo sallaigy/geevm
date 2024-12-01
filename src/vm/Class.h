@@ -2,7 +2,6 @@
 #define GEEVM_VM_CLASS_H
 
 #include "Frame.h"
-#include "Heap.h"
 #include "Thread.h"
 
 #include <unordered_map>
@@ -20,6 +19,7 @@ namespace geevm
 class Vm;
 class StringHeap;
 class InstanceClass;
+class ClassInstance;
 class ArrayClass;
 class JMethod;
 class JavaHeap;
@@ -56,9 +56,13 @@ protected:
   JClass(Kind kind, types::JString className);
 
 public:
+  JClass(const JClass&) = delete;
+  JClass& operator=(const JClass&) = delete;
+
+  virtual ~JClass() = default;
+
   // Basic class metadata
   //==----------------------------------------------------------------------==//
-
   const types::JString& className() const
   {
     return mClassName;
@@ -76,10 +80,7 @@ public:
     return mSuperInterfaces;
   }
 
-  Instance* classInstance() const
-  {
-    return mClassInstance.get();
-  }
+  Instance* classInstance() const;
 
   // Methods and fields
   //==----------------------------------------------------------------------==//
@@ -111,6 +112,18 @@ public:
   const std::unordered_map<NameAndDescriptor, std::unique_ptr<JField>, PairHash>& fields() const
   {
     return mFields;
+  }
+
+  size_t numInstanceFields() const
+  {
+    // TODO: This should be a constant operation
+    size_t count = 0;
+    for (auto& [key, field] : mFields) {
+      if (!field->isStatic()) {
+        count++;
+      }
+    }
+    return count;
   }
 
   // Static polymorphism
@@ -167,7 +180,7 @@ private:
   JClass* mSuperClass = nullptr;
   std::vector<JClass*> mSuperInterfaces;
 
-  std::unique_ptr<Instance> mClassInstance;
+  ClassInstance* mClassInstance;
 };
 
 class InstanceClass : public JClass
