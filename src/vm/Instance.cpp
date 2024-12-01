@@ -2,10 +2,9 @@
 
 using namespace geevm;
 
-Instance::Instance(JClass* klass)
-  : mClass(klass)
+Instance::Instance(JClass* klass, Value* fieldsStartOffset)
+  : mClass(klass), mFields(fieldsStartOffset)
 {
-  mFields.resize(klass->fields().size(), Value::from<int32_t>(0));
   for (const auto& [key, field] : klass->fields()) {
     if (!hasAccessFlag(field->accessFlags(), FieldAccessFlags::ACC_STATIC)) {
       mFields[field->offset()] = Value::defaultValue(field->fieldType());
@@ -29,7 +28,7 @@ Value Instance::getFieldValue(types::JStringRef fieldName, types::JStringRef des
   assert(mClass->fields().contains(key));
   size_t offset = mClass->fields().at(key)->offset();
 
-  return mFields.at(offset);
+  return mFields[offset];
 }
 
 std::unique_ptr<ArrayInstance> ArrayInstance::create(ArrayClass* arrayClass, size_t length)
@@ -45,7 +44,7 @@ void* ArrayInstance::operator new(size_t base, size_t arrayLength)
 }
 
 ArrayInstance::ArrayInstance(ArrayClass* arrayClass, size_t length)
-  : Instance(arrayClass), mLength(length), mStart(this->contentsStart())
+  : Instance(arrayClass, reinterpret_cast<Value*>(reinterpret_cast<char*>(this) + sizeof(ArrayInstance))), mLength(length)
 {
   for (int32_t i = 0; i < mLength; i++) {
     this->setArrayElement(i, Value::defaultValue(arrayClass->elementType()));

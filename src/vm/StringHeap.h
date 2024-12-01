@@ -18,11 +18,11 @@ public:
   {
   }
 
-  Instance* intern(types::JStringRef utf8);
+  Instance* intern(const types::JString& utf8);
 
 private:
   Vm& mVm;
-  std::unordered_map<types::JStringRef, Instance*> mInternedStrings;
+  std::unordered_map<types::JString, Instance*> mInternedStrings;
 };
 
 } // namespace geevm

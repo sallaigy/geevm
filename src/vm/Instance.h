@@ -21,8 +21,10 @@ class ClassInstance;
 
 class Instance
 {
-public:
-  explicit Instance(JClass* klass);
+  friend class JavaHeap;
+
+protected:
+  explicit Instance(JClass* klass, Value* fieldStartOffset);
 
 public:
   JClass* getClass() const
@@ -48,11 +50,20 @@ public:
   ArrayInstance* asArrayInstance();
   ClassInstance* asClassInstance();
 
+  Value* fieldsStart()
+  {
+    return mFields;
+  }
+  const Value* fieldsStart() const
+  {
+    return mFields;
+  }
+
   virtual ~Instance() = default;
 
 protected:
   JClass* mClass;
-  std::vector<Value> mFields;
+  Value* mFields;
 };
 
 class ArrayInstance : public Instance
@@ -108,12 +119,12 @@ public:
 private:
   Value* contentsStart()
   {
-    return reinterpret_cast<Value*>(reinterpret_cast<char*>(this) + sizeof(ArrayInstance));
+    return this->fieldsStart();
   }
 
   const Value* contentsStart() const
   {
-    return reinterpret_cast<const Value*>(reinterpret_cast<const char*>(this) + sizeof(ArrayInstance));
+    return this->fieldsStart();
   }
 
   Value* atIndex(size_t i)
@@ -123,17 +134,21 @@ private:
 
 private:
   int32_t mLength;
-  Value* mStart;
 };
 
 /// An instance of java.lang.Class
 class ClassInstance : public Instance
 {
-public:
-  explicit ClassInstance(JClass* javaLangClass, JClass* target)
-    : Instance(javaLangClass), mTarget(target)
+  friend class JavaHeap;
+
+private:
+  ClassInstance(JClass* javaLangClass, Value* fieldsStart, JClass* target)
+    : Instance(javaLangClass, fieldsStart), mTarget(target)
   {
   }
+
+public:
+  static std::unique_ptr<ClassInstance> create(JClass* javaLangClass, JClass* target);
 
   JClass* target() const
   {

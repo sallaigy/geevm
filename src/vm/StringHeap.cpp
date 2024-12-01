@@ -3,7 +3,7 @@
 
 using namespace geevm;
 
-Instance* StringHeap::intern(types::JStringRef utf8)
+Instance* StringHeap::intern(const types::JString& utf8)
 {
   if (auto it = mInternedStrings.find(utf8); it != mInternedStrings.end()) {
     return it->second;
@@ -26,7 +26,7 @@ Instance* StringHeap::intern(types::JStringRef utf8)
     stringContents->setArrayElement<int8_t>(i, std::bit_cast<int8_t>(bytes[i]));
   }
 
-  Instance* newInstance = mVm.heap().allocate((*stringClass)->asInstanceClass());
+  Instance* newInstance = mVm.heap().allocate<Instance>((*stringClass)->asInstanceClass());
   newInstance->setFieldValue<Instance*>(u"value", u"[B", stringContents);
   // newInstance->setFieldValue<int8_t>(u"coder", u"B", Value::from<int8_t>(-1));
 
