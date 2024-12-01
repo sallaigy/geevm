@@ -27,7 +27,7 @@ void Vm::initialize()
 
   JClass* systemCls = this->requireClass(u"java/lang/System");
   auto initMethod = systemCls->getMethod(u"initPhase1", u"()V");
-  // mMainThread.executeCall(*initMethod, {});
+  mMainThread.executeCall(*initMethod, {});
 }
 
 JvmExpected<JClass*> Vm::resolveClass(const types::JString& name)
