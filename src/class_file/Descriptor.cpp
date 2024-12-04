@@ -168,3 +168,27 @@ types::JString MethodDescriptor::formatAsJavaSignature(const types::JString& nam
   str += u")";
   return str;
 }
+
+std::size_t FieldType::sizeOf() const
+{
+  if (dimensions() != 0) {
+    return sizeof(void*);
+  }
+
+  return this->map<std::size_t>(
+      [](const PrimitiveType& primitive) {
+        switch (primitive) {
+          case PrimitiveType::Byte: return sizeof(int8_t);
+          case PrimitiveType::Char: return sizeof(char16_t);
+          case PrimitiveType::Double: return sizeof(double);
+          case PrimitiveType::Float: return sizeof(float);
+          case PrimitiveType::Int: return sizeof(int32_t);
+          case PrimitiveType::Long: return sizeof(int64_t);
+          case PrimitiveType::Short: return sizeof(int16_t);
+          // TODO
+          case PrimitiveType::Boolean: return sizeof(int32_t);
+        }
+        std::unreachable();
+      },
+      [](const types::JString&) { return sizeof(void*); });
+}

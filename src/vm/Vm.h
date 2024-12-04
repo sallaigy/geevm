@@ -51,6 +51,7 @@ private:
 
   /// Resolves and initializes a core class
   JClass* requireClass(const types::JString& name);
+  void setUpJavaLangClass();
 
 private:
   BootstrapClassLoader mBootstrapClassLoader;
