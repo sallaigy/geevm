@@ -48,13 +48,12 @@ public:
     requires(std::is_base_of_v<Instance, T>)
   T* allocate(InstanceClass* klass, Args&&... args)
   {
-    size_t numFields = klass->numInstanceFields();
-    size_t size = sizeof(T) + numFields * sizeof(Value);
+    size_t size = klass->allocationSize();
     void* mem = ::operator new(size);
 
     auto* fieldsStart = reinterpret_cast<Value*>(reinterpret_cast<char*>(mem) + sizeof(T));
 
-    auto object = new (mem) T(klass, fieldsStart, std::forward<Args>(args)...);
+    auto object = new (mem) T(klass, std::forward<Args>(args)...);
     ObjectPtr ptr{object, ObjectDeleter{}};
     return static_cast<T*>(mHeap.emplace_back(std::move(ptr)).get());
   }

@@ -37,6 +37,7 @@ public:
   }
 
   JvmExpected<JClass*> loadClass(const types::JString& name);
+  JvmExpected<JClass*> loadUnpreparedClass(const types::JString& name);
 
   void registerClassLoader(std::unique_ptr<ClassLoader> classLoader);
 

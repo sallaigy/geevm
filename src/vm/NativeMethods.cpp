@@ -69,6 +69,7 @@ static std::optional<Value> jdk_internal_util_SystemProps_Raw_platformProperties
 static std::optional<Value> jdk_internal_util_SystemProps_Raw_vmProperties(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> jdk_internal_misc_CDS_getRandomSeedForDumping(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> jdk_internal_misc_Unsafe_compareAndSetInt(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+static std::optional<Value> jdk_internal_misc_Unsafe_compareAndSetLong(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> jdk_internal_misc_Unsafe_compareAndSetReference(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> jdk_internal_misc_Unsafe_getReferenceVolatile(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> jdk_internal_misc_Unsafe_getIntVolatile(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
@@ -233,7 +234,7 @@ void Vm::registerNatives()
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/Unsafe", u"compareAndSetInt", u"(Ljava/lang/Object;JII)Z"},
                                       jdk_internal_misc_Unsafe_compareAndSetInt);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/Unsafe", u"compareAndSetLong", u"(Ljava/lang/Object;JJJ)Z"},
-                                      jdk_internal_misc_Unsafe_compareAndSetInt);
+                                      jdk_internal_misc_Unsafe_compareAndSetLong);
   mNativeMethods.registerNativeMethod(
       ClassNameAndDescriptor{u"jdk/internal/misc/Unsafe", u"compareAndSetReference", u"(Ljava/lang/Object;JLjava/lang/Object;Ljava/lang/Object;)Z"},
       jdk_internal_misc_Unsafe_compareAndSetReference);
@@ -514,10 +515,7 @@ std::optional<Value> sun_misc_Unsafe_objectFieldOffset(JavaThread& thread, CallF
     return Value::from<int64_t>(-1);
   }
 
-  // TODO: If the target is java/lang/Class, this logic won't work
-  auto diff = sizeof(Instance) + (*field)->offset() * sizeof(Value);
-
-  return Value::from<int64_t>(static_cast<int64_t>(diff));
+  return Value::from<int64_t>((*field)->offset());
 }
 
 std::optional<Value> sun_misc_Unsafe_storeFence(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
@@ -526,21 +524,27 @@ std::optional<Value> sun_misc_Unsafe_storeFence(JavaThread& thread, CallFrame& f
   return std::nullopt;
 }
 
-std::optional<Value> jdk_internal_misc_Unsafe_compareAndSetInt(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+template<class T>
+std::optional<Value> compareAndSet(const std::vector<Value>& args)
 {
   Instance* object = args[1].get<Instance*>();
   int64_t offset = args[2].get<int64_t>();
-  Value expected = args[4];
-  Value desired = args[5];
+  T expected = args[4].get<T>();
+  T desired = args[5].get<T>();
 
-  Value* target = reinterpret_cast<Value*>(reinterpret_cast<char*>(object) + offset);
+  T* target = reinterpret_cast<T*>(reinterpret_cast<char*>(object) + offset);
 
   if (*target == expected) {
     *target = desired;
     return Value::from<int32_t>(1);
-  } else {
-    return Value::from<int32_t>(0);
   }
+
+  return Value::from<int32_t>(0);
+}
+
+std::optional<Value> jdk_internal_misc_Unsafe_compareAndSetInt(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  return compareAndSet<int32_t>(args);
 
   // std::atomic_ref<Value*> atomicRef(target);
   //
@@ -555,21 +559,14 @@ std::optional<Value> jdk_internal_misc_Unsafe_compareAndSetInt(JavaThread& threa
   // }
 }
 
+std::optional<Value> jdk_internal_misc_Unsafe_compareAndSetLong(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  return compareAndSet<int64_t>(args);
+}
+
 std::optional<Value> jdk_internal_misc_Unsafe_compareAndSetReference(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
-  Instance* object = args[1].get<Instance*>();
-  int64_t offset = args[2].get<int64_t>();
-  Value expected = args[4];
-  Value desired = args[5];
-
-  Value* target = reinterpret_cast<Value*>(reinterpret_cast<char*>(object) + offset);
-
-  if (*target == expected) {
-    *target = desired;
-    return Value::from<int32_t>(1);
-  } else {
-    return Value::from<int32_t>(0);
-  }
+  return compareAndSet<Instance*>(args);
 }
 
 std::optional<Value> jdk_internal_misc_Unsafe_getReferenceVolatile(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
@@ -588,10 +585,10 @@ std::optional<Value> jdk_internal_misc_Unsafe_getIntVolatile(JavaThread& thread,
   Instance* object = args[1].get<Instance*>();
   int64_t offset = args[2].get<int64_t>();
 
-  Value* target = reinterpret_cast<Value*>(reinterpret_cast<char*>(object) + offset);
-  std::atomic_ref<Value*> atomicRef(target);
+  int32_t* target = reinterpret_cast<int32_t*>(reinterpret_cast<char*>(object) + offset);
+  std::atomic_ref<int32_t*> atomicRef(target);
 
-  return *atomicRef.load();
+  return Value::from<int32_t>(*atomicRef.load());
 }
 
 std::optional<Value> sun_reflect_Reflection_getCallerClass(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)

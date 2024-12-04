@@ -24,7 +24,7 @@ class Instance
   friend class JavaHeap;
 
 protected:
-  explicit Instance(JClass* klass, Value* fieldStartOffset);
+  explicit Instance(JClass* klass);
 
 public:
   JClass* getClass() const
@@ -50,20 +50,28 @@ public:
   ArrayInstance* asArrayInstance();
   ClassInstance* asClassInstance();
 
-  Value* fieldsStart()
-  {
-    return mFields;
-  }
-  const Value* fieldsStart() const
-  {
-    return mFields;
-  }
+  void* fieldsStart();
+  const void* fieldsStart() const;
 
   virtual ~Instance() = default;
 
+private:
+  template<JvmType T>
+  void setFieldValue(size_t offset, const T& value)
+  {
+    auto* ptr = reinterpret_cast<T*>(reinterpret_cast<char*>(this) + offset);
+    *ptr = value;
+  }
+
+  template<JvmType T>
+  T getFieldValue(size_t offset)
+  {
+    auto* ptr = reinterpret_cast<T*>(reinterpret_cast<char*>(this) + offset);
+    return *ptr;
+  }
+
 protected:
   JClass* mClass;
-  Value* mFields;
 };
 
 class ArrayInstance : public Instance
@@ -119,12 +127,12 @@ public:
 private:
   Value* contentsStart()
   {
-    return this->fieldsStart();
+    return reinterpret_cast<Value*>(this->fieldsStart());
   }
 
   const Value* contentsStart() const
   {
-    return this->fieldsStart();
+    return reinterpret_cast<const Value*>(this->fieldsStart());
   }
 
   Value* atIndex(size_t i)
@@ -141,9 +149,8 @@ class ClassInstance : public Instance
 {
   friend class JavaHeap;
 
-private:
-  ClassInstance(JClass* javaLangClass, Value* fieldsStart, JClass* target)
-    : Instance(javaLangClass, fieldsStart), mTarget(target)
+  ClassInstance(JClass* javaLangClass, JClass* target)
+    : Instance(javaLangClass), mTarget(target)
   {
   }
 

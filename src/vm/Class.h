@@ -34,6 +34,7 @@ struct ClassAndMethod
 
 class JClass
 {
+  friend class Vm;
   friend class BootstrapClassLoader;
 
 public:
@@ -163,6 +164,8 @@ public:
     return mStatus == Status::UnderInitialization;
   }
 
+  size_t headerSize() const;
+
 private:
   void linkSuperClass(types::JStringRef className, BootstrapClassLoader& classLoader);
   void linkSuperInterfaces(const std::vector<types::JStringRef>& interfaces, BootstrapClassLoader& classLoader);
@@ -205,6 +208,11 @@ public:
 
   bool isSubClassOf(InstanceClass* other) const;
 
+  size_t allocationSize() const
+  {
+    return mAllocationSize;
+  }
+
 private:
   void initializeRuntimeConstantPool(StringHeap& stringHeap, BootstrapClassLoader& classLoader);
   Value getInitialFieldValue(const FieldType& fieldType, types::u2 cvIndex);
@@ -217,6 +225,7 @@ protected:
 private:
   std::unique_ptr<ClassFile> mClassFile;
   std::unique_ptr<RuntimeConstantPool> mRuntimeConstantPool;
+  size_t mAllocationSize;
 };
 
 class ArrayClass : public JClass

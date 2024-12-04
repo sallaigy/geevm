@@ -1,6 +1,8 @@
 #ifndef GEEVM_JVMTYPES_H
 #define GEEVM_JVMTYPES_H
 
+#include "common/TypeTraits.h"
+
 #include <cstdint>
 #include <string>
 
