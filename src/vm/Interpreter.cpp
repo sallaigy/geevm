@@ -117,12 +117,15 @@ static void notImplemented(Opcode opcode)
 
 std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t startPc)
 {
+  static int ycnt = 0;
   CodeCursor cursor(code.bytes(), startPc);
 
   while (cursor.hasNext()) {
     Opcode opcode = cursor.next();
     CallFrame& frame = mThread.currentFrame();
     RuntimeConstantPool& runtimeConstantPool = frame.currentClass()->runtimeConstantPool();
+
+    // std::cout << types::convertJString(frame.currentClass()->className()) << "#" << types::convertJString(frame.currentMethod()->name()) << std::endl;
 
     switch (opcode) {
       using enum Opcode;
@@ -560,7 +563,23 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         }
 
         assert(objectRef->getClass()->isInstanceOf(field->getClass()));
-        objectRef->setFieldValue(field->name(), field->descriptor(), value);
+
+        if (field->fieldType().dimensions() != 0 || field->fieldType().asObjectName().has_value()) {
+          objectRef->setFieldValue(field->name(), field->descriptor(), value);
+        } else if (auto primitiveTy = field->fieldType().asPrimitive(); primitiveTy.has_value()) {
+          switch (*primitiveTy) {
+            case PrimitiveType::Byte: objectRef->setFieldValue(field->name(), field->descriptor(), Value::from<int8_t>(value.get<int32_t>())); break;
+            case PrimitiveType::Char: objectRef->setFieldValue(field->name(), field->descriptor(), Value::from<char16_t>(value.get<int32_t>())); break;
+            case PrimitiveType::Double: objectRef->setFieldValue(field->name(), field->descriptor(), value); break;
+            case PrimitiveType::Float: objectRef->setFieldValue(field->name(), field->descriptor(), value); break;
+            case PrimitiveType::Int: objectRef->setFieldValue(field->name(), field->descriptor(), value); break;
+            case PrimitiveType::Long: objectRef->setFieldValue(field->name(), field->descriptor(), value); break;
+            case PrimitiveType::Short: objectRef->setFieldValue(field->name(), field->descriptor(), value.get<int16_t>()); break;
+            case PrimitiveType::Boolean: objectRef->setFieldValue(field->name(), field->descriptor(), value); break;
+          }
+        } else {
+          assert(false);
+        }
 
         break;
       }

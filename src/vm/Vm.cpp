@@ -9,8 +9,8 @@ void Vm::initialize()
 {
   this->registerNatives();
 
+  this->setUpJavaLangClass();
   this->requireClass(u"java/lang/Object");
-  this->requireClass(u"java/lang/Class");
   JClass* javaLangString = this->requireClass(u"java/lang/String");
   javaLangString->setStaticFieldValue(u"COMPACT_STRINGS", u"Z", Value::from<int32_t>(0));
 
@@ -43,4 +43,15 @@ JClass* Vm::requireClass(const types::JString& name)
   (*klass)->initialize(mMainThread);
 
   return *klass;
+}
+
+void Vm::setUpJavaLangClass()
+{
+  auto klass = this->bootstrapClassLoader().loadUnpreparedClass(u"java/lang/Class");
+  assert(klass.has_value());
+
+  auto classClass = (*klass)->asInstanceClass();
+  classClass->linkFields();
+
+  classClass->prepare(mBootstrapClassLoader, mHeap);
 }

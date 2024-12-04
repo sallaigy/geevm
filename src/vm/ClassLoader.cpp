@@ -26,7 +26,7 @@ JvmExpected<JClass*> BootstrapClassLoader::loadClass(const types::JString& name)
   if (location.has_value()) {
     loadResult = location->resolve();
   } else {
-    for (auto& classLoader : mClassLoaders) {
+    for (const auto& classLoader : mClassLoaders) {
       loadResult = classLoader->loadClass(name);
       if (loadResult.has_value() && *loadResult != nullptr) {
         break;
@@ -43,6 +43,25 @@ JvmExpected<JClass*> BootstrapClassLoader::loadClass(const types::JString& name)
 
   klass->initializeRuntimeConstantPool(mVm.heap().stringHeap(), *this);
   klass->prepare(*this, mVm.heap());
+
+  return result->second.get();
+}
+
+JvmExpected<JClass*> BootstrapClassLoader::loadUnpreparedClass(const types::JString& name)
+{
+  if (auto it = mClasses.find(name); it != mClasses.end()) {
+    return it->second.get();
+  }
+
+  std::optional<ClassLocation> location = mClassPath.search(name);
+  assert(location.has_value());
+  auto loadResult = location->resolve();
+  assert(loadResult.has_value());
+
+  auto [result, _] = mClasses.try_emplace(name, std::move(*loadResult));
+  auto* klass = result->second->asInstanceClass();
+
+  klass->initializeRuntimeConstantPool(mVm.heap().stringHeap(), *this);
 
   return result->second.get();
 }

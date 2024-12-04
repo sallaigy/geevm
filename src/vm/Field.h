@@ -17,7 +17,7 @@ class JField
 {
 public:
   JField(const FieldInfo& fieldInfo, InstanceClass* klass, types::JString name, types::JString descriptor, FieldType fieldType, size_t offset)
-    : mFieldInfo(fieldInfo), mClass(klass), mName(std::move(name)), mDescriptor(descriptor), mFieldType(std::move(fieldType)), mOffset(offset)
+    : mFieldInfo(fieldInfo), mClass(klass), mFieldType(std::move(fieldType)), mName(std::move(name)), mDescriptor(descriptor), mOffset(offset)
   {
   }
 

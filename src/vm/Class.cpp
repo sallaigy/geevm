@@ -46,7 +46,9 @@ const InstanceClass* JClass::asInstanceClass() const
 }
 
 InstanceClass::InstanceClass(std::unique_ptr<ClassFile> classFile)
-  : JClass(Kind::Instance, types::JString{classFile->constantPool().getClassName(classFile->thisClass())}), mClassFile(std::move(classFile))
+  : JClass(Kind::Instance, types::JString{classFile->constantPool().getClassName(classFile->thisClass())}),
+    mClassFile(std::move(classFile)),
+    mAllocationSize(this->headerSize())
 {
 }
 
@@ -171,15 +173,27 @@ void JClass::initialize(JavaThread& thread)
   mStatus = Status::Initialized;
 }
 
+static std::size_t alignTo(size_t size, size_t alignment)
+{
+  return (size + (alignment - 1)) & ~(alignment - 1);
+}
+
 void InstanceClass::linkFields()
 {
-  size_t instanceFieldOffset = 0;
+  if (!mFields.empty()) {
+    return;
+  }
+
   size_t staticFieldOffset = 0;
 
+  size_t currentOffset = this->headerSize();
   if (this->superClass() != nullptr) {
     for (auto& [name, field] : this->superClass()->fields()) {
       if (!field->isStatic()) {
-        mFields.try_emplace(name, std::make_unique<JField>(field->fieldInfo(), this, name.first, name.second, field->fieldType(), instanceFieldOffset++));
+        size_t fieldSize = field->fieldType().sizeOf();
+        currentOffset = alignTo(currentOffset, fieldSize);
+        mFields.try_emplace(name, std::make_unique<JField>(field->fieldInfo(), this, name.first, name.second, field->fieldType(), currentOffset));
+        currentOffset += fieldSize;
       }
     }
   }
@@ -196,12 +210,17 @@ void InstanceClass::linkFields()
       jfield = std::make_unique<JField>(field, this, types::JString{fieldName}, types::JString{descriptor}, *fieldType, staticFieldOffset++);
       mStaticFieldValues.emplace_back(Value::defaultValue(*fieldType));
     } else {
-      jfield = std::make_unique<JField>(field, this, types::JString{fieldName}, types::JString{descriptor}, *fieldType, instanceFieldOffset++);
+      size_t fieldSize = fieldType->sizeOf();
+      currentOffset = alignTo(currentOffset, fieldSize);
+      jfield = std::make_unique<JField>(field, this, types::JString{fieldName}, types::JString{descriptor}, *fieldType, currentOffset);
+      currentOffset += fieldSize;
     }
 
     NameAndDescriptor key{fieldName, descriptor};
     mFields.try_emplace(key, std::move(jfield));
   }
+
+  mAllocationSize = currentOffset;
 }
 
 void InstanceClass::initializeFields()
@@ -470,6 +489,22 @@ types::JString JClass::javaClassName() const
   }
 
   assert(false && "A class must be an instance or an array!");
+}
+
+size_t JClass::headerSize() const
+{
+  if (auto instanceClass = this->asInstanceClass(); instanceClass) {
+    if (instanceClass->className() == u"java/lang/Class") {
+      return sizeof(ClassInstance);
+    }
+    return sizeof(Instance);
+  }
+
+  if (auto arrayClass = this->asArrayClass(); arrayClass) {
+    return sizeof(ArrayInstance);
+  }
+
+  std::unreachable();
 }
 
 void InstanceClass::initializeRuntimeConstantPool(StringHeap& stringHeap, BootstrapClassLoader& classLoader)

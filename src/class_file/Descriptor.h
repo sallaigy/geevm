@@ -59,15 +59,17 @@ public:
     return std::nullopt;
   }
 
+  std::size_t sizeOf() const;
+
   template<class R>
   R map(std::function<R(const PrimitiveType&)> primitiveMapper, std::function<R(const types::JString&)> classNameMapper) const
   {
     return std::visit(
         [&](auto&& arg) {
-          if constexpr (std::is_same_v<decltype(arg), PrimitiveType>) {
-            return primitiveMapper(arg);
-          } else {
+          if constexpr (std::is_same_v<std::decay_t<decltype(arg)>, types::JString>) {
             return classNameMapper(arg);
+          } else {
+            return primitiveMapper(arg);
           }
         },
         mVariant);
