@@ -220,9 +220,9 @@ Instance* JavaThread::createStackTrace()
 
     if (include) {
       auto stackTraceElement = heap().allocate((*stackTraceElementCls)->asInstanceClass());
-      stackTraceElement->setFieldValue(u"declaringClass", u"Ljava/lang/String;", heap().intern(callFrame.currentClass()->javaClassName()));
-      stackTraceElement->setFieldValue(u"declaringClassObject", u"Ljava/lang/Class;", Value::from<Instance*>(callFrame.currentClass()->classInstance()));
-      stackTraceElement->setFieldValue(u"methodName", u"Ljava/lang/String;", heap().intern(callFrame.currentMethod()->name()));
+      stackTraceElement->setFieldValue<Instance*>(u"declaringClass", u"Ljava/lang/String;", heap().intern(callFrame.currentClass()->javaClassName()));
+      stackTraceElement->setFieldValue<Instance*>(u"declaringClassObject", u"Ljava/lang/Class;", callFrame.currentClass()->classInstance());
+      stackTraceElement->setFieldValue<Instance*>(u"methodName", u"Ljava/lang/String;", heap().intern(callFrame.currentMethod()->name()));
       stackTrace.push_back(stackTraceElement);
     }
   }

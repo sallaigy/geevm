@@ -129,7 +129,7 @@ types::JString FieldType::toJavaString() const
       default: std::unreachable();
     }
   } else {
-    types::JString objectName = *asObjectName();
+    types::JString objectName = *asReference();
 
     str = types::JString{objectName};
     std::ranges::replace(str, u'/', u'.');
@@ -140,6 +140,14 @@ types::JString FieldType::toJavaString() const
   }
 
   return str;
+}
+
+std::optional<ArrayType> FieldType::asArrayType() const
+{
+  if (mDimensions != 0) {
+    return ArrayType(*this);
+  }
+  return std::nullopt;
 }
 
 types::JString ReturnType::toJavaString() const
@@ -171,24 +179,33 @@ types::JString MethodDescriptor::formatAsJavaSignature(const types::JString& nam
 
 std::size_t FieldType::sizeOf() const
 {
-  if (dimensions() != 0) {
-    return sizeof(void*);
-  }
-
-  return this->map<std::size_t>(
-      [](const PrimitiveType& primitive) {
-        switch (primitive) {
-          case PrimitiveType::Byte: return sizeof(int8_t);
-          case PrimitiveType::Char: return sizeof(char16_t);
-          case PrimitiveType::Double: return sizeof(double);
-          case PrimitiveType::Float: return sizeof(float);
-          case PrimitiveType::Int: return sizeof(int32_t);
-          case PrimitiveType::Long: return sizeof(int64_t);
-          case PrimitiveType::Short: return sizeof(int16_t);
-          // TODO
-          case PrimitiveType::Boolean: return sizeof(int32_t);
-        }
-        std::unreachable();
+  return this->map(
+      []<PrimitiveType Type>() {
+        return sizeof(typename PrimitiveTypeTraits<Type>::Representation);
       },
-      [](const types::JString&) { return sizeof(void*); });
+      [](types::JStringRef _) {
+        return sizeof(void*);
+      },
+      [](const ArrayType& _) {
+        return sizeof(void*);
+      });
+}
+
+types::JString ArrayType::className() const
+{
+  types::JString buff = u"[";
+
+  auto elementTy = getElementType();
+  buff += elementTy.map(
+      []<PrimitiveType Type>() {
+        return u"L" + types::JString{PrimitiveTypeTraits<Type>::ClassName} + u";";
+      },
+      [](types::JStringRef className) {
+        return u"L" + types::JString{className} + u";";
+      },
+      [](const ArrayType& array) {
+        return array.className();
+      });
+
+  return buff;
 }

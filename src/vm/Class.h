@@ -238,7 +238,7 @@ public:
   {
   }
 
-  const FieldType& elementType() const
+  const FieldType& fieldType() const
   {
     return mType;
   }
