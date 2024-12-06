@@ -2,7 +2,6 @@
 #define GEEVM_VM_FRAME_H
 
 #include "common/JvmTypes.h"
-#include "common/TypeTraits.h"
 #include "vm/Method.h"
 
 #include <cassert>
@@ -14,31 +13,8 @@ class InstanceClass;
 namespace geevm
 {
 
-class JClass;
-class Instance;
-
-template<class T>
-concept JvmType = is_one_of<T, std::int8_t, std::int16_t, std::int32_t, std::int64_t, char16_t, float, double, std::uint32_t, Instance*>();
-
-template<class T>
-concept CategoryTwoJvmType = is_one_of<T, std::int64_t, double>();
-
-template<class T>
-concept CategoryOneJvmType = JvmType<T> && !CategoryTwoJvmType<T>;
-
-/// JVM types that are sign-extended to int before being pushed to the operand stack.
-template<class T>
-concept StoredAsInt = JvmType<T> && is_one_of<T, std::int8_t, std::int16_t, char16_t>();
-
-template<class T>
-concept JavaFloatType = is_one_of<T, float, double>();
-
-template<class T>
-concept JavaIntegerType = is_one_of<T, int8_t, int16_t, int32_t, int64_t>();
-
 class Value
 {
-public:
 private:
   using Storage = std::variant<std::int8_t, std::int16_t, std::int32_t, std::int64_t, char16_t, float, double, Instance*>;
 
@@ -89,22 +65,16 @@ public:
 
   static Value defaultValue(const FieldType& fieldType)
   {
-    if (auto primitiveType = fieldType.asPrimitive(); primitiveType) {
-      switch (*primitiveType) {
-        case PrimitiveType::Byte: return Value(static_cast<std::int8_t>(0));
-        case PrimitiveType::Char: return Value(static_cast<char16_t>(0));
-        case PrimitiveType::Double: return Value(static_cast<double>(0));
-        case PrimitiveType::Float: return Value(static_cast<float>(0));
-        case PrimitiveType::Int: return Value(static_cast<std::int32_t>(0));
-        case PrimitiveType::Long: return Value(static_cast<std::int64_t>(0));
-        case PrimitiveType::Short: return Value(static_cast<std::int16_t>(0));
-        case PrimitiveType::Boolean: return Value(static_cast<std::int32_t>(0));
-      }
-    } else if (fieldType.asObjectName().has_value()) {
-      return Value(static_cast<Instance*>(nullptr));
-    }
-
-    assert(false && "Unknown field type!");
+    return fieldType.map(
+        []<PrimitiveType Type>() {
+          return Value::from<typename PrimitiveTypeTraits<Type>::Representation>(0);
+        },
+        [](types::JStringRef name) {
+          return Value::from<Instance*>(nullptr);
+        },
+        [](const ArrayType& array) {
+          return Value::from<Instance*>(nullptr);
+        });
   }
 
 private:
@@ -164,7 +134,11 @@ public:
   template<JvmType T>
   void pushOperand(T value)
   {
-    mOperandStack.push_back(Value::from<T>(value));
+    if constexpr (StoredAsInt<T>) {
+      mOperandStack.push_back(Value::from<int32_t>(static_cast<int32_t>(value)));
+    } else {
+      mOperandStack.push_back(Value::from<T>(value));
+    }
   }
 
   template<JvmType T>

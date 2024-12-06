@@ -845,8 +845,8 @@ std::optional<Value> java_io_FileOutputStream_writeBytes(JavaThread& thread, Cal
   auto fd = descriptor->getFieldValue<int32_t>(u"fd", u"I");
 
   std::vector<int8_t> buffer;
-  for (auto& v : *bytes) {
-    buffer.push_back(v.get<int8_t>());
+  for (int32_t i = 0; i < length; i++) {
+    buffer.push_back(bytes->getArrayElement(i)->get<int8_t>());
   }
 
   FILE* fp = fdopen(fd, "w");

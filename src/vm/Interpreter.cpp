@@ -125,8 +125,6 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
     CallFrame& frame = mThread.currentFrame();
     RuntimeConstantPool& runtimeConstantPool = frame.currentClass()->runtimeConstantPool();
 
-    // std::cout << types::convertJString(frame.currentClass()->className()) << "#" << types::convertJString(frame.currentMethod()->name()) << std::endl;
-
     switch (opcode) {
       using enum Opcode;
       case NOP: notImplemented(opcode); break;
@@ -547,7 +545,22 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         }
 
         assert(objectRef->getClass()->isInstanceOf(field->getClass()));
-        frame.pushGenericOperand(objectRef->getFieldValue(field->name(), field->descriptor()));
+
+        auto& fieldType = field->fieldType();
+        fieldType.map(
+            [&]<PrimitiveType Type>() {
+              using T = typename PrimitiveTypeTraits<Type>::Representation;
+              auto result = objectRef->getFieldValue<T>(field->name(), field->descriptor());
+              frame.pushOperand<T>(result);
+            },
+            [&](types::JStringRef) {
+              auto result = objectRef->getFieldValue<Instance*>(field->name(), field->descriptor());
+              frame.pushOperand(result);
+            },
+            [&](const ArrayType&) {
+              auto result = objectRef->getFieldValue<Instance*>(field->name(), field->descriptor());
+              frame.pushOperand(result);
+            });
         break;
       }
       case PUTFIELD: {
@@ -564,22 +577,21 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
 
         assert(objectRef->getClass()->isInstanceOf(field->getClass()));
 
-        if (field->fieldType().dimensions() != 0 || field->fieldType().asObjectName().has_value()) {
-          objectRef->setFieldValue(field->name(), field->descriptor(), value);
-        } else if (auto primitiveTy = field->fieldType().asPrimitive(); primitiveTy.has_value()) {
-          switch (*primitiveTy) {
-            case PrimitiveType::Byte: objectRef->setFieldValue(field->name(), field->descriptor(), Value::from<int8_t>(value.get<int32_t>())); break;
-            case PrimitiveType::Char: objectRef->setFieldValue(field->name(), field->descriptor(), Value::from<char16_t>(value.get<int32_t>())); break;
-            case PrimitiveType::Double: objectRef->setFieldValue(field->name(), field->descriptor(), value); break;
-            case PrimitiveType::Float: objectRef->setFieldValue(field->name(), field->descriptor(), value); break;
-            case PrimitiveType::Int: objectRef->setFieldValue(field->name(), field->descriptor(), value); break;
-            case PrimitiveType::Long: objectRef->setFieldValue(field->name(), field->descriptor(), value); break;
-            case PrimitiveType::Short: objectRef->setFieldValue(field->name(), field->descriptor(), value.get<int16_t>()); break;
-            case PrimitiveType::Boolean: objectRef->setFieldValue(field->name(), field->descriptor(), value); break;
-          }
-        } else {
-          assert(false);
-        }
+        field->fieldType().map(
+            [&]<PrimitiveType Type>() {
+              using T = typename PrimitiveTypeTraits<Type>::Representation;
+              if constexpr (StoredAsInt<T>) {
+                objectRef->setFieldValue<T>(field->name(), field->descriptor(), static_cast<T>(value.get<int32_t>()));
+              } else {
+                objectRef->setFieldValue<T>(field->name(), field->descriptor(), value.get<T>());
+              }
+            },
+            [&](types::JStringRef) {
+              objectRef->setFieldValue<Instance*>(field->name(), field->descriptor(), value.get<Instance*>());
+            },
+            [&](const ArrayType&) {
+              objectRef->setFieldValue<Instance*>(field->name(), field->descriptor(), value.get<Instance*>());
+            });
 
         break;
       }

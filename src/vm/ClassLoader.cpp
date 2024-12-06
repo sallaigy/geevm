@@ -71,7 +71,7 @@ JvmExpected<ArrayClass*> BootstrapClassLoader::loadArrayClass(const types::JStri
   auto arrayType = FieldType::parse(name);
   assert(arrayType.has_value() && "An array class descriptor should be parseable!");
 
-  if (auto referenceType = arrayType->asObjectName(); referenceType.has_value()) {
+  if (auto referenceType = arrayType->asReference(); referenceType.has_value()) {
     auto elementClass = this->loadClass(*referenceType);
     if (!elementClass) {
       return makeError<ArrayClass*>(std::move(elementClass.error()));
