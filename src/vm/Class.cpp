@@ -62,41 +62,17 @@ void JClass::prepare(BootstrapClassLoader& classLoader, JavaHeap& heap)
     this->linkSuperClass(u"java/lang/Object", classLoader);
     this->linkSuperInterfaces({u"java/lang/Cloneable", u"java/io/Serializable"}, classLoader);
 
-    auto& elementType = arrayClass->elementType();
-    if (auto primitiveType = elementType.asPrimitive(); primitiveType) {
-      if (elementType.dimensions() != 1) {
-        ArrayClass* inner = nullptr;
-        for (int i = elementType.dimensions() - 1; i > 0; i--) {
-          types::JStringRef nestedName = mClassName;
-          nestedName.remove_prefix(i);
-          auto loaded = classLoader.loadClass(types::JString{nestedName});
-          assert(loaded);
-
-          (*loaded)->prepare(classLoader, heap);
-          if (inner != nullptr) {
-            inner->mElementClass = *loaded;
-          }
-
-          inner = (*loaded)->asArrayClass();
-        }
-        arrayClass->mElementClass = inner;
-      }
-    } else if (auto objectName = elementType.asObjectName(); objectName) {
-      if (elementType.dimensions() != 1) {
-        types::JStringRef nestedClassName = mClassName;
-        nestedClassName.remove_prefix(1);
-
-        auto inner = classLoader.loadClass(types::JString{nestedClassName});
-        assert(inner.has_value());
-
-        arrayClass->mElementClass = *inner;
-      } else {
-        auto loaded = classLoader.loadClass(*objectName);
-        assert(loaded);
-
-        arrayClass->mElementClass = *loaded;
-      }
-    }
+    FieldType elementType = arrayClass->fieldType().asArrayType()->getElementType();
+    elementType.map(
+        [&]<PrimitiveType Type>() {
+          arrayClass->mElementClass = nullptr;
+        },
+        [&](const types::JString& name) {
+          arrayClass->mElementClass = *classLoader.loadClass(name);
+        },
+        [&](const ArrayType& array) {
+          arrayClass->mElementClass = *classLoader.loadClass(array.className());
+        });
   } else if (auto instanceClass = this->asInstanceClass(); instanceClass != nullptr) {
     if (auto superClass = instanceClass->constantPool().getOptionalClassName(instanceClass->mClassFile->superClass())) {
       this->linkSuperClass(*superClass, classLoader);
@@ -250,7 +226,7 @@ Value InstanceClass::getInitialFieldValue(const FieldType& fieldType, types::u2 
     std::unreachable();
   }
 
-  if (auto objectName = fieldType.asObjectName(); objectName && *objectName == u"java/lang/String") {
+  if (auto objectName = fieldType.asReference(); objectName && *objectName == u"java/lang/String") {
     return Value::from(mRuntimeConstantPool->getString(cvIndex));
   }
 
@@ -421,8 +397,8 @@ bool JClass::isInstanceOf(const JClass* other) const
     }
     // If T is an array type TC[], that is, an array of components of type TC, then one of the following must be true:
     if (auto otherArray = other->asArrayClass(); otherArray) {
-      auto leftElementTy = arrayClass->elementType();
-      auto rightElementTy = otherArray->elementType();
+      auto leftElementTy = arrayClass->fieldType().asArrayType()->getElementType();
+      auto rightElementTy = otherArray->fieldType().asArrayType()->getElementType();
 
       if (auto leftPrimitive = leftElementTy.asPrimitive(), rightPrimitive = rightElementTy.asPrimitive();
           leftPrimitive.has_value() && rightPrimitive.has_value()) {
@@ -485,7 +461,7 @@ types::JString JClass::javaClassName() const
   }
 
   if (auto arrayClass = this->asArrayClass(); arrayClass) {
-    return arrayClass->elementType().toJavaString();
+    return arrayClass->fieldType().toJavaString();
   }
 
   assert(false && "A class must be an instance or an array!");

@@ -13,28 +13,15 @@
 namespace geevm
 {
 
-enum class PrimitiveType
-{
-  Byte,
-  Char,
-  Double,
-  Float,
-  Int,
-  Long,
-  Short,
-  Boolean,
-};
+class ArrayType;
 
 class FieldType
 {
-public:
-  explicit FieldType(PrimitiveType primitiveType, int arrayDimensions = 0)
-    : mVariant(primitiveType), mDimensions(arrayDimensions)
-  {
-  }
+  using StorageTy = std::variant<PrimitiveType, types::JString>;
 
-  explicit FieldType(types::JString className, int arrayDimensions = 0)
-    : mVariant(className), mDimensions(arrayDimensions)
+public:
+  explicit FieldType(StorageTy storage, int arrayDimensions = 0)
+    : mVariant(std::move(storage)), mDimensions(arrayDimensions)
   {
   }
 
@@ -44,47 +31,59 @@ public:
 
   std::optional<PrimitiveType> asPrimitive() const
   {
-    if (std::holds_alternative<PrimitiveType>(mVariant)) {
+    if (std::holds_alternative<PrimitiveType>(mVariant) && mDimensions == 0) {
       return std::get<PrimitiveType>(mVariant);
     }
 
     return std::nullopt;
   }
 
-  std::optional<types::JString> asObjectName() const
+  std::optional<types::JString> asReference() const
   {
-    if (std::holds_alternative<types::JString>(mVariant)) {
+    if (std::holds_alternative<types::JString>(mVariant) && mDimensions == 0) {
       return std::get<types::JString>(mVariant);
     }
+
     return std::nullopt;
   }
 
+  std::optional<ArrayType> asArrayType() const;
+
   std::size_t sizeOf() const;
 
-  template<class R>
-  R map(std::function<R(const PrimitiveType&)> primitiveMapper, std::function<R(const types::JString&)> classNameMapper) const
+  /// Map the contents of this descriptor using one of the provided mapper functions.
+  /// \param primitiveMapper a template function with a PrimitiveType template parameter, mapping primitive values.
+  /// \param classMapper a function that maps a class name.
+  /// \param arrayMapper a function that maps an ArrayType.
+  template<class PrimitiveMapFunc, class ClassMapFunc, class ArrayMapFunc>
+  decltype(auto) map(const PrimitiveMapFunc& primitiveMapper, const ClassMapFunc& classMapper, const ArrayMapFunc& arrayMapper) const;
+
+  types::JString toJavaString() const;
+
+protected:
+  StorageTy mVariant;
+  int mDimensions;
+};
+
+class ArrayType : public FieldType
+{
+public:
+  explicit ArrayType(FieldType elementType)
+    : FieldType(std::move(elementType))
   {
-    return std::visit(
-        [&](auto&& arg) {
-          if constexpr (std::is_same_v<std::decay_t<decltype(arg)>, types::JString>) {
-            return classNameMapper(arg);
-          } else {
-            return primitiveMapper(arg);
-          }
-        },
-        mVariant);
   }
 
-  int dimensions() const
+  FieldType getElementType() const
+  {
+    return FieldType(mVariant, mDimensions - 1);
+  }
+
+  int getDimensions() const
   {
     return mDimensions;
   }
 
-  types::JString toJavaString() const;
-
-private:
-  std::variant<PrimitiveType, types::JString> mVariant;
-  int mDimensions;
+  types::JString className() const;
 };
 
 class ReturnType
@@ -149,6 +148,34 @@ private:
   ReturnType mReturnType;
   std::vector<FieldType> mParameterTypes;
 };
+
+template<class PrimitiveMapFunc, class ClassMapFunc, class ArrayMapFunc>
+decltype(auto) FieldType::map(const PrimitiveMapFunc& primitiveMapper, const ClassMapFunc& classMapper, const ArrayMapFunc& arrayMapper) const
+{
+  if (auto primitive = this->asPrimitive(); primitive) {
+    switch (*primitive) {
+      case PrimitiveType::Byte: return primitiveMapper.template operator()<PrimitiveType::Byte>();
+      case PrimitiveType::Char: return primitiveMapper.template operator()<PrimitiveType::Char>();
+      case PrimitiveType::Double: return primitiveMapper.template operator()<PrimitiveType::Double>();
+      case PrimitiveType::Float: return primitiveMapper.template operator()<PrimitiveType::Float>();
+      case PrimitiveType::Int: return primitiveMapper.template operator()<PrimitiveType::Int>();
+      case PrimitiveType::Long: return primitiveMapper.template operator()<PrimitiveType::Long>();
+      case PrimitiveType::Short: return primitiveMapper.template operator()<PrimitiveType::Short>();
+      case PrimitiveType::Boolean: return primitiveMapper.template operator()<PrimitiveType::Boolean>();
+    }
+    std::unreachable();
+  }
+
+  if (auto array = this->asArrayType(); array) {
+    return arrayMapper(*array);
+  }
+
+  if (auto reference = this->asReference(); reference) {
+    return classMapper(*reference);
+  }
+
+  std::unreachable();
+}
 
 } // namespace geevm
 

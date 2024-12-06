@@ -28,3 +28,4 @@ PointerAlignment: Left
 ReferenceAlignment: Left
 AlwaysBreakTemplateDeclarations: Yes
 SpaceAfterTemplateKeyword: False
+AllowShortLambdasOnASingleLine: Empty

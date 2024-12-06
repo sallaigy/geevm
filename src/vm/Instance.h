@@ -7,8 +7,6 @@
 
 #include <cstdint>
 #include <span>
-#include <unordered_map>
-#include <vector>
 
 namespace geevm
 {
@@ -32,19 +30,18 @@ public:
     return mClass;
   }
 
-  void setFieldValue(types::JStringRef fieldName, types::JStringRef descriptor, Value value);
-  Value getFieldValue(types::JStringRef fieldName, types::JStringRef descriptor);
-
   template<JvmType T>
-  void setFieldValue(types::JStringRef fieldName, types::JStringRef descriptor, T value)
+  void setFieldValue(types::JStringRef fieldName, types::JStringRef descriptor, const T& value)
   {
-    setFieldValue(fieldName, descriptor, Value::from<T>(value));
+    size_t offset = getFieldOffset(fieldName, descriptor);
+    this->setFieldValue(offset, value);
   }
 
   template<JvmType T>
   T getFieldValue(types::JStringRef fieldName, types::JStringRef descriptor)
   {
-    return getFieldValue(fieldName, descriptor).get<T>();
+    size_t offset = getFieldOffset(fieldName, descriptor);
+    return this->getFieldValue<T>(offset);
   }
 
   ArrayInstance* asArrayInstance();
@@ -56,6 +53,8 @@ public:
   virtual ~Instance() = default;
 
 private:
+  size_t getFieldOffset(types::JStringRef fieldName, types::JStringRef descriptor) const;
+
   template<JvmType T>
   void setFieldValue(size_t offset, const T& value)
   {
@@ -95,7 +94,9 @@ public:
   {
     auto result = getArrayElement(index);
 
-    return result.transform([](const Value& value) -> T { return value.get<T>(); });
+    return result.transform([](const Value& value) -> T {
+      return value.get<T>();
+    });
   }
 
   template<JvmType T>
@@ -116,7 +117,8 @@ public:
   }
   const_iterator end() const
   {
-    return this->contentsStart() + this->length();
+    auto p = this->contentsStart() + this->length();
+    return p;
   }
 
   std::span<Value> span()
