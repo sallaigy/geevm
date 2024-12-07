@@ -34,9 +34,9 @@ jobs:
 
       - name: Configure
         run: |
-          cmake -GNinja -Bbuild `
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
-            -DCMAKE_CXX_COMPILER=${{ matrix.cxx_compiler }} `
+          cmake -GNinja -Bbuild
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+            -DCMAKE_CXX_COMPILER=${{ matrix.cxx_compiler }} 
             -S ${{ github.workspace }}
 
       - name: Build
