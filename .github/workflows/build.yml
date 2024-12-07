@@ -12,9 +12,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-latest ]
+        os: [ ubuntu-24.04 ]
         build_type: [ Debug ]
-        cxx_compiler: [ g++-13 ]
+        cxx_compiler: [ g++ ]
 
     steps:
       - name: Checkout
