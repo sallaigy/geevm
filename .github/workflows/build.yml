@@ -28,7 +28,7 @@ jobs:
           java-version: 17
           distribution: 'oracle'
       - name: Setup build dependencies
-        run: >
+        run: |
           sudo apt update
           sudo apt install libzip-dev zipcmp zipmerge ziptool ninja
 
