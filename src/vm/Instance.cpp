@@ -48,8 +48,9 @@ void* ArrayInstance::operator new(size_t base, size_t arrayLength)
 ArrayInstance::ArrayInstance(ArrayClass* arrayClass, size_t length)
   : Instance(arrayClass), mLength(length)
 {
+  auto elementType = arrayClass->fieldType().asArrayType()->getElementType();
   for (int32_t i = 0; i < mLength; i++) {
-    this->setArrayElement(i, Value::defaultValue(arrayClass->fieldType()));
+    this->setArrayElement(i, Value::defaultValue(elementType));
   }
 }
 
