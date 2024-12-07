@@ -33,6 +33,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install libzip-dev zipcmp zipmerge ziptool ninja-build llvm
+          sudo ln -s /usr/lib/llvm-18/bin/FileCheck /usr/bin/FileCheck
 
       - name: Setup Python environment
         run:
