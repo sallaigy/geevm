@@ -6,6 +6,7 @@
 #include "vm/Vm.h"
 
 #include <algorithm>
+#include <cmath>
 #include <csignal>
 #include <cstring>
 #include <fcntl.h>
@@ -60,6 +61,8 @@ static std::optional<Value> java_lang_Class_getDeclaredFields0(JavaThread& threa
 static std::optional<Value> java_lang_Float_floatToRawIntBits(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> java_lang_Double_doubleToRawIntBits(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> java_lang_Double_longBitsToDouble(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
+
+static std::optional<Value> java_lang_StrictMath_log(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 
 static std::optional<Value> sun_misc_Unsafe_arrayBaseOffset(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
 static std::optional<Value> sun_misc_Unsafe_arrayIndexScale(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);
@@ -205,6 +208,9 @@ void Vm::registerNatives()
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Double", u"doubleToRawLongBits", u"(D)J"}, java_lang_Double_doubleToRawIntBits);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/Double", u"longBitsToDouble", u"(J)D"}, java_lang_Double_longBitsToDouble);
 
+  // java.lang.StrictMath
+  mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"java/lang/StrictMath", u"log", u"(D)D"}, java_lang_StrictMath_log);
+
   // sun.misc.VM
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/VM", u"initialize", u"()V"}, noop);
   mNativeMethods.registerNativeMethod(ClassNameAndDescriptor{u"jdk/internal/misc/CDS", u"isDumpingClassList0", u"()Z"}, return_false);
@@ -333,24 +339,14 @@ std::optional<Value> java_lang_Class_getPrimitiveClass(JavaThread& thread, CallF
   auto stringObject = args[0].get<Instance*>();
   types::JString buffer = utils::getStringValue(stringObject);
 
-  if (buffer == u"float") {
-    auto klass = thread.resolveClass(u"java/lang/Float");
-    return Value::from((*klass)->classInstance());
-  } else if (buffer == u"double") {
-    auto klass = thread.resolveClass(u"java/lang/Double");
-    return Value::from((*klass)->classInstance());
-  } else if (buffer == u"int") {
-    auto klass = thread.resolveClass(u"java/lang/Integer");
-    return Value::from((*klass)->classInstance());
-  } else if (buffer == u"byte") {
-    auto klass = thread.resolveClass(u"java/lang/Byte");
-    return Value::from((*klass)->classInstance());
-  } else if (buffer == u"char") {
-    auto klass = thread.resolveClass(u"java/lang/Character");
-    return Value::from((*klass)->classInstance());
-  } else {
-    assert(false && "Unknown primitive class");
-  }
+  static std::unordered_map<types::JStringRef, types::JStringRef> classNames = {
+      {u"float", u"java/lang/Float"}, {u"double", u"java/lang/Double"}, {u"int", u"java/lang/Integer"},   {u"byte", u"java/lang/Byte"},
+      {u"short", u"java/lang/Short"}, {u"long", u"java/lang/Long"},     {u"char", u"java/lang/Character"}};
+
+  assert(classNames.contains(buffer));
+
+  auto klass = thread.resolveClass(types::JString{classNames.at(buffer)});
+  return Value::from((*klass)->classInstance());
 }
 
 std::optional<Value> java_lang_Class_isPrimitive(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
@@ -363,7 +359,7 @@ std::optional<Value> java_lang_Class_isPrimitive(JavaThread& thread, CallFrame& 
       u"java/lang/Char",    u"java/lang/Short", u"java/lang/Integer", u"java/lang/Long",
   };
 
-  return klassNames.contains(className) ? Value::from<int32_t>(0) : Value::from<int32_t>(1);
+  return klassNames.contains(className) ? Value::from<int32_t>(1) : Value::from<int32_t>(0);
 }
 
 std::optional<Value> java_lang_Class_getName0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
@@ -450,6 +446,12 @@ std::optional<Value> java_lang_Double_doubleToRawIntBits(JavaThread& thread, Cal
 std::optional<Value> java_lang_Double_longBitsToDouble(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
   return Value::from(std::bit_cast<double>(args[0].get<int64_t>()));
+}
+
+std::optional<Value> java_lang_StrictMath_log(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
+{
+  // FIXME: use Java semantics (fdlibm)
+  return Value::from<double>(std::log(args[0].get<double>()));
 }
 
 std::optional<Value> java_lang_System_initProperties(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)

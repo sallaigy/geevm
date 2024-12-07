@@ -695,7 +695,14 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
           break;
         }
 
-        auto arrayClass = mThread.resolveClass(u"[L" + types::JString{(*klass)->className()} + u";");
+        types::JString elementClassName;
+        if ((*klass)->isArrayType()) {
+          elementClassName = u"[" + (*klass)->className();
+        } else {
+          elementClassName = u"[L" + (*klass)->className() + u";";
+        }
+
+        auto arrayClass = mThread.resolveClass(elementClassName);
         if (!arrayClass) {
           this->handleErrorAsException(arrayClass.error());
           break;
