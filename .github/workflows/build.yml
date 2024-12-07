@@ -14,7 +14,7 @@ jobs:
       matrix:
         os: [ ubuntu-latest ]
         build_type: [ Debug ]
-        cxx_compiler: [ g++ ]
+        cxx_compiler: [ g++-13 ]
 
     steps:
       - name: Checkout
