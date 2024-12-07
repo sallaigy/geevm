@@ -44,5 +44,5 @@ jobs:
           cmake --build build
 
       - name: Test
-        working-directory: ${{github.workspace}}/jllvm-build
+        working-directory: ${{github.workspace}}
         run: ctest --extra-verbose
