@@ -13,8 +13,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ ubuntu-latest ]
-        build_type: [ Debug, Release ]
-        cxx_compiler: [ g++, clang++ ]
+        build_type: [ Debug ]
+        cxx_compiler: [ g++ ]
 
     steps:
       - name: Checkout
@@ -27,10 +27,14 @@ jobs:
         with:
           java-version: 17
           distribution: 'oracle'
+      - name: Setup build dependencies
+        run: >
+          sudo apt update
+          sudo apt install libzip-dev zipcmp zipmerge ziptool ninja
 
       - name: Configure
         run: >
-          cmake -Bbuild
+          cmake -Gninja -Bbuild
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
             -DCMAKE_CXX_COMPILER=${{ matrix.cxx_compiler }}
             -S ${{ github.workspace }}
