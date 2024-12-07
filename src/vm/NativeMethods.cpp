@@ -363,7 +363,7 @@ std::optional<Value> java_lang_Class_isPrimitive(JavaThread& thread, CallFrame& 
       u"java/lang/Char",    u"java/lang/Short", u"java/lang/Integer", u"java/lang/Long",
   };
 
-  return klassNames.find(className) == klassNames.end() ? Value::from<int32_t>(0) : Value::from<int32_t>(1);
+  return klassNames.contains(className) ? Value::from<int32_t>(0) : Value::from<int32_t>(1);
 }
 
 std::optional<Value> java_lang_Class_getName0(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
@@ -534,29 +534,15 @@ std::optional<Value> compareAndSet(const std::vector<Value>& args)
 
   T* target = reinterpret_cast<T*>(reinterpret_cast<char*>(object) + offset);
 
-  if (*target == expected) {
-    *target = desired;
-    return Value::from<int32_t>(1);
-  }
+  std::atomic_ref<T> atomicRef(*target);
 
-  return Value::from<int32_t>(0);
+  bool success = atomicRef.compare_exchange_strong(expected, desired, std::memory_order_seq_cst);
+  return Value::from<int32_t>(success ? 1 : 0);
 }
 
 std::optional<Value> jdk_internal_misc_Unsafe_compareAndSetInt(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
 {
   return compareAndSet<int32_t>(args);
-
-  // std::atomic_ref<Value*> atomicRef(target);
-  //
-  // Value* expectedPtr = &expected;
-  // Value* desiredPtr = &desired;
-  //
-  // bool bitwise = std::memcmp(target, expectedPtr, sizeof(Value));
-  //
-  // bool success = atomicRef.compare_exchange_strong(expectedPtr, desiredPtr, std::memory_order_seq_cst);
-  // return success ? Value::from<int32_t>(1) : Value::from<int32_t>(0);
-  // if (*target == expected) {
-  // }
 }
 
 std::optional<Value> jdk_internal_misc_Unsafe_compareAndSetLong(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args)
