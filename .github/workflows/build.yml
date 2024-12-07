@@ -30,7 +30,7 @@ jobs:
       - name: Setup build dependencies
         run: |
           sudo apt update
-          sudo apt install libzip-dev zipcmp zipmerge ziptool ninja
+          sudo apt install libzip-dev zipcmp zipmerge ziptool ninja-build
 
       - name: Configure
         run: >
