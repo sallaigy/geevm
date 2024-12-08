@@ -41,14 +41,24 @@ set(GEEVM_SOURCES
 
 add_library(geevm ${GEEVM_SOURCES})
 
+file(GLOB_RECURSE
+  GEEVM_NATIVE_SOURCES
+  src/native/**/*.cpp
+)
+
+add_library(geevm-libjava SHARED ${GEEVM_NATIVE_SOURCES})
+target_include_directories(geevm-libjava PUBLIC ${JNI_INCLUDE_DIRS})
+target_include_directories(geevm-libjava PUBLIC src)
+
 include(CTest)
 enable_testing()
 add_subdirectory(src/unit_tests)
 add_subdirectory(tests)
 
-target_include_directories(geevm PUBLIC ${JNI_INCLUDE_DIRS})
 target_include_directories(geevm PUBLIC src)
 target_link_libraries(geevm libzip::zip)
+target_link_libraries(geevm geevm-libjava)
+target_link_libraries(geevm ffi)
 
 add_executable(java src/bin/java.cpp)
 target_link_libraries(java geevm)

@@ -1,3 +1,4 @@
+#include "common/DynamicLibrary.h"
 #include "vm/Thread.h"
 #include "vm/Vm.h"
 
