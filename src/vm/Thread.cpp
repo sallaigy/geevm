@@ -32,7 +32,9 @@ void JavaThread::start(JMethod* method, std::vector<Value> arguments)
 {
   mMethod = method;
   mArguments = std::move(arguments);
-  mNativeThread = std::jthread([this]() { this->run(); });
+  mNativeThread = std::jthread([this]() {
+    this->run();
+  });
   mThreadInstance->setFieldValue<int64_t>(u"eetop", u"J", (long)mNativeThread.native_handle());
 }
 
@@ -157,6 +159,11 @@ std::optional<Value> JavaThread::executeCall(JMethod* method, const std::vector<
 
 std::optional<Value> JavaThread::executeNative(JMethod* method, CallFrame& frame, const std::vector<Value>& args)
 {
+  auto nativeHandle = mVm.nativeMethods().getNativeMethod(method);
+  if (nativeHandle) {
+    return nativeHandle->invoke(*this, args);
+  }
+
   auto handle = mVm.nativeMethods().get(method);
   if (!handle) {
     types::JString name;

@@ -1,6 +1,8 @@
 #include "vm/NativeMethods.h"
 
+#include "JniImplementation.h"
 #include "VmUtils.h"
+#include "common/DynamicLibrary.h"
 #include "vm/Frame.h"
 #include "vm/Thread.h"
 #include "vm/Vm.h"
@@ -10,8 +12,11 @@
 #include <csignal>
 #include <cstring>
 #include <fcntl.h>
+#include <ffi.h>
 #include <filesystem>
+#include <format>
 #include <iostream>
+#include <jni.h>
 #include <unordered_set>
 #include <utility>
 
@@ -34,6 +39,208 @@ std::optional<NativeMethodHandle> NativeMethodRegistry::get(const ClassNameAndDe
 std::optional<NativeMethodHandle> NativeMethodRegistry::get(JMethod* method) const
 {
   return get(ClassNameAndDescriptor{method->getClass()->className(), method->name(), method->rawDescriptor()});
+}
+
+struct JObjectAdaptor : public _jobject
+{
+  Instance* actualObject;
+};
+
+struct JClassAdaptor : public _jclass
+{
+  ClassInstance* actualClass;
+};
+
+std::optional<NativeMethod> NativeMethodRegistry::getNativeMethod(const JMethod* method)
+{
+  auto dl = DynamicLibrary::create();
+
+  types::JString name = u"Java_";
+  std::ranges::replace_copy(method->getClass()->className(), std::back_inserter<std::u16string>(name), u'/', u'_');
+  name += u"_" + method->name();
+
+  auto nameStr = types::convertJString(name);
+  void* symbol = dl->findSymbol(nameStr.c_str());
+
+  if (symbol != nullptr) {
+    return NativeMethod{method, symbol};
+  }
+
+  return std::nullopt;
+}
+
+std::optional<Value> NativeMethod::invoke(JavaThread& thread, const std::vector<Value>& args)
+{
+  ffi_cif cif;
+  std::vector<ffi_type*> argTypes;
+
+  // The first parameter is JNIEnv*, a pointer
+  argTypes.push_back(&ffi_type_pointer);
+
+  std::vector<jvalue> argValues;
+  size_t argIdx = 0;
+
+  JniImplementation impl;
+  std::vector<void*> actualArgs;
+
+  JNIEnv* env = impl.getEnv();
+  actualArgs.push_back(&env);
+
+  if (mMethod->isStatic()) {
+    auto klass = mMethod->getClass()->classInstance()->asClassInstance();
+    argTypes.push_back(&ffi_type_pointer);
+    argValues.push_back(jvalue{.l = JniTranslate<ClassInstance*, jclass>{}(klass)});
+    actualArgs.push_back(&argValues.back().l);
+  } else {
+    auto javaThis = args.at(0).get<Instance*>();
+    argTypes.push_back(&ffi_type_pointer);
+    argValues.push_back(jvalue{.l = JniTranslate<Instance*, jobject>{}(javaThis)});
+    actualArgs.push_back(&argValues.back().l);
+    argIdx = 1;
+  }
+
+  for (const FieldType& paramType : mMethod->descriptor().parameters()) {
+    const auto& current = args.at(argIdx);
+    argIdx++;
+    if (auto primitive = paramType.asPrimitive(); primitive) {
+      switch (*primitive) {
+        case PrimitiveType::Byte: {
+          argValues.push_back(jvalue{.b = current.get<int8_t>()});
+          argTypes.push_back(&ffi_type_sint8);
+          actualArgs.push_back(&argValues.back().b);
+          break;
+        }
+        case PrimitiveType::Char: {
+          argValues.push_back(jvalue{.c = std::bit_cast<uint16_t>(current.get<char16_t>())});
+          argTypes.push_back(&ffi_type_uint16);
+          actualArgs.push_back(&argValues.back().c);
+          break;
+        }
+        case PrimitiveType::Float: {
+          argValues.push_back(jvalue{.f = current.get<float>()});
+          argTypes.push_back(&ffi_type_float);
+          actualArgs.push_back(&argValues.back().f);
+          break;
+        }
+        case PrimitiveType::Int: {
+          argValues.push_back(jvalue{.i = current.get<int32_t>()});
+          argTypes.push_back(&ffi_type_sint32);
+          actualArgs.push_back(&argValues.back().i);
+          break;
+        }
+        case PrimitiveType::Short: {
+          argValues.push_back(jvalue{.s = current.get<int16_t>()});
+          argTypes.push_back(&ffi_type_sint16);
+          actualArgs.push_back(&argValues.back().s);
+          break;
+        }
+        case PrimitiveType::Boolean: {
+          bool boolValue = current.get<int32_t>() == 0 ? false : true;
+          argValues.push_back(jvalue{.z = static_cast<uint8_t>(boolValue)});
+          argTypes.push_back(&ffi_type_uint8);
+          actualArgs.push_back(&argValues.back().z);
+          break;
+        }
+        case PrimitiveType::Double: {
+          argValues.push_back(jvalue{.d = current.get<double>()});
+          argTypes.push_back(&ffi_type_double);
+          actualArgs.push_back(&argValues.back().d);
+          argIdx++;
+          break;
+        }
+        case PrimitiveType::Long: {
+          argValues.push_back(jvalue{.j = current.get<int64_t>()});
+          argTypes.push_back(&ffi_type_sint64);
+          actualArgs.push_back(&argValues.back().j);
+          argIdx++;
+          break;
+        }
+      }
+    } else {
+      // Must object or array reference
+      argValues.push_back(jvalue{.l = JniTranslate<Instance*, jobject>{}(current.get<Instance*>())});
+      argTypes.push_back(&ffi_type_pointer);
+      actualArgs.push_back(&argValues.back().l);
+    }
+  }
+
+  ffi_type* returnType;
+  void* result;
+  jvalue returnValue;
+  if (mMethod->descriptor().returnType().isVoid()) {
+    returnType = &ffi_type_void;
+    result = nullptr;
+  } else {
+    if (auto primitive = mMethod->descriptor().returnType().getType().asPrimitive(); primitive) {
+      switch (*primitive) {
+        case PrimitiveType::Byte:
+          returnType = &ffi_type_sint8;
+          result = &returnValue.b;
+          break;
+        case PrimitiveType::Char:
+          returnType = &ffi_type_uint16;
+          result = &returnValue.c;
+          break;
+        case PrimitiveType::Double:
+          returnType = &ffi_type_double;
+          result = &returnValue.d;
+          break;
+        case PrimitiveType::Float:
+          returnType = &ffi_type_float;
+          result = &returnValue.f;
+          break;
+        case PrimitiveType::Int:
+          returnType = &ffi_type_sint32;
+          result = &returnValue.i;
+          break;
+        case PrimitiveType::Long:
+          returnType = &ffi_type_sint64;
+          result = &returnValue.j;
+          break;
+        case PrimitiveType::Short:
+          returnType = &ffi_type_sint16;
+          result = &returnValue.s;
+          break;
+        case PrimitiveType::Boolean:
+          returnType = &ffi_type_uint8;
+          result = &returnValue.z;
+          break;
+      }
+    } else {
+      returnType = &ffi_type_pointer;
+      result = &returnValue.l;
+    }
+  }
+
+  assert(actualArgs.size() == mMethod->descriptor().parameters().size() + 2);
+  assert(actualArgs.size() == argTypes.size());
+
+  if (ffi_prep_cif(&cif, FFI_DEFAULT_ABI, argTypes.size(), returnType, argTypes.data()) != FFI_OK) {
+    thread.throwException(u"java/lang/RuntimeException", u"Failed to invoke nativ method");
+    return std::nullopt;
+  }
+
+  ffi_call(&cif, FFI_FN(mHandle), result, actualArgs.data());
+
+  if (mMethod->descriptor().returnType().isVoid()) {
+    return std::nullopt;
+  }
+
+  if (auto primitive = mMethod->descriptor().returnType().getType().asPrimitive(); primitive) {
+    switch (*primitive) {
+      case PrimitiveType::Byte: return Value::from<int8_t>(returnValue.b);
+      case PrimitiveType::Char: return Value::from<char16_t>(returnValue.c);
+      case PrimitiveType::Double: return Value::from<double>(returnValue.d);
+      case PrimitiveType::Float: return Value::from<float>(returnValue.f);
+      case PrimitiveType::Int: return Value::from<int32_t>(returnValue.i);
+      case PrimitiveType::Long: return Value::from<int64_t>(returnValue.j);
+      case PrimitiveType::Short: return Value::from<int16_t>(returnValue.s);
+      case PrimitiveType::Boolean: return Value::from<int32_t>(returnValue.z ? 1 : 0);
+    }
+    std::unreachable();
+  } else {
+    return Value::from<Instance*>(JniTranslate<jobject, Instance*>{}(returnValue.l));
+  }
 }
 
 static std::optional<Value> noop(JavaThread& thread, CallFrame& frame, const std::vector<Value>& args);

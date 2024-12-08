@@ -23,9 +23,11 @@ AllowShortBlocksOnASingleLine: Never
 AllowShortCaseLabelsOnASingleLine: true
 AllowShortFunctionsOnASingleLine: None
 IndentCaseLabels: true
+IndentExternBlock: NoIndent
 AlignEscapedNewlines: Left
 PointerAlignment: Left
 ReferenceAlignment: Left
 AlwaysBreakTemplateDeclarations: Yes
 SpaceAfterTemplateKeyword: False
 AllowShortLambdasOnASingleLine: Empty
+
