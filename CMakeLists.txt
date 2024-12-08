@@ -8,6 +8,7 @@ include(FetchContent)
 find_package(libzip CONFIG REQUIRED)
 find_package(Python3 COMPONENTS Interpreter)
 find_package(Java 17 EXACT REQUIRED)
+find_package(JNI 17 EXACT REQUIRED)
 
 get_filename_component(REAL_JAVAC ${Java_JAVAC_EXECUTABLE} REALPATH)
 cmake_path(GET REAL_JAVAC PARENT_PATH JAVA_BIN_DIR)
@@ -45,6 +46,7 @@ enable_testing()
 add_subdirectory(src/unit_tests)
 add_subdirectory(tests)
 
+target_include_directories(geevm PUBLIC ${JNI_INCLUDE_DIRS})
 target_include_directories(geevm PUBLIC src)
 target_link_libraries(geevm libzip::zip)
 
