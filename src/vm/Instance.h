@@ -44,11 +44,20 @@ public:
     return this->getFieldValue<T>(offset);
   }
 
+  template<JvmType T>
+  T getFieldValue(size_t offset)
+  {
+    auto* ptr = reinterpret_cast<T*>(reinterpret_cast<char*>(this) + offset);
+    return *ptr;
+  }
+
   ArrayInstance* asArrayInstance();
   ClassInstance* asClassInstance();
 
   void* fieldsStart();
   const void* fieldsStart() const;
+
+  int32_t hashCode() const;
 
   virtual ~Instance() = default;
 
@@ -60,13 +69,6 @@ private:
   {
     auto* ptr = reinterpret_cast<T*>(reinterpret_cast<char*>(this) + offset);
     *ptr = value;
-  }
-
-  template<JvmType T>
-  T getFieldValue(size_t offset)
-  {
-    auto* ptr = reinterpret_cast<T*>(reinterpret_cast<char*>(this) + offset);
-    return *ptr;
   }
 
 protected:

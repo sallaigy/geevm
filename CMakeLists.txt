@@ -56,10 +56,11 @@ add_subdirectory(src/unit_tests)
 add_subdirectory(tests)
 
 target_include_directories(geevm PUBLIC src)
+target_include_directories(geevm PUBLIC ${JNI_INCLUDE_DIRS})
 target_link_libraries(geevm libzip::zip)
-target_link_libraries(geevm geevm-libjava)
 target_link_libraries(geevm ffi)
 
 add_executable(java src/bin/java.cpp)
 target_link_libraries(java geevm)
+target_link_libraries(java geevm-libjava)
 target_include_directories(java PUBLIC src)

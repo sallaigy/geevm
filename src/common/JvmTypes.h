@@ -51,6 +51,9 @@ concept CategoryTwoJvmType = is_one_of<T, std::int64_t, double>();
 template<class T>
 concept CategoryOneJvmType = JvmType<T> && !CategoryTwoJvmType<T>;
 
+template<class T>
+concept JvmPrimitiveType = is_one_of<std::int8_t, std::int16_t, std::int32_t, std::int64_t, char16_t, float, double, std::uint32_t>();
+
 /// JVM types that are sign-extended to int before being pushed to the operand stack.
 template<class T>
 concept StoredAsInt = JvmType<T> && is_one_of<T, std::int8_t, std::int16_t, char16_t>();

@@ -9,6 +9,10 @@ namespace geevm
 
 class Instance;
 class ClassInstance;
+class ArrayInstance;
+class JavaThread;
+class JField;
+class JMethod;
 
 template<class From, class To>
 struct JniTranslateImpl
@@ -22,35 +26,40 @@ struct JniTranslateImpl
 template<class From, class To>
 struct JniTranslate;
 
-template<>
-struct JniTranslate<jobject, Instance*> : JniTranslateImpl<jobject, Instance*>
-{
-};
+#define GEEVM_JNI_TRANSLATE(TYPE1, TYPE2)                            \
+  template<>                                                         \
+  struct JniTranslate<TYPE1, TYPE2> : JniTranslateImpl<TYPE1, TYPE2> \
+  {                                                                  \
+  };                                                                 \
+  template<>                                                         \
+  struct JniTranslate<TYPE2, TYPE1> : JniTranslateImpl<TYPE2, TYPE1> \
+  {                                                                  \
+  };
 
-template<>
-struct JniTranslate<Instance*, jobject> : JniTranslateImpl<Instance*, jobject>
-{
-};
+GEEVM_JNI_TRANSLATE(jobject, Instance*)
+GEEVM_JNI_TRANSLATE(jclass, ClassInstance*)
+GEEVM_JNI_TRANSLATE(jarray, ArrayInstance*)
+GEEVM_JNI_TRANSLATE(jfieldID, JField*)
+GEEVM_JNI_TRANSLATE(jmethodID, JMethod*)
+GEEVM_JNI_TRANSLATE(jbyteArray, ArrayInstance*)
 
-template<>
-struct JniTranslate<jclass, ClassInstance*> : JniTranslateImpl<jclass, ClassInstance*>
+namespace jni
 {
-};
 
-template<>
-struct JniTranslate<ClassInstance*, jclass> : JniTranslateImpl<ClassInstance*, jclass>
-{
-};
+JavaThread& threadFromJniEnv(JNIEnv* env);
+
+}
 
 class JniImplementation
 {
 public:
-  JniImplementation();
+  JniImplementation(JavaThread& thread);
 
   JNIEnv_* getEnv();
 
 private:
-  JNIEnv_ mEnv;
+  JavaThread& mThread;
+  JNIEnv mEnv;
   JNINativeInterface_ mFunctions;
 };
 
