@@ -33,6 +33,11 @@ size_t Instance::getFieldOffset(types::JStringRef fieldName, types::JStringRef d
   return field->offset();
 }
 
+int32_t Instance::hashCode() const
+{
+  return static_cast<int32_t>(std::hash<const Instance*>{}(this));
+}
+
 std::unique_ptr<ArrayInstance> ArrayInstance::create(ArrayClass* arrayClass, size_t length)
 {
   ArrayInstance* array = new (length) ArrayInstance(arrayClass, length);
