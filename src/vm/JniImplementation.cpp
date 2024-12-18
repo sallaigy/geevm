@@ -1,7 +1,6 @@
 #include "JniImplementation.h"
 
 #include "Instance.h"
-
 #include <jni.h>
 
 using namespace geevm;
@@ -38,6 +37,15 @@ static T getField(JNIEnv* env, jobject object, jfieldID field)
   auto fieldOffset = JniTranslate<jfieldID, JField*>{}(field)->offset();
 
   return objectInstance->getFieldValue<T>(fieldOffset);
+}
+
+template<class T>
+static T getStaticField(JNIEnv* env, jclass klass, jfieldID field)
+{
+  auto javaClass = JniTranslate<jclass, ClassInstance*>{}(klass)->target();
+  auto fieldOffset = JniTranslate<jfieldID, JField*>{}(field)->offset();
+
+  return javaClass->getStaticFieldValue<T>(fieldOffset);
 }
 
 void initializeFunctions(JNINativeInterface_& functions)
@@ -101,6 +109,7 @@ void initializeFunctions(JNINativeInterface_& functions)
   };
 
   functions.GetLongField = getField<int64_t>;
+  functions.GetIntField = getField<int32_t>;
   functions.GetObjectField = [](JNIEnv* env, jobject object, jfieldID field) {
     auto objectInstance = JniTranslate<jobject, Instance*>{}(object);
     auto fieldOffset = JniTranslate<jfieldID, JField*>{}(field)->offset();
@@ -108,4 +117,6 @@ void initializeFunctions(JNINativeInterface_& functions)
     Instance* ret = objectInstance->getFieldValue<Instance*>(fieldOffset);
     return JniTranslate<Instance*, jobject>{}(ret);
   };
+
+  functions.GetStaticIntField = getStaticField<int32_t>;
 }

@@ -2,8 +2,6 @@
 
 #include "vm/Instance.h"
 
-#include <vm/JniImplementation.h>
-
 using namespace geevm;
 
 extern "C"

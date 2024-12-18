@@ -3,7 +3,7 @@
 #include <codecvt>
 #include <locale>
 
-std::string geevm::types::convertJString(const geevm::types::JString& str)
+std::string geevm::types::convertJString(const JString& str)
 {
   // Convert u16string to std::string
   std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> converter;

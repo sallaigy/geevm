@@ -59,7 +59,7 @@ JNIEXPORT void JNICALL Java_java_lang_System_setOut0(JNIEnv* env, jclass klass, 
 
 JNIEXPORT void JNICALL Java_java_lang_System_setErr0(JNIEnv* env, jclass klass, jobject stream)
 {
-  auto fieldId = env->GetFieldID(klass, "out", "Ljava/io/PrintStream;");
+  auto fieldId = env->GetFieldID(klass, "err", "Ljava/io/PrintStream;");
   if (fieldId == nullptr) {
     return;
   }

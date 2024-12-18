@@ -164,18 +164,13 @@ std::optional<Value> JavaThread::executeNative(JMethod* method, CallFrame& frame
     return nativeHandle->invoke(*this, args);
   }
 
-  auto handle = mVm.nativeMethods().get(method);
-  if (!handle) {
-    types::JString name;
-    name += method->getClass()->javaClassName();
-    name += u".";
-    name += method->name();
+  types::JString name;
+  name += method->getClass()->javaClassName();
+  name += u".";
+  name += method->name();
 
-    this->throwException(u"java/lang/UnsatisfiedLinkError", method->descriptor().formatAsJavaSignature(name));
-    return std::nullopt;
-  }
-
-  return (*handle)(*this, frame, args);
+  this->throwException(u"java/lang/UnsatisfiedLinkError", method->descriptor().formatAsJavaSignature(name));
+  return std::nullopt;
 }
 
 void JavaThread::throwException(Instance* exceptionInstance)
