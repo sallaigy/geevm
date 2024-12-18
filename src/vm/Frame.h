@@ -35,6 +35,11 @@ public:
   template<JvmType T>
   T get() const
   {
+    if constexpr (StoredAsInt<T>) {
+      if (std::holds_alternative<int32_t>(mStorage)) {
+        return static_cast<T>(std::get<int32_t>(mStorage));
+      }
+    }
     return std::get<T>(mStorage);
   }
 

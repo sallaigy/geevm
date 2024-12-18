@@ -29,4 +29,14 @@ JNIEXPORT void JNICALL Java_java_lang_Object_notifyAll(JNIEnv* env, jobject obj)
 {
   // Ignored for now
 }
+
+JNIEXPORT void JNICALL Java_java_lang_Object_wait__(JNIEnv* env, jobject obj)
+{
+  // Ignored for now
+}
+
+JNIEXPORT void JNICALL Java_java_lang_Object_wait__J(JNIEnv* env, jobject obj, jlong time)
+{
+  // Ignored for now
+}
 }

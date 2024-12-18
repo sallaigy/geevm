@@ -116,30 +116,22 @@ types::JString FieldType::toJavaString() const
 {
   types::JString str;
 
-  if (auto primitveType = asPrimitive(); primitveType) {
-    switch (*primitveType) {
-      case PrimitiveType::Byte: str = u"byte"; break;
-      case PrimitiveType::Char: str = u"char"; break;
-      case PrimitiveType::Double: str = u"double"; break;
-      case PrimitiveType::Float: str = u"float"; break;
-      case PrimitiveType::Int: str = u"int"; break;
-      case PrimitiveType::Long: str = u"long"; break;
-      case PrimitiveType::Short: str = u"short"; break;
-      case PrimitiveType::Boolean: str = u"boolean"; break;
-      default: std::unreachable();
-    }
-  } else {
-    types::JString objectName = *asReference();
-
-    str = types::JString{objectName};
-    std::ranges::replace(str, u'/', u'.');
-  }
-
-  for (size_t i = 0; i < mDimensions; i++) {
-    str += u"[]";
-  }
-
-  return str;
+  return map(
+      []<PrimitiveType Type>() {
+        return types::JString{PrimitiveTypeTraits<Type>::Name};
+      },
+      [](const types::JString& className) {
+        auto buff = types::JString{className};
+        std::ranges::replace(buff, u'/', u'.');
+        return buff;
+      },
+      [](const ArrayType& array) {
+        auto elementString = array.getElementType().toJavaString();
+        for (size_t i = 0; i < array.getDimensions(); i++) {
+          elementString += u"[]";
+        }
+        return elementString;
+      });
 }
 
 std::optional<ArrayType> FieldType::asArrayType() const

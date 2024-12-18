@@ -39,9 +39,12 @@ struct JniTranslate;
 GEEVM_JNI_TRANSLATE(jobject, Instance*)
 GEEVM_JNI_TRANSLATE(jclass, ClassInstance*)
 GEEVM_JNI_TRANSLATE(jarray, ArrayInstance*)
+GEEVM_JNI_TRANSLATE(jthrowable, Instance*)
+GEEVM_JNI_TRANSLATE(jstring, Instance*)
 GEEVM_JNI_TRANSLATE(jfieldID, JField*)
 GEEVM_JNI_TRANSLATE(jmethodID, JMethod*)
 GEEVM_JNI_TRANSLATE(jbyteArray, ArrayInstance*)
+GEEVM_JNI_TRANSLATE(jobjectArray, ArrayInstance*)
 
 namespace jni
 {

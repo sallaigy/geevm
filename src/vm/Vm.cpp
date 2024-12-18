@@ -7,8 +7,6 @@ using namespace geevm;
 
 void Vm::initialize()
 {
-  this->registerNatives();
-
   this->setUpJavaLangClass();
   this->requireClass(u"java/lang/Object");
   JClass* javaLangString = this->requireClass(u"java/lang/String");
