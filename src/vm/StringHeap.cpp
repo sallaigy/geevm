@@ -21,9 +21,9 @@ Instance* StringHeap::intern(const types::JString& utf8)
     bytes.push_back((c >> 8) & 0xff);
   }
 
-  ArrayInstance* stringContents = mVm.heap().allocateArray((*byteArrayClass)->asArrayClass(), bytes.size());
+  auto* stringContents = mVm.heap().allocateArray<int8_t>((*byteArrayClass)->asArrayClass(), bytes.size());
   for (int32_t i = 0; i < bytes.size(); ++i) {
-    stringContents->setArrayElement<int8_t>(i, std::bit_cast<int8_t>(bytes[i]));
+    stringContents->setArrayElement(i, std::bit_cast<int8_t>(bytes[i]));
   }
 
   Instance* newInstance = mVm.heap().allocate<Instance>((*stringClass)->asInstanceClass());

@@ -713,7 +713,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
           break;
         }
 
-        ArrayInstance* array = mThread.heap().allocateArray((*arrayClass)->asArrayClass(), count);
+        ArrayInstance* array = mThread.heap().allocateArray<Instance*>((*arrayClass)->asArrayClass(), count);
         frame.pushOperand<Instance*>(array);
 
         break;
@@ -807,13 +807,17 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
           auto count = dimensionCounts.back();
           dimensionCounts.pop_back();
 
-          ArrayInstance* newArray = mThread.heap().allocateArray(arrayClass, count);
+          ArrayInstance* newArray;
           if (!dimensionCounts.empty()) {
+            auto outerArray = mThread.heap().allocateArray<Instance*>(arrayClass, count);
             ArrayClass* innerArrayClass = (*arrayClass->elementClass())->asArrayClass();
             for (int32_t i = 0; i < count; i++) {
               auto innerArray = self(self, dimensionCounts, innerArrayClass);
-              newArray->setArrayElement(i, Value::from<Instance*>(innerArray));
+              outerArray->setArrayElement(i, innerArray);
             }
+            newArray = outerArray;
+          } else {
+            newArray = mThread.heap().allocateArray(arrayClass, count);
           }
 
           return newArray;
@@ -923,8 +927,8 @@ void DefaultInterpreter::arrayLoad()
     return;
   }
 
-  ArrayInstance* array = arrayRef->asArrayInstance();
-  auto element = array->getArrayElement<T>(index);
+  JavaArray<T>* array = arrayRef->asArray<T>();
+  auto element = array->getArrayElement(index);
   if (!element) {
     this->handleErrorAsException(element.error());
     return;
@@ -955,7 +959,7 @@ void DefaultInterpreter::arrayStore()
     return;
   }
 
-  ArrayInstance* array = arrayRef->asArrayInstance();
+  JavaArray<T>* array = arrayRef->asArray<T>();
 
   if constexpr (std::is_same_v<std::remove_const_t<T>, Instance*>) {
     if (value != nullptr) {
@@ -969,7 +973,7 @@ void DefaultInterpreter::arrayStore()
     }
   }
 
-  JvmExpected<void> result = array->setArrayElement<T>(index, value);
+  JvmExpected<void> result = array->setArrayElement(index, value);
   if (!result) {
     this->handleErrorAsException(result.error());
   }

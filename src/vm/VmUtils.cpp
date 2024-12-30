@@ -9,12 +9,12 @@ types::JString utils::getStringValue(Instance* stringInstance)
 {
   assert(stringInstance->getClass()->className() == u"java/lang/String");
 
-  ArrayInstance* array = stringInstance->getFieldValue<Instance*>(u"value", u"[B")->asArrayInstance();
+  JavaArray<int8_t>* array = stringInstance->getFieldValue<Instance*>(u"value", u"[B")->asArray<int8_t>();
 
   types::JString result;
   for (int i = 0; i < array->length(); i += 2) {
-    auto hi = array->getArrayElement(i)->get<int8_t>();
-    auto lo = array->getArrayElement(i + 1)->get<int8_t>();
+    int8_t hi = *array->getArrayElement(i);
+    int8_t lo = *array->getArrayElement(i + 1);
 
     uint16_t value = std::bit_cast<uint16_t>(static_cast<int16_t>(hi)) | (std::bit_cast<uint16_t>(static_cast<int16_t>(lo)) << 8);
 

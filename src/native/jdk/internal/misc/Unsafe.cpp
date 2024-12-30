@@ -37,9 +37,13 @@ JNIEXPORT jint JNICALL Java_jdk_internal_misc_Unsafe_arrayBaseOffset0(JNIEnv*, j
   return static_cast<jint>(arrayClass->headerSize());
 }
 
-JNIEXPORT jint JNICALL Java_jdk_internal_misc_Unsafe_arrayIndexScale0(JNIEnv*, jobject, jclass)
+JNIEXPORT jint JNICALL Java_jdk_internal_misc_Unsafe_arrayIndexScale0(JNIEnv*, jobject, jclass arrayClass)
 {
-  return sizeof(Value);
+  auto klass = JniTranslate<jclass, ClassInstance*>{}(arrayClass);
+
+  assert(klass->target()->asArrayClass() != nullptr);
+
+  return klass->target()->asArrayClass()->fieldType().asArrayType()->getElementType().sizeOf();
 }
 
 JNIEXPORT jlong JNICALL Java_jdk_internal_misc_Unsafe_objectFieldOffset1(JNIEnv* env, jobject theUnsafe, jclass klass, jstring fieldName)

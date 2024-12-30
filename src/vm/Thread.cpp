@@ -137,9 +137,9 @@ std::optional<Value> JavaThread::executeCall(JMethod* method, const std::vector<
       if (stackTrace != nullptr) {
         message += u"\n";
 
-        for (Value elem : *stackTrace->asArrayInstance()) {
-          auto toStringMethod = elem.get<Instance*>()->getClass()->getVirtualMethod(u"toString", u"()Ljava/lang/String;");
-          auto ret = this->executeCall(*toStringMethod, {elem});
+        for (Instance* elem : *stackTrace->asArray<Instance*>()) {
+          auto toStringMethod = elem->getClass()->getVirtualMethod(u"toString", u"()Ljava/lang/String;");
+          auto ret = this->executeCall(*toStringMethod, {Value::from<Instance*>(elem)});
           assert(ret.has_value());
 
           message += u"  at ";
@@ -229,7 +229,7 @@ Instance* JavaThread::createStackTrace()
     }
   }
 
-  ArrayInstance* array = heap().allocateArray((*stackTraceArrayCls)->asArrayClass(), stackTrace.size());
+  JavaArray<Instance*>* array = heap().allocateArray<Instance*>((*stackTraceArrayCls)->asArrayClass(), stackTrace.size());
   for (int32_t i = 0; i < stackTrace.size(); i++) {
     array->setArrayElement(i, stackTrace[i]);
   }

@@ -103,7 +103,7 @@ JNIEXPORT jarray JNICALL Java_java_lang_Class_getDeclaredFields0(JNIEnv* env, jc
     }
   }
 
-  ArrayInstance* fieldsArray = thread.heap().allocateArray((*thread.resolveClass(u"[Ljava/lang/reflect/Field;"))->asArrayClass(), fields.size());
+  auto fieldsArray = thread.heap().allocateArray<Instance*>((*thread.resolveClass(u"[Ljava/lang/reflect/Field;"))->asArrayClass(), fields.size());
   for (int i = 0; i < fields.size(); i++) {
     fieldsArray->setArrayElement(i, fields.at(i));
   }

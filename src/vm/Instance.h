@@ -17,6 +17,9 @@ class JClass;
 class ArrayInstance;
 class ClassInstance;
 
+template<JvmType T>
+class JavaArray;
+
 class Instance
 {
   friend class JavaHeap;
@@ -52,6 +55,14 @@ public:
   }
 
   ArrayInstance* asArrayInstance();
+
+  template<JvmType T>
+  JavaArray<T>* asArray()
+  {
+    // TODO: Assert class and type consistency
+    return static_cast<JavaArray<T>*>(this);
+  }
+
   ClassInstance* asClassInstance();
 
   void* fieldsStart();
@@ -77,75 +88,67 @@ protected:
 
 class ArrayInstance : public Instance
 {
-public:
+protected:
   ArrayInstance(ArrayClass* arrayClass, size_t length);
 
-  static std::unique_ptr<ArrayInstance> create(ArrayClass* arrayClass, size_t length);
-
-  void* operator new(size_t base, size_t arraySize);
-  void operator delete(void* ptr)
-  {
-    ::operator delete(ptr);
-  }
-
-  JvmExpected<Value> getArrayElement(int32_t index);
-  JvmExpected<void> setArrayElement(int32_t index, Value value);
-
-  template<JvmType T>
-  JvmExpected<T> getArrayElement(int32_t index)
-  {
-    auto result = getArrayElement(index);
-
-    return result.transform([](const Value& value) -> T {
-      return value.get<T>();
-    });
-  }
-
-  template<JvmType T>
-  JvmExpected<void> setArrayElement(int32_t index, T value)
-  {
-    return setArrayElement(index, Value::from<T>(value));
-  }
-
+public:
   int32_t length() const
   {
     return mLength;
   }
 
-  using const_iterator = const Value*;
+private:
+  int32_t mLength;
+};
+
+template<JvmType T>
+class JavaArray : public ArrayInstance
+{
+public:
+  JavaArray(ArrayClass* arrayClass, size_t length)
+    : ArrayInstance(arrayClass, length)
+  {
+    for (int32_t i = 0; i < length; i++) {
+      this->setArrayElement(i, static_cast<T>(0));
+    }
+  }
+
+  JvmExpected<T> getArrayElement(int32_t index)
+  {
+    if (index < 0 || index >= length()) {
+      return makeError<T>(u"java/lang/ArrayIndexOutOfBoundsException");
+    }
+    T* result = this->atIndex(index);
+
+    return *result;
+  }
+
+  JvmExpected<void> setArrayElement(int32_t index, T value)
+  {
+    if (index < 0 || index >= length()) {
+      return makeError<void>(u"java/lang/ArrayIndexOutOfBoundsException");
+    }
+
+    *this->atIndex(index) = value;
+
+    return JvmExpected<void>{};
+  }
+
+  using const_iterator = const T*;
   const_iterator begin() const
   {
-    return this->contentsStart();
+    return reinterpret_cast<const T*>(this->fieldsStart());
   }
   const_iterator end() const
   {
-    auto p = this->contentsStart() + this->length();
-    return p;
-  }
-
-  std::span<Value> span()
-  {
-    return std::span<Value>(this->contentsStart(), static_cast<size_t>(this->length()));
+    return reinterpret_cast<const T*>(this->fieldsStart()) + length();
   }
 
 private:
-  Value* contentsStart()
+  T* atIndex(size_t i)
   {
-    return reinterpret_cast<Value*>(this->fieldsStart());
+    return reinterpret_cast<T*>(this->fieldsStart()) + i;
   }
-
-  const Value* contentsStart() const
-  {
-    return reinterpret_cast<const Value*>(this->fieldsStart());
-  }
-
-  Value* atIndex(size_t i)
-  {
-    return contentsStart() + i;
-  }
-
-private:
-  int32_t mLength;
 };
 
 /// An instance of java.lang.Class

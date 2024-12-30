@@ -27,7 +27,9 @@ class JavaHeap
   {
     void operator()(Instance* obj)
     {
-      if (obj->getClass()->className() == u"java/lang/Class") {
+      if (obj->getClass()->isArrayType()) {
+        obj->asArrayInstance()->~ArrayInstance();
+      } else if (obj->getClass()->className() == u"java/lang/Class") {
         obj->asClassInstance()->~ClassInstance();
       } else {
         obj->~Instance();
@@ -51,14 +53,28 @@ public:
     size_t size = klass->allocationSize();
     void* mem = ::operator new(size);
 
-    auto* fieldsStart = reinterpret_cast<Value*>(reinterpret_cast<char*>(mem) + sizeof(T));
-
     auto object = new (mem) T(klass, std::forward<Args>(args)...);
     ObjectPtr ptr{object, ObjectDeleter{}};
     return static_cast<T*>(mHeap.emplace_back(std::move(ptr)).get());
   }
 
-  /// Allocates space for an instance of the given class.
+  template<JvmType T>
+  JavaArray<T>* allocateArray(ArrayClass* klass, int32_t length)
+  {
+    assert(length >= 0);
+    auto elementType = klass->fieldType().asArrayType()->getElementType();
+
+    size_t elementSize = sizeof(T);
+
+    size_t size = klass->headerSize() + length * elementSize;
+    void* mem = ::operator new(size);
+
+    JavaArray<T>* array = new (mem) JavaArray<T>(klass, length);
+
+    ObjectPtr ptr{array, ObjectDeleter{}};
+    return static_cast<JavaArray<T>*>(mHeap.emplace_back(std::move(ptr)).get());
+  }
+
   ArrayInstance* allocateArray(ArrayClass* klass, int32_t length);
 
   Instance* intern(const types::JString& utf8)
@@ -73,7 +89,6 @@ public:
 
 private:
   std::vector<ObjectPtr> mHeap;
-  std::vector<std::unique_ptr<ArrayInstance>> mArrayHeap;
   StringHeap mInternedStrings;
 };
 

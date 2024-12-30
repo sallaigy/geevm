@@ -38,25 +38,9 @@ int32_t Instance::hashCode() const
   return static_cast<int32_t>(std::hash<const Instance*>{}(this));
 }
 
-std::unique_ptr<ArrayInstance> ArrayInstance::create(ArrayClass* arrayClass, size_t length)
-{
-  ArrayInstance* array = new (length) ArrayInstance(arrayClass, length);
-  return std::unique_ptr<ArrayInstance>(array);
-}
-
-void* ArrayInstance::operator new(size_t base, size_t arrayLength)
-{
-  size_t size = base + arrayLength * sizeof(Value);
-  return ::operator new(size);
-}
-
 ArrayInstance::ArrayInstance(ArrayClass* arrayClass, size_t length)
   : Instance(arrayClass), mLength(length)
 {
-  auto elementType = arrayClass->fieldType().asArrayType()->getElementType();
-  for (int32_t i = 0; i < mLength; i++) {
-    this->setArrayElement(i, Value::defaultValue(elementType));
-  }
 }
 
 ArrayInstance* Instance::asArrayInstance()
@@ -77,24 +61,4 @@ void* Instance::fieldsStart()
 const void* Instance::fieldsStart() const
 {
   return reinterpret_cast<const char*>(this) + this->getClass()->headerSize();
-}
-
-JvmExpected<Value> ArrayInstance::getArrayElement(int32_t index)
-{
-  if (index < 0 || index >= mLength) {
-    return makeError<Value>(u"java/lang/ArrayIndexOutOfBoundsException");
-  }
-
-  return *this->atIndex(index);
-}
-
-JvmExpected<void> ArrayInstance::setArrayElement(int32_t index, Value value)
-{
-  if (index < 0 || index >= mLength) {
-    return makeError<void>(u"java/lang/ArrayIndexOutOfBoundsException");
-  }
-
-  *this->atIndex(index) = value;
-
-  return JvmExpected<void>{};
 }

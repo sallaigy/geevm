@@ -1,6 +1,8 @@
 #ifndef GEEVM_JNIIMPLEMENTATION_H
 #define GEEVM_JNIIMPLEMENTATION_H
 
+#include "Instance.h"
+
 #include <bit>
 #include <jni.h>
 
@@ -43,8 +45,8 @@ GEEVM_JNI_TRANSLATE(jthrowable, Instance*)
 GEEVM_JNI_TRANSLATE(jstring, Instance*)
 GEEVM_JNI_TRANSLATE(jfieldID, JField*)
 GEEVM_JNI_TRANSLATE(jmethodID, JMethod*)
-GEEVM_JNI_TRANSLATE(jbyteArray, ArrayInstance*)
-GEEVM_JNI_TRANSLATE(jobjectArray, ArrayInstance*)
+GEEVM_JNI_TRANSLATE(jbyteArray, JavaArray<int8_t>*)
+GEEVM_JNI_TRANSLATE(jobjectArray, JavaArray<Instance*>*)
 
 namespace jni
 {
