@@ -37,7 +37,7 @@ JNIEXPORT jobject JNICALL Java_java_lang_Throwable_getStackTraceElement(JNIEnv* 
 {
   auto exceptionInstance = JniTranslate<jobject, Instance*>{}(throwable);
   auto backtrace = exceptionInstance->getFieldValue<Instance*>(u"backtrace", u"Ljava/lang/Object;");
-  auto elem = backtrace->asArrayInstance()->getArrayElement<Instance*>(index);
+  auto elem = backtrace->asArray<Instance*>()->getArrayElement(index);
 
   assert(elem.has_value());
 

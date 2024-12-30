@@ -5,8 +5,17 @@ using namespace geevm;
 
 ArrayInstance* JavaHeap::allocateArray(ArrayClass* klass, int32_t length)
 {
-  assert(length >= 0);
+  auto elementType = klass->fieldType().asArrayType()->getElementType();
 
-  const auto& inserted = mArrayHeap.emplace_back(ArrayInstance::create(klass, length));
-  return static_cast<ArrayInstance*>(inserted.get());
+  return elementType.map(
+      [&]<PrimitiveType Type>() -> ArrayInstance* {
+        using Representation = typename PrimitiveTypeTraits<Type>::Representation;
+        return this->allocateArray<Representation>(klass, length);
+      },
+      [&](types::JStringRef) -> ArrayInstance* {
+        return this->allocateArray<Instance*>(klass, length);
+      },
+      [&](const ArrayType&) -> ArrayInstance* {
+        return this->allocateArray<Instance*>(klass, length);
+      });
 }
