@@ -43,18 +43,7 @@ JNIEXPORT jboolean JNICALL Java_java_lang_Thread_isAlive(JNIEnv* env, jobject th
 
 JNIEXPORT void JNICALL Java_java_lang_Thread_start0(JNIEnv* env, jobject thread)
 {
-  jclass threadCls = env->GetObjectClass(thread);
-  auto methodId = env->GetMethodID(threadCls, "run", "()V");
-  if (methodId == nullptr) {
-    return;
-  }
-
-  JMethod* target = JniTranslate<jmethodID, JMethod*>{}(methodId);
-  Instance* threadRef = JniTranslate<jobject, Instance*>{}(thread);
-  JavaThread& internalThread = jni::threadFromJniEnv(env);
-
-  auto targetThrad = std::make_unique<JavaThread>(internalThread.vm());
-  targetThrad->setThreadInstance(threadRef);
-  targetThrad->start(target, {});
+  // TODO: We do not have sufficient synchronization to safely start a new thread, so we ignore this call
+  //  until we are ready with proper thread support.
 }
 }
