@@ -784,7 +784,19 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         break;
       }
 
-      case WIDE: notImplemented(opcode); break;
+      case WIDE: {
+        Opcode modifiedOpcode = static_cast<Opcode>(cursor.readU1());
+        if (modifiedOpcode == IINC) {
+          types::u2 index = cursor.readU2();
+          int16_t constant = static_cast<int16_t>(cursor.readU2());
+
+          int32_t value = frame.loadValue<int32_t>(index);
+          frame.storeValue<int32_t>(index, value + constant);
+        } else {
+          notImplemented(opcode);
+        }
+        break;
+      }
       case MULTIANEWARRAY: {
         uint16_t index = cursor.readU2();
         uint8_t dimensions = cursor.readU1();
