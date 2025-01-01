@@ -138,7 +138,7 @@ struct PrimitiveTypeTraits<PrimitiveType::Short>
 template<>
 struct PrimitiveTypeTraits<PrimitiveType::Boolean>
 {
-  using Representation = std::int32_t;
+  using Representation = std::int8_t;
   static constexpr types::JStringRef Descriptor = u"Z";
   static constexpr types::JStringRef Name = u"boolean";
   static constexpr types::JStringRef ClassName = u"java/lang/Boolean";

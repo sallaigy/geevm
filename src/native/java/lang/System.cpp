@@ -1,10 +1,8 @@
-#include <jni.h>
-
 #include "vm/Instance.h"
-
-#include <vm/JniImplementation.h>
+#include "vm/JniImplementation.h"
 
 #include <cstring>
+#include <format>
 
 using namespace geevm;
 
@@ -33,7 +31,7 @@ JNIEXPORT void JNICALL Java_java_lang_System_arraycopy(JNIEnv* env, jclass klass
   JavaThread& thread = jni::threadFromJniEnv(env);
 
   if (src == nullptr || dest == nullptr) {
-    thread.throwException(u"java/lang/NullPointerException");
+    thread.throwException(u"java/lang/NullPointerException", u"null");
     return;
   }
 
@@ -48,18 +46,37 @@ JNIEXPORT void JNICALL Java_java_lang_System_arraycopy(JNIEnv* env, jclass klass
   auto sourceElementTy = sourceArray->getClass()->asArrayClass()->fieldType().asArrayType()->getElementType();
   auto targetElementTy = sourceArray->getClass()->asArrayClass()->fieldType().asArrayType()->getElementType();
 
-  if (srcPos < 0 || destPos < 0 || length < 0) {
-    thread.throwException(u"java/lang/IndexOutOfBoundsException");
+  if (srcPos < 0) {
+    auto message = std::format("arraycopy: source index {} out of bounds for {}[{}]", srcPos, types::convertJString(sourceElementTy.toJavaString()),
+                               sourceArray->length());
+    thread.throwException(u"java/lang/IndexOutOfBoundsException", types::convertString(message));
+    return;
+  }
+
+  if (destPos < 0) {
+    auto message = std::format("arraycopy: destination index {} out of bounds for {}[{}]", destPos, types::convertJString(targetElementTy.toJavaString()),
+                               targetArray->length());
+    thread.throwException(u"java/lang/IndexOutOfBoundsException", types::convertString(message));
     return;
   }
 
   if (srcPos + length > sourceArray->length()) {
-    thread.throwException(u"java/lang/IndexOutOfBoundsException", u"source array range is out of bounds");
+    auto message = std::format("arraycopy: last source index {} out of bounds for {}[{}]", srcPos + length,
+                               types::convertJString(sourceElementTy.toJavaString()), sourceArray->length());
+    thread.throwException(u"java/lang/IndexOutOfBoundsException", types::convertString(message));
     return;
   }
 
   if (destPos + length > targetArray->length()) {
-    thread.throwException(u"java/lang/IndexOutOfBoundsException", u"dest array range is out of bounds");
+    auto message = std::format("arraycopy: last destination index {} out of bounds for {}[{}]", destPos + length,
+                               types::convertJString(targetElementTy.toJavaString()), targetArray->length());
+    thread.throwException(u"java/lang/IndexOutOfBoundsException", types::convertString(message));
+    return;
+  }
+
+  if (length < 0) {
+    auto message = std::format("arraycopy: length {} is negative", length);
+    thread.throwException(u"java/lang/IndexOutOfBoundsException", types::convertString(message));
     return;
   }
 

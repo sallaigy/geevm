@@ -15,6 +15,7 @@ JNIEXPORT void JNICALL Java_java_io_FileOutputStream_initIDs(JNIEnv*, jobject)
 
 JNIEXPORT void JNICALL Java_java_io_FileOutputStream_writeBytes(JNIEnv* env, jobject fos, jbyteArray bytes, jint offset, jint length, jboolean append)
 {
+  JavaThread& thread = jni::threadFromJniEnv(env);
   auto klass = env->GetObjectClass(fos);
   auto descriptorField = env->GetFieldID(klass, "fd", "Ljava/io/FileDescriptor;");
   if (descriptorField == nullptr) {
@@ -36,7 +37,7 @@ JNIEXPORT void JNICALL Java_java_io_FileOutputStream_writeBytes(JNIEnv* env, job
   for (int32_t i = 0; i < length; i++) {
     auto res = array->getArrayElement(i);
     if (!res) {
-      jni::threadFromJniEnv(env).throwException(res.error().exception());
+      thread.throwException(res.error().exception());
       return;
     } else {
       buffer.push_back(*res);
@@ -44,6 +45,17 @@ JNIEXPORT void JNICALL Java_java_io_FileOutputStream_writeBytes(JNIEnv* env, job
   }
 
   FILE* fp = fdopen(fd, "w");
-  fwrite(reinterpret_cast<char*>(buffer.data() + offset), sizeof(int8_t), length, fp);
+  if (fp == nullptr) {
+    thread.throwException(u"java/io/IOException", u"failed to open file");
+    return;
+  }
+
+  fwrite(buffer.data() + offset, sizeof(int8_t), length, fp);
+  fflush(fp);
+
+  // Do not attempt to close stdout and stderr
+  if (fd > STDERR_FILENO) {
+    fclose(fp);
+  }
 }
 }
