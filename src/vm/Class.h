@@ -82,6 +82,7 @@ public:
   }
 
   Instance* classInstance() const;
+  void setClassInstance(ClassInstance* instance);
 
   // Methods and fields
   //==----------------------------------------------------------------------==//
@@ -107,6 +108,12 @@ public:
 
   void setStaticFieldValue(const types::JString& name, const types::JString& descriptor, Value value);
   void setStaticFieldValue(size_t offset, Value value);
+
+  template<JvmType T>
+  void setStaticFieldValue(size_t offset, T value)
+  {
+    this->setStaticFieldValue(offset, Value::from<T>(value));
+  }
 
   std::optional<JField*> lookupField(const types::JString& name, const types::JString& descriptor);
   std::optional<JField*> lookupFieldByName(const types::JString& string);
@@ -184,7 +191,7 @@ private:
   JClass* mSuperClass = nullptr;
   std::vector<JClass*> mSuperInterfaces;
 
-  ClassInstance* mClassInstance;
+  ClassInstance* mClassInstance = nullptr;
 };
 
 class InstanceClass : public JClass
@@ -247,6 +254,8 @@ public:
   {
     return mElementClass;
   }
+
+  std::size_t allocationSize(int32_t length) const;
 
 private:
   FieldType mType;

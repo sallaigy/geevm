@@ -47,16 +47,14 @@ public:
 
   Value widenToInt()
   {
-    return std::visit(
-        [this](auto&& arg) -> Value {
-          using T = std::decay_t<decltype(arg)>;
-          if constexpr (StoredAsInt<T>) {
-            return Value::from(static_cast<int32_t>(arg));
-          } else {
-            return *this;
-          }
-        },
-        mStorage);
+    return std::visit([this](auto&& arg) -> Value {
+      using T = std::decay_t<decltype(arg)>;
+      if constexpr (StoredAsInt<T>) {
+        return Value::from(static_cast<int32_t>(arg));
+      } else {
+        return *this;
+      }
+    }, mStorage);
   }
 
 public:
@@ -68,18 +66,25 @@ public:
     return std::holds_alternative<int64_t>(mStorage) || std::holds_alternative<double>(mStorage);
   }
 
+  template<JvmType T>
+  std::optional<T> tryGet() const
+  {
+    if (std::holds_alternative<T>(mStorage)) {
+      return std::get<T>(mStorage);
+    }
+
+    return std::nullopt;
+  }
+
   static Value defaultValue(const FieldType& fieldType)
   {
-    return fieldType.map(
-        []<PrimitiveType Type>() {
-          return Value::from<typename PrimitiveTypeTraits<Type>::Representation>(0);
-        },
-        [](types::JStringRef name) {
-          return Value::from<Instance*>(nullptr);
-        },
-        [](const ArrayType& array) {
-          return Value::from<Instance*>(nullptr);
-        });
+    return fieldType.map([]<PrimitiveType Type>() {
+      return Value::from<typename PrimitiveTypeTraits<Type>::Representation>(0);
+    }, [](types::JStringRef name) {
+      return Value::from<Instance*>(nullptr);
+    }, [](const ArrayType& array) {
+      return Value::from<Instance*>(nullptr);
+    });
   }
 
 private:
@@ -172,6 +177,11 @@ public:
     int32_t idx = static_cast<int32_t>(mOperandStack.size()) - 1 - entry;
     assert(idx >= 0);
     return mOperandStack[idx];
+  }
+
+  void replaceStackValue(types::u2 index, Value value)
+  {
+    mOperandStack.at(index) = value;
   }
 
   const std::vector<Value>& operandStack() const

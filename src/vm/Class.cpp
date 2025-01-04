@@ -63,16 +63,13 @@ void JClass::prepare(BootstrapClassLoader& classLoader, JavaHeap& heap)
     this->linkSuperInterfaces({u"java/lang/Cloneable", u"java/io/Serializable"}, classLoader);
 
     FieldType elementType = arrayClass->fieldType().asArrayType()->getElementType();
-    elementType.map(
-        [&]<PrimitiveType Type>() {
-          arrayClass->mElementClass = nullptr;
-        },
-        [&](const types::JString& name) {
-          arrayClass->mElementClass = *classLoader.loadClass(name);
-        },
-        [&](const ArrayType& array) {
-          arrayClass->mElementClass = *classLoader.loadClass(array.className());
-        });
+    elementType.map([&]<PrimitiveType Type>() {
+      arrayClass->mElementClass = nullptr;
+    }, [&](const types::JString& name) {
+      arrayClass->mElementClass = *classLoader.loadClass(name);
+    }, [&](const ArrayType& array) {
+      arrayClass->mElementClass = *classLoader.loadClass(array.className());
+    });
   } else if (auto instanceClass = this->asInstanceClass(); instanceClass != nullptr) {
     if (auto superClass = instanceClass->constantPool().getOptionalClassName(instanceClass->mClassFile->superClass())) {
       this->linkSuperClass(*superClass, classLoader);
@@ -493,4 +490,16 @@ void InstanceClass::initializeRuntimeConstantPool(StringHeap& stringHeap, Bootst
 Instance* JClass::classInstance() const
 {
   return mClassInstance;
+}
+
+void JClass::setClassInstance(ClassInstance* instance)
+{
+  mClassInstance = instance;
+}
+
+std::size_t ArrayClass::allocationSize(int32_t length) const
+{
+  assert(length >= 0);
+  auto elementType = this->fieldType().asArrayType()->getElementType();
+  return this->headerSize() + length * elementType.sizeOf();
 }
