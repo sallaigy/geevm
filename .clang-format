@@ -30,4 +30,4 @@ ReferenceAlignment: Left
 AlwaysBreakTemplateDeclarations: Yes
 SpaceAfterTemplateKeyword: False
 AllowShortLambdasOnASingleLine: Empty
-
+LambdaBodyIndentation: OuterScope

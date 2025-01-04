@@ -188,12 +188,12 @@ void JavaThread::throwException(const types::JString& name, const types::JString
     assert(false && "TODO: failure to resolve exception class");
   }
 
-  Instance* exceptionInstance = heap().allocate((*klass)->asInstanceClass());
+  GcRootRef<Instance> exceptionInstance = heap().gc().pin(heap().allocate((*klass)->asInstanceClass()));
   Instance* messageInstance = heap().intern(message);
   exceptionInstance->setFieldValue(u"detailMessage", u"Ljava/lang/String;", messageInstance);
   exceptionInstance->setFieldValue(u"stackTrace", u"[Ljava/lang/StackTraceElement;", createStackTrace());
 
-  this->throwException(exceptionInstance);
+  this->throwException(*exceptionInstance);
 }
 
 void JavaThread::clearException()
@@ -221,11 +221,11 @@ Instance* JavaThread::createStackTrace()
     }
 
     if (include) {
-      auto stackTraceElement = heap().allocate((*stackTraceElementCls)->asInstanceClass());
+      auto stackTraceElement = heap().gc().pin(heap().allocate((*stackTraceElementCls)->asInstanceClass()));
       stackTraceElement->setFieldValue<Instance*>(u"declaringClass", u"Ljava/lang/String;", heap().intern(callFrame.currentClass()->javaClassName()));
       stackTraceElement->setFieldValue<Instance*>(u"declaringClassObject", u"Ljava/lang/Class;", callFrame.currentClass()->classInstance());
       stackTraceElement->setFieldValue<Instance*>(u"methodName", u"Ljava/lang/String;", heap().intern(callFrame.currentMethod()->name()));
-      stackTrace.push_back(stackTraceElement);
+      stackTrace.push_back(*stackTraceElement);
     }
   }
 

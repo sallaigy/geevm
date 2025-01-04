@@ -49,6 +49,11 @@ public:
 
   std::optional<ArrayType> asArrayType() const;
 
+  bool isReferenceOrArray() const
+  {
+    return std::holds_alternative<types::JString>(mVariant) || mDimensions != 0;
+  }
+
   std::size_t sizeOf() const;
 
   /// Map the contents of this descriptor using one of the provided mapper functions.

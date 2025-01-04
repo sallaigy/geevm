@@ -41,6 +41,12 @@ public:
 
   void registerClassLoader(std::unique_ptr<ClassLoader> classLoader);
 
+  using class_iterator = std::unordered_map<types::JString, std::unique_ptr<JClass>>::const_iterator;
+  decltype(auto) loadedClasses()
+  {
+    return std::ranges::subrange(mClasses.begin(), mClasses.end());
+  }
+
 private:
   JvmExpected<ArrayClass*> loadArrayClass(const types::JString& name);
 

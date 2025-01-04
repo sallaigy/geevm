@@ -5,6 +5,7 @@
 #include "common/JvmError.h"
 #include "vm/Frame.h"
 
+#include <common/Memory.h>
 #include <cstdint>
 #include <span>
 
@@ -23,9 +24,11 @@ class JavaArray;
 class Instance
 {
   friend class JavaHeap;
+  friend class GarbageCollector;
 
 protected:
   explicit Instance(JClass* klass);
+  Instance(const Instance& other) = delete;
 
 public:
   JClass* getClass() const
@@ -70,7 +73,7 @@ public:
 
   int32_t hashCode() const;
 
-  virtual ~Instance() = default;
+  Instance* copyTo(void* dest);
 
 private:
   size_t getFieldOffset(types::JStringRef fieldName, types::JStringRef descriptor) const;
@@ -118,9 +121,9 @@ public:
     if (index < 0 || index >= length()) {
       return makeError<T>(u"java/lang/ArrayIndexOutOfBoundsException");
     }
-    T* result = this->atIndex(index);
 
-    return *result;
+    T result = *this->atIndex(index);
+    return result;
   }
 
   JvmExpected<void> setArrayElement(int32_t index, T value)
@@ -172,6 +175,10 @@ public:
 private:
   JClass* mTarget;
 };
+
+static_assert(std::is_trivially_copyable_v<Instance>);
+static_assert(std::is_trivially_copyable_v<ArrayInstance>);
+static_assert(std::is_trivially_copyable_v<ClassInstance>);
 
 } // namespace geevm
 

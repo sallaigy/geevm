@@ -7,6 +7,8 @@ using namespace geevm;
 
 void Vm::initialize()
 {
+  mHeap.gc().lockGC();
+
   this->setUpJavaLangClass();
   this->requireClass(u"java/lang/Object");
   JClass* javaLangString = this->requireClass(u"java/lang/String");
@@ -21,11 +23,13 @@ void Vm::initialize()
   mainThreadGroup->setFieldValue<int32_t>(u"maxPriority", u"I", 10);
 
   this->requireClass(u"java/lang/Thread");
-  mMainThread.initialize(u"main", mainThreadGroup);
+  mMainThread->initialize(u"main", mainThreadGroup);
 
   JClass* systemCls = this->requireClass(u"java/lang/System");
   auto initMethod = systemCls->getMethod(u"initPhase1", u"()V");
-  mMainThread.executeCall(*initMethod, {});
+  mMainThread->executeCall(*initMethod, {});
+
+  mHeap.gc().unlockGC();
 }
 
 JvmExpected<JClass*> Vm::resolveClass(const types::JString& name)
@@ -38,7 +42,7 @@ JClass* Vm::requireClass(const types::JString& name)
   auto klass = this->resolveClass(name);
   assert(klass.has_value() && "Required classes must always be resolvable!");
 
-  (*klass)->initialize(mMainThread);
+  (*klass)->initialize(*mMainThread);
 
   return *klass;
 }

@@ -1,19 +1,16 @@
 #ifndef GEEVM_THREAD_H
 #define GEEVM_THREAD_H
 
+#include "common/JvmError.h"
 #include "vm/Frame.h"
 
-#include <common/JvmError.h>
 #include <list>
 #include <thread>
 
 namespace geevm
 {
-class JavaHeap;
-}
-namespace geevm
-{
 
+class JavaHeap;
 class Vm;
 
 class JavaThread
@@ -51,7 +48,6 @@ public:
 
   void setThreadInstance(Instance* instance)
   {
-    assert(mThreadInstance == nullptr);
     mThreadInstance = instance;
   }
 
@@ -70,7 +66,7 @@ public:
     return mCallStack.back();
   }
 
-  const std::list<CallFrame>& callStack() const
+  std::list<CallFrame>& callStack()
   {
     return mCallStack;
   }

@@ -10,16 +10,13 @@ Instance::Instance(JClass* klass)
   for (const auto& [key, field] : klass->fields()) {
     if (!field->isStatic()) {
       auto& fieldType = field->fieldType();
-      fieldType.map(
-          [&]<PrimitiveType Type>() {
-            this->setFieldValue<typename PrimitiveTypeTraits<Type>::Representation>(field->offset(), 0);
-          },
-          [&](types::JStringRef) {
-            this->setFieldValue<Instance*>(field->offset(), nullptr);
-          },
-          [&](const ArrayType&) {
-            this->setFieldValue<Instance*>(field->offset(), nullptr);
-          });
+      fieldType.map([&]<PrimitiveType Type>() {
+        this->setFieldValue<typename PrimitiveTypeTraits<Type>::Representation>(field->offset(), 0);
+      }, [&](types::JStringRef) {
+        this->setFieldValue<Instance*>(field->offset(), nullptr);
+      }, [&](const ArrayType&) {
+        this->setFieldValue<Instance*>(field->offset(), nullptr);
+      });
     }
   }
 }

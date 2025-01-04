@@ -1,8 +1,6 @@
 #ifndef GEEVM_VM_VM_H
 #define GEEVM_VM_VM_H
 
-#include <unordered_map>
-
 #include "common/JvmError.h"
 #include "vm/Class.h"
 #include "vm/ClassLoader.h"
@@ -11,6 +9,9 @@
 #include "vm/NativeMethods.h"
 #include "vm/Thread.h"
 
+#include <ranges>
+#include <unordered_map>
+
 namespace geevm
 {
 
@@ -18,8 +19,9 @@ class Vm
 {
 public:
   explicit Vm()
-    : mBootstrapClassLoader(*this), mMainThread(*this), mHeap(*this)
+    : mBootstrapClassLoader(*this), mHeap(*this)
   {
+    mMainThread = mThreads.emplace_back(std::make_unique<JavaThread>(*this)).get();
   }
 
   JvmExpected<JClass*> resolveClass(const types::JString& name);
@@ -38,12 +40,19 @@ public:
 
   JavaThread& mainThread()
   {
-    return mMainThread;
+    return *mMainThread;
   }
 
   BootstrapClassLoader& bootstrapClassLoader()
   {
     return mBootstrapClassLoader;
+  }
+
+  auto threads()
+  {
+    return mThreads | std::views::transform([](std::unique_ptr<JavaThread>& ptr) {
+      return ptr.get();
+    });
   }
 
 private:
@@ -57,7 +66,8 @@ private:
   NativeMethodRegistry mNativeMethods;
   JavaHeap mHeap;
   // TODO: We only support one thread
-  JavaThread mMainThread;
+  JavaThread* mMainThread = nullptr;
+  std::vector<std::unique_ptr<JavaThread>> mThreads;
 };
 
 } // namespace geevm

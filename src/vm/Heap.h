@@ -4,11 +4,9 @@
 #include "common/JvmTypes.h"
 #include "vm/Class.h"
 #include "vm/Frame.h"
+#include "vm/GarbageCollector.h"
 #include "vm/Instance.h"
 #include "vm/StringHeap.h"
-
-#include <memory>
-#include <vector>
 
 namespace geevm
 {
@@ -23,56 +21,53 @@ class StringHeap;
 
 class JavaHeap
 {
-  struct ObjectDeleter
-  {
-    void operator()(Instance* obj)
-    {
-      if (obj->getClass()->isArrayType()) {
-        obj->asArrayInstance()->~ArrayInstance();
-      } else if (obj->getClass()->className() == u"java/lang/Class") {
-        obj->asClassInstance()->~ClassInstance();
-      } else {
-        obj->~Instance();
-      }
-      ::operator delete(obj);
-    }
-  };
-
-  using ObjectPtr = std::unique_ptr<Instance, ObjectDeleter>;
-
 public:
-  explicit JavaHeap(Vm& vm)
-    : mInternedStrings(vm)
-  {
-  }
+  explicit JavaHeap(Vm& vm);
 
   template<class T = Instance, class... Args>
     requires(std::is_base_of_v<Instance, T>)
   T* allocate(InstanceClass* klass, Args&&... args)
   {
     size_t size = klass->allocationSize();
-    void* mem = ::operator new(size);
+    void* mem = mGC.allocate(size);
 
     auto object = new (mem) T(klass, std::forward<Args>(args)...);
-    ObjectPtr ptr{object, ObjectDeleter{}};
-    return static_cast<T*>(mHeap.emplace_back(std::move(ptr)).get());
+    return object;
+  }
+
+  template<class T = Instance, class... Args>
+    requires(std::is_base_of_v<Instance, T>)
+  T* allocatePerm(InstanceClass* klass, Args&&... args)
+  {
+    size_t size = klass->allocationSize();
+    void* mem = this->allocateSpaceOnPerm(size);
+
+    auto object = new (mem) T(klass, std::forward<Args>(args)...);
+    return object;
   }
 
   template<JvmType T>
   JavaArray<T>* allocateArray(ArrayClass* klass, int32_t length)
   {
     assert(length >= 0);
-    auto elementType = klass->fieldType().asArrayType()->getElementType();
 
-    size_t elementSize = sizeof(T);
+    size_t size = klass->allocationSize(length);
+    void* mem = mGC.allocate(size);
 
-    size_t size = klass->headerSize() + length * elementSize;
-    void* mem = ::operator new(size);
+    auto array = new (mem) JavaArray<T>(klass, length);
+    return array;
+  }
 
-    JavaArray<T>* array = new (mem) JavaArray<T>(klass, length);
+  template<JvmType T>
+  JavaArray<T>* allocateArrayOnPerm(ArrayClass* klass, int32_t length)
+  {
+    assert(length >= 0);
 
-    ObjectPtr ptr{array, ObjectDeleter{}};
-    return static_cast<JavaArray<T>*>(mHeap.emplace_back(std::move(ptr)).get());
+    size_t size = klass->allocationSize(length);
+    void* mem = this->allocateSpaceOnPerm(size);
+
+    auto array = new (mem) JavaArray<T>(klass, length);
+    return array;
   }
 
   ArrayInstance* allocateArray(ArrayClass* klass, int32_t length);
@@ -87,9 +82,23 @@ public:
     return mInternedStrings;
   }
 
+  GarbageCollector& gc()
+  {
+    return mGC;
+  }
+
+  ~JavaHeap();
+
 private:
-  std::vector<ObjectPtr> mHeap;
+  void* allocateSpaceOnPerm(size_t size);
+
+private:
   StringHeap mInternedStrings;
+  // Garbage-collected heap
+  GarbageCollector mGC;
+  // Permanent heap
+  char* mPermanentRegion;
+  char* mPermanentBumpPtr;
 };
 
 } // namespace geevm
