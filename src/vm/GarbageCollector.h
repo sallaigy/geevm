@@ -3,6 +3,7 @@
 
 #include "common/JvmError.h"
 
+#include <cassert>
 #include <cstddef>
 #include <list>
 #include <unordered_map>
@@ -16,31 +17,62 @@ class Instance;
 /// A special reference that marks the object it points to as a GC root.
 /// As the garbage collector may relocate memory, this reference provides safe access to an object, even if the GC
 /// decides to relocate the object it refers to.
-template<class T = Instance>
-  requires(std::is_base_of_v<Instance, T>)
+template<std::derived_from<Instance> T = Instance>
 class GcRootRef
 {
+  template<std::derived_from<Instance> U>
+  friend class GcRootRef;
+
 public:
-  explicit GcRootRef(T** root)
+  explicit GcRootRef(Instance** root)
     : mReference(root)
   {
   }
 
+  /*implicit*/ GcRootRef(std::nullptr_t)
+    : mReference(nullptr)
+  {
+  }
+
   GcRootRef(const GcRootRef& other) = default;
+  GcRootRef& operator=(const GcRootRef& other) = default;
   GcRootRef(GcRootRef&& other) = default;
+  GcRootRef& operator=(GcRootRef&& other) = default;
+
+  template<std::derived_from<T> U>
+  GcRootRef(const GcRootRef<U>& other)
+    : mReference(other.mReference)
+  {
+  }
 
   T* operator->() const
   {
-    return *mReference;
+    return static_cast<T*>(*mReference);
   }
 
-  T* operator*() const
+  T* get() const
   {
-    return *mReference;
+    assert(mReference != nullptr);
+    return static_cast<T*>(*mReference);
+  }
+
+  bool operator==(GcRootRef<T> other) const
+  {
+    return mReference == other.mReference;
+  }
+
+  bool operator==(std::nullptr_t) const
+  {
+    return mReference == nullptr;
+  }
+
+  void reset()
+  {
+    mReference = nullptr;
   }
 
 private:
-  T** mReference;
+  Instance** mReference;
 };
 
 class GarbageCollector
@@ -52,7 +84,12 @@ public:
 
   void performGarbageCollection();
 
-  GcRootRef<Instance> pin(Instance* object);
+  template<std::derived_from<Instance> T>
+  GcRootRef<T> pin(T* object)
+  {
+    Instance** root = &mRootList.emplace_back(object);
+    return GcRootRef<T>(root);
+  }
 
   // Locks the garbage collector, preventing it from running.
   void lockGC();

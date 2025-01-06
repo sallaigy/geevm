@@ -27,9 +27,10 @@ JNIEXPORT jobjectArray JNICALL Java_jdk_internal_util_SystemProps_00024Raw_platf
 
   JavaThread& thread = jni::threadFromJniEnv(env);
 
-  auto targetClass = JniTranslate<jclass, ClassInstance*>{}(strArrayClass)->target();
+  auto targetClass = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(strArrayClass)->target();
 
-  JavaArray<Instance*>* propsArray = thread.heap().allocateArray<Instance*>(targetClass->asArrayClass(), arrayLength);
+  auto* allocatedArray = thread.heap().allocateArray<Instance*>(targetClass->asArrayClass(), arrayLength);
+  GcRootRef<JavaArray<Instance*>> propsArray = thread.heap().gc().pin(allocatedArray);
   propsArray->setArrayElement(18, thread.heap().intern(temp));
   propsArray->setArrayElement(36, thread.heap().intern(temp));
   propsArray->setArrayElement(37, thread.heap().intern(temp));
@@ -39,7 +40,7 @@ JNIEXPORT jobjectArray JNICALL Java_jdk_internal_util_SystemProps_00024Raw_platf
   propsArray->setArrayElement(5, thread.heap().intern(u"/"));
   propsArray->setArrayElement(23, thread.heap().intern(u":"));
 
-  return JniTranslate<JavaArray<Instance*>*, jobjectArray>{}(propsArray);
+  return JniTranslate<GcRootRef<JavaArray<Instance*>>, jobjectArray>{}(propsArray);
 }
 
 JNIEXPORT jobjectArray JNICALL Java_jdk_internal_util_SystemProps_00024Raw_vmProperties(JNIEnv* env, jclass klass)
@@ -52,12 +53,12 @@ JNIEXPORT jobjectArray JNICALL Java_jdk_internal_util_SystemProps_00024Raw_vmPro
 
   JavaThread& thread = jni::threadFromJniEnv(env);
 
-  auto targetClass = JniTranslate<jclass, ClassInstance*>{}(strArrayClass)->target();
+  auto targetClass = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(strArrayClass)->target();
 
-  JavaArray<Instance*>* propsArray = thread.heap().allocateArray<Instance*>(targetClass->asArrayClass(), arrayLength);
+  GcRootRef<JavaArray<Instance*>> propsArray = thread.heap().gc().pin(thread.heap().allocateArray<Instance*>(targetClass->asArrayClass(), arrayLength));
   propsArray->setArrayElement(0, thread.heap().intern(u"java.home"));
   propsArray->setArrayElement(1, thread.heap().intern(types::convertString(std::getenv("JDK17_PATH"))));
 
-  return JniTranslate<JavaArray<Instance*>*, jobjectArray>{}(propsArray);
+  return JniTranslate<GcRootRef<JavaArray<Instance*>>, jobjectArray>{}(propsArray);
 }
 }

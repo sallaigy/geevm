@@ -1,6 +1,7 @@
 #ifndef GEEVM_VM_FRAME_H
 #define GEEVM_VM_FRAME_H
 
+#include "GarbageCollector.h"
 #include "common/JvmTypes.h"
 #include "vm/Method.h"
 
@@ -15,10 +16,8 @@ namespace geevm
 
 class Value
 {
-private:
   using Storage = std::variant<std::int8_t, std::int16_t, std::int32_t, std::int64_t, char16_t, float, double, Instance*>;
 
-private:
   template<JvmType T>
   explicit Value(T value)
     : mStorage(value)

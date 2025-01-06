@@ -1,4 +1,5 @@
 #include "vm/VmUtils.h"
+#include "vm/Class.h"
 #include "vm/Instance.h"
 
 #include <algorithm>

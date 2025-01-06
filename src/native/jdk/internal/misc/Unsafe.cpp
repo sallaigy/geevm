@@ -9,9 +9,9 @@
 using namespace geevm;
 
 template<class T>
-jboolean compareAndSet(Instance* object, jlong offset, T expected, T desired)
+jboolean compareAndSet(GcRootRef<Instance> object, jlong offset, T expected, T desired)
 {
-  T* target = reinterpret_cast<T*>(reinterpret_cast<char*>(object) + offset);
+  T* target = reinterpret_cast<T*>(reinterpret_cast<char*>(object.get()) + offset);
 
   std::atomic_ref<T> atomicRef(*target);
 
@@ -29,7 +29,7 @@ JNIEXPORT void JNICALL Java_jdk_internal_misc_Unsafe_registerNatives(JNIEnv*, jc
 
 JNIEXPORT jint JNICALL Java_jdk_internal_misc_Unsafe_arrayBaseOffset0(JNIEnv*, jobject, jclass klass)
 {
-  auto classInstance = JniTranslate<jclass, ClassInstance*>{}(klass);
+  auto classInstance = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(klass);
   assert(classInstance->target()->isArrayType());
 
   const ArrayClass* arrayClass = classInstance->target()->asArrayClass();
@@ -39,7 +39,7 @@ JNIEXPORT jint JNICALL Java_jdk_internal_misc_Unsafe_arrayBaseOffset0(JNIEnv*, j
 
 JNIEXPORT jint JNICALL Java_jdk_internal_misc_Unsafe_arrayIndexScale0(JNIEnv*, jobject, jclass arrayClass)
 {
-  auto klass = JniTranslate<jclass, ClassInstance*>{}(arrayClass);
+  auto klass = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(arrayClass);
 
   assert(klass->target()->asArrayClass() != nullptr);
 
@@ -48,10 +48,10 @@ JNIEXPORT jint JNICALL Java_jdk_internal_misc_Unsafe_arrayIndexScale0(JNIEnv*, j
 
 JNIEXPORT jlong JNICALL Java_jdk_internal_misc_Unsafe_objectFieldOffset1(JNIEnv* env, jobject theUnsafe, jclass klass, jstring fieldName)
 {
-  auto classInstance = JniTranslate<jclass, ClassInstance*>{}(klass);
-  auto nameObj = JniTranslate<jobject, Instance*>{}(fieldName);
+  auto classInstance = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(klass);
+  auto nameObj = JniTranslate<jobject, GcRootRef<Instance>>{}(fieldName);
 
-  auto nameStr = utils::getStringValue(nameObj);
+  auto nameStr = utils::getStringValue(nameObj.get());
   auto field = classInstance->target()->lookupFieldByName(nameStr);
 
   if (!field.has_value()) {
@@ -68,36 +68,37 @@ JNIEXPORT void JNICALL Java_jdk_internal_misc_Unsafe_storeFence(JNIEnv*, jobject
 
 JNIEXPORT jboolean JNICALL Java_jdk_internal_misc_Unsafe_compareAndSetInt(JNIEnv*, jobject unsafe, jobject object, jlong offset, jint expected, jint desired)
 {
-  return compareAndSet<jint>(JniTranslate<jobject, Instance*>{}(object), offset, expected, desired);
+  return compareAndSet<jint>(JniTranslate<jobject, GcRootRef<Instance>>{}(object), offset, expected, desired);
 }
 
 JNIEXPORT jboolean JNICALL Java_jdk_internal_misc_Unsafe_compareAndSetLong(JNIEnv*, jobject unsafe, jobject object, jlong offset, jlong expected, jlong desired)
 {
-  return compareAndSet<jlong>(JniTranslate<jobject, Instance*>{}(object), offset, expected, desired);
+  return compareAndSet<jlong>(JniTranslate<jobject, GcRootRef<Instance>>{}(object), offset, expected, desired);
 }
 
 JNIEXPORT jboolean JNICALL Java_jdk_internal_misc_Unsafe_compareAndSetReference(JNIEnv*, jobject unsafe, jobject object, jlong offset, jobject expected,
                                                                                 jobject desired)
 {
-  return compareAndSet<Instance*>(JniTranslate<jobject, Instance*>{}(object), offset, JniTranslate<jobject, Instance*>{}(expected),
-                                  JniTranslate<jobject, Instance*>{}(desired));
+  return compareAndSet<Instance*>(JniTranslate<jobject, GcRootRef<Instance>>{}(object), offset, JniTranslate<jobject, GcRootRef<Instance>>{}(expected).get(),
+                                  JniTranslate<jobject, GcRootRef<Instance>>{}(desired).get());
 }
 
-JNIEXPORT jobject JNICALL Java_jdk_internal_misc_Unsafe_getReferenceVolatile(JNIEnv*, jobject unsafe, jobject object, jlong offset)
+JNIEXPORT jobject JNICALL Java_jdk_internal_misc_Unsafe_getReferenceVolatile(JNIEnv* env, jobject unsafe, jobject object, jlong offset)
 {
-  Instance* instance = JniTranslate<jobject, Instance*>{}(object);
+  GcRootRef<Instance> instance = JniTranslate<jobject, GcRootRef<Instance>>{}(object);
 
-  Instance** target = reinterpret_cast<Instance**>(reinterpret_cast<char*>(instance) + offset);
+  Instance** target = reinterpret_cast<Instance**>(reinterpret_cast<char*>(instance.get()) + offset);
   std::atomic_ref<Instance**> atomicRef(target);
+  auto loaded = jni::threadFromJniEnv(env).heap().gc().pin(*atomicRef.load());
 
-  return JniTranslate<Instance*, jobject>{}(*atomicRef.load());
+  return JniTranslate<GcRootRef<Instance>, jobject>{}(loaded);
 }
 
 JNIEXPORT jint JNICALL Java_jdk_internal_misc_Unsafe_getIntVolatile(JNIEnv*, jobject unsafe, jobject object, jlong offset)
 {
-  Instance* instance = JniTranslate<jobject, Instance*>{}(object);
+  GcRootRef<Instance> instance = JniTranslate<jobject, GcRootRef<Instance>>{}(object);
 
-  int32_t* target = reinterpret_cast<int32_t*>(reinterpret_cast<char*>(instance) + offset);
+  int32_t* target = reinterpret_cast<int32_t*>(reinterpret_cast<char*>(instance.get()) + offset);
   std::atomic_ref<int32_t*> atomicRef(target);
 
   return *atomicRef.load();

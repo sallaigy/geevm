@@ -84,7 +84,7 @@ void JClass::prepare(BootstrapClassLoader& classLoader, JavaHeap& heap)
   }
 
   auto classClass = classLoader.loadClass(u"java/lang/Class");
-  mClassInstance = heap.allocate<ClassInstance>((*classClass)->asInstanceClass(), this);
+  mClassInstance = heap.gc().pin(heap.allocate<ClassInstance>((*classClass)->asInstanceClass(), this));
 
   mStatus = Status::Prepared;
 }
@@ -487,14 +487,9 @@ void InstanceClass::initializeRuntimeConstantPool(StringHeap& stringHeap, Bootst
   }
 }
 
-Instance* JClass::classInstance() const
+GcRootRef<ClassInstance> JClass::classInstance() const
 {
   return mClassInstance;
-}
-
-void JClass::setClassInstance(ClassInstance* instance)
-{
-  mClassInstance = instance;
 }
 
 std::size_t ArrayClass::allocationSize(int32_t length) const

@@ -1,10 +1,14 @@
 #ifndef GEEVM_VM_FIELD_H
 #define GEEVM_VM_FIELD_H
 
+#include "class_file/Descriptor.h"
+
 #include <utility>
 
 namespace geevm
 {
+
+class InstanceClass;
 
 struct FieldRef
 {

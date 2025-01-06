@@ -1,7 +1,6 @@
 #ifndef GEEVM_VM_INSTANCE_H
 #define GEEVM_VM_INSTANCE_H
 
-#include "Class.h"
 #include "common/JvmError.h"
 #include "vm/Frame.h"
 

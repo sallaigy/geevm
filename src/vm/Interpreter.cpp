@@ -39,7 +39,7 @@ private:
   void invoke(JMethod* method);
   void handleErrorAsException(const VmError& error);
 
-  std::optional<types::u2> tryHandleException(Instance* exception, RuntimeConstantPool& rt, const Code& code, size_t pc);
+  std::optional<types::u2> tryHandleException(GcRootRef<Instance> exception, RuntimeConstantPool& rt, const Code& code, size_t pc);
 
   CallFrame& currentFrame()
   {
@@ -161,7 +161,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         } else if (entry.tag == ConstantPool::Tag::CONSTANT_Class) {
           auto klass = runtimeConstantPool.getClass(index);
           // TODO: Check if class is loaded
-          frame.pushOperand<Instance*>((*klass)->classInstance());
+          frame.pushOperand<Instance*>((*klass)->classInstance().get());
         } else {
           assert(false && "Unknown LDC type!");
         }
@@ -180,7 +180,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         } else if (entry.tag == ConstantPool::Tag::CONSTANT_Class) {
           auto klass = runtimeConstantPool.getClass(index);
           // TODO: Check if class is loaded
-          frame.pushOperand<Instance*>((*klass)->classInstance());
+          frame.pushOperand<Instance*>((*klass)->classInstance().get());
         } else {
           assert(false && "Unknown LDC_W type!");
         }
@@ -547,20 +547,17 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         assert(objectRef->getClass()->isInstanceOf(field->getClass()));
 
         auto& fieldType = field->fieldType();
-        fieldType.map(
-            [&]<PrimitiveType Type>() {
-              using T = typename PrimitiveTypeTraits<Type>::Representation;
-              auto result = objectRef->getFieldValue<T>(field->name(), field->descriptor());
-              frame.pushOperand<T>(result);
-            },
-            [&](types::JStringRef) {
-              auto result = objectRef->getFieldValue<Instance*>(field->name(), field->descriptor());
-              frame.pushOperand(result);
-            },
-            [&](const ArrayType&) {
-              auto result = objectRef->getFieldValue<Instance*>(field->name(), field->descriptor());
-              frame.pushOperand(result);
-            });
+        fieldType.map([&]<PrimitiveType Type>() {
+          using T = typename PrimitiveTypeTraits<Type>::Representation;
+          auto result = objectRef->getFieldValue<T>(field->name(), field->descriptor());
+          frame.pushOperand<T>(result);
+        }, [&](types::JStringRef) {
+          auto result = objectRef->getFieldValue<Instance*>(field->name(), field->descriptor());
+          frame.pushOperand(result);
+        }, [&](const ArrayType&) {
+          auto result = objectRef->getFieldValue<Instance*>(field->name(), field->descriptor());
+          frame.pushOperand(result);
+        });
         break;
       }
       case PUTFIELD: {
@@ -577,21 +574,18 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
 
         assert(objectRef->getClass()->isInstanceOf(field->getClass()));
 
-        field->fieldType().map(
-            [&]<PrimitiveType Type>() {
-              using T = typename PrimitiveTypeTraits<Type>::Representation;
-              if constexpr (StoredAsInt<T>) {
-                objectRef->setFieldValue<T>(field->name(), field->descriptor(), static_cast<T>(value.get<int32_t>()));
-              } else {
-                objectRef->setFieldValue<T>(field->name(), field->descriptor(), value.get<T>());
-              }
-            },
-            [&](types::JStringRef) {
-              objectRef->setFieldValue<Instance*>(field->name(), field->descriptor(), value.get<Instance*>());
-            },
-            [&](const ArrayType&) {
-              objectRef->setFieldValue<Instance*>(field->name(), field->descriptor(), value.get<Instance*>());
-            });
+        field->fieldType().map([&]<PrimitiveType Type>() {
+          using T = typename PrimitiveTypeTraits<Type>::Representation;
+          if constexpr (StoredAsInt<T>) {
+            objectRef->setFieldValue<T>(field->name(), field->descriptor(), static_cast<T>(value.get<int32_t>()));
+          } else {
+            objectRef->setFieldValue<T>(field->name(), field->descriptor(), value.get<T>());
+          }
+        }, [&](types::JStringRef) {
+          objectRef->setFieldValue<Instance*>(field->name(), field->descriptor(), value.get<Instance*>());
+        }, [&](const ArrayType&) {
+          objectRef->setFieldValue<Instance*>(field->name(), field->descriptor(), value.get<Instance*>());
+        });
 
         break;
       }
@@ -870,7 +864,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
   assert(false && "Should be unreachable");
 }
 
-std::optional<types::u2> DefaultInterpreter::tryHandleException(Instance* exception, RuntimeConstantPool& rt, const Code& code, size_t pc)
+std::optional<types::u2> DefaultInterpreter::tryHandleException(GcRootRef<Instance> exception, RuntimeConstantPool& rt, const Code& code, size_t pc)
 {
   for (auto& entry : code.exceptionTable()) {
     if (pc < entry.startPc || pc >= entry.endPc) {

@@ -38,26 +38,23 @@ std::optional<NativeMethod> NativeMethodRegistry::getNativeMethod(const JMethod*
   overloadedMethodName += u"__";
 
   std::function<types::JString(const FieldType&)> mapParameter = [&mapParameter](const FieldType& parameter) {
-    return parameter.map(
-        []<PrimitiveType Type>() {
-          return types::JString{PrimitiveTypeTraits<Type>::Descriptor};
-        },
-        [](types::JStringRef className) {
-          types::JString buf;
-          buf += u"L";
-          buf += className;
-          types::replaceAll(buf, u"/", u"_");
-          buf += u"_2";
-          return buf;
-        },
-        [&mapParameter](const ArrayType& arrayType) {
-          types::JString buf;
-          for (int i = 0; i < arrayType.getDimensions(); i++) {
-            buf += u"_1";
-          }
-          buf += mapParameter(arrayType.getElementType());
-          return buf;
-        });
+    return parameter.map([]<PrimitiveType Type>() {
+      return types::JString{PrimitiveTypeTraits<Type>::Descriptor};
+    }, [](types::JStringRef className) {
+      types::JString buf;
+      buf += u"L";
+      buf += className;
+      types::replaceAll(buf, u"/", u"_");
+      buf += u"_2";
+      return buf;
+    }, [&mapParameter](const ArrayType& arrayType) {
+      types::JString buf;
+      for (int i = 0; i < arrayType.getDimensions(); i++) {
+        buf += u"_1";
+      }
+      buf += mapParameter(arrayType.getElementType());
+      return buf;
+    });
   };
   for (const FieldType& parameter : method->descriptor().parameters()) {
     overloadedMethodName += mapParameter(parameter);
@@ -91,14 +88,14 @@ std::optional<Value> NativeMethod::invoke(JavaThread& thread, const std::vector<
   actualArgs.push_back(&env);
 
   if (mMethod->isStatic()) {
-    auto klass = mMethod->getClass()->classInstance()->asClassInstance();
+    auto klass = mMethod->getClass()->classInstance();
     argTypes.push_back(&ffi_type_pointer);
-    argValues.push_back(jvalue{.l = JniTranslate<ClassInstance*, jclass>{}(klass)});
+    argValues.push_back(jvalue{.l = JniTranslate<GcRootRef<ClassInstance>, jclass>{}(klass)});
     actualArgs.push_back(&argValues.back().l);
   } else {
-    auto javaThis = args.at(0).get<Instance*>();
+    auto javaThis = thread.heap().gc().pin(args.at(0).get<Instance*>());
     argTypes.push_back(&ffi_type_pointer);
-    argValues.push_back(jvalue{.l = JniTranslate<Instance*, jobject>{}(javaThis)});
+    argValues.push_back(jvalue{.l = JniTranslate<GcRootRef<Instance>, jobject>{}(javaThis)});
     actualArgs.push_back(&argValues.back().l);
     argIdx = 1;
   }
@@ -162,7 +159,8 @@ std::optional<Value> NativeMethod::invoke(JavaThread& thread, const std::vector<
       }
     } else {
       // Must object or array reference
-      argValues.push_back(jvalue{.l = JniTranslate<Instance*, jobject>{}(current.get<Instance*>())});
+      GcRootRef<Instance> ref = thread.heap().gc().pin(current.get<Instance*>());
+      argValues.push_back(jvalue{.l = JniTranslate<GcRootRef<Instance>, jobject>{}(ref)});
       argTypes.push_back(&ffi_type_pointer);
       actualArgs.push_back(&argValues.back().l);
     }
@@ -243,6 +241,6 @@ std::optional<Value> NativeMethod::invoke(JavaThread& thread, const std::vector<
     }
     std::unreachable();
   } else {
-    return Value::from<Instance*>(JniTranslate<jobject, Instance*>{}(returnValue.l));
+    return Value::from<Instance*>(JniTranslate<jobject, GcRootRef<Instance>>{}(returnValue.l).get());
   }
 }

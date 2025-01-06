@@ -36,12 +36,6 @@ void GarbageCollector::unlockGC()
   mIsGcRunning = false;
 }
 
-GcRootRef<Instance> GarbageCollector::pin(Instance* object)
-{
-  Instance** node = &mRootList.emplace_back(object);
-  return GcRootRef(node);
-}
-
 void* GarbageCollector::allocate(size_t size)
 {
   // char* end = mFromRegion + mHeapSize / 2;
@@ -104,7 +98,12 @@ Instance* GarbageCollector::copyObject(Instance* instance, std::unordered_map<In
     if (arrayClass->fieldType().asArrayType()->getElementType().isReferenceOrArray()) {
       JavaArray<Instance*>* arrayOfObjects = instance->asArray<Instance*>();
       for (int32_t i = 0; i < arrayOfObjects->length(); i++) {
-        Instance* copyOfElem = this->copyObject(*arrayOfObjects->getArrayElement(i), map);
+        Instance* elem = *arrayOfObjects->getArrayElement(i);
+        Instance* copyOfElem = this->copyObject(elem, map);
+
+        if (elem != nullptr) {
+          assert((elem->getClass() == nullptr && copyOfElem->getClass() == nullptr) || elem->getClass()->className() == copyOfElem->getClass()->className());
+        }
         copy->asArray<Instance*>()->setArrayElement(i, copyOfElem);
       }
     }
@@ -137,13 +136,6 @@ void GarbageCollector::performGarbageCollection()
   for (auto& [_, klass] : mVm.bootstrapClassLoader().loadedClasses()) {
     // Copy and update the class instance
     // The class instance can be null if GC was triggered during class initialization
-    assert(klass->classInstance() != nullptr || !klass->isInitialized());
-    if (klass->classInstance() != nullptr) {
-      auto classInstanceCopy = this->copyObject(klass->classInstance(), map);
-      klass->setClassInstance(classInstanceCopy->asClassInstance());
-    }
-
-    // Copy and update static fields in classes
     for (auto& [_, field] : klass->fields()) {
       if (field->isStatic() && field->fieldType().isReferenceOrArray()) {
         auto* instance = klass->getStaticFieldValue<Instance*>(field->offset());
@@ -155,9 +147,6 @@ void GarbageCollector::performGarbageCollection()
 
   // Update local variables and the stack in threads
   for (JavaThread* thread : mVm.threads()) {
-    Instance* threadCopy = this->copyObject(thread->instance(), map);
-    thread->setThreadInstance(threadCopy);
-
     for (CallFrame& frame : thread->callStack()) {
       for (types::u2 i = 0; i < frame.locals().size(); i++) {
         if (auto object = frame.locals()[i].tryGet<Instance*>(); object) {
