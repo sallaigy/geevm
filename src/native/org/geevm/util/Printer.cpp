@@ -1,3 +1,4 @@
+#include "vm/Class.h"
 #include "vm/Instance.h"
 #include "vm/JniImplementation.h"
 #include "vm/Thread.h"
@@ -42,12 +43,12 @@ JNIEXPORT void JNICALL Java_org_geevm_util_Printer_println__Z(JNIEnv*, jclass, j
 
 JNIEXPORT void JNICALL Java_org_geevm_util_Printer_println__Ljava_lang_String_2(JNIEnv*, jclass, jstring value)
 {
-  auto ref = JniTranslate<jstring, Instance*>{}(value);
+  auto ref = JniTranslate<jstring, GcRootRef<Instance>>{}(value);
   if (ref->getClass()->className() == u"java/lang/String") {
-    types::JString out = utils::getStringValue(ref);
+    types::JString out = utils::getStringValue(ref.get());
     std::cout << types::convertJString(out) << std::endl;
   } else {
-    std::cout << ref << std::endl;
+    std::cout << ref.get() << std::endl;
   }
 }
 }

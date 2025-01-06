@@ -27,8 +27,8 @@ JNIEXPORT jboolean JNICALL Java_java_lang_Class_desiredAssertionStatus0(JNIEnv* 
 
 JNIEXPORT jclass JNICALL Java_java_lang_Class_getPrimitiveClass(JNIEnv* env, jclass klass, jstring name)
 {
-  auto stringObject = geevm::JniTranslate<jobject, Instance*>{}(name);
-  types::JString buffer = utils::getStringValue(stringObject);
+  auto stringObject = geevm::JniTranslate<jobject, GcRootRef<Instance>>{}(name);
+  types::JString buffer = utils::getStringValue(stringObject.get());
 
   static std::unordered_map<types::JStringRef, types::JStringRef> classNames = {
       {u"float", u"java/lang/Float"}, {u"double", u"java/lang/Double"}, {u"int", u"java/lang/Integer"},   {u"byte", u"java/lang/Byte"},
@@ -44,7 +44,7 @@ JNIEXPORT jclass JNICALL Java_java_lang_Class_getPrimitiveClass(JNIEnv* env, jcl
 
 JNIEXPORT jboolean JNICALL Java_java_lang_Class_isPrimitive(JNIEnv* env, jclass klass)
 {
-  auto classObject = JniTranslate<jclass, ClassInstance*>{}(klass);
+  auto classObject = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(klass);
   const types::JString& className = classObject->target()->className();
 
   static std::unordered_set<types::JString> klassNames = {
@@ -57,23 +57,24 @@ JNIEXPORT jboolean JNICALL Java_java_lang_Class_isPrimitive(JNIEnv* env, jclass 
 
 JNIEXPORT jobject JNICALL Java_java_lang_Class_getName0(JNIEnv* env, jclass klass)
 {
-  ClassInstance* cls = JniTranslate<jclass, ClassInstance*>{}(klass);
+  GcRootRef<ClassInstance> cls = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(klass);
   assert(cls != nullptr);
 
   auto name = cls->target()->className();
   std::ranges::replace(name, u'/', u'.');
 
   Instance* str = jni::threadFromJniEnv(env).heap().intern(name);
+  GcRootRef<Instance> strRef = jni::threadFromJniEnv(env).heap().gc().pin(str);
 
-  return JniTranslate<Instance*, jobject>{}(str);
+  return JniTranslate<GcRootRef<Instance>, jobject>{}(strRef);
 }
 
 JNIEXPORT jclass JNICALL Java_java_lang_Class_forName0(JNIEnv* env, jclass klass, jstring name, jboolean initialize, jobject classLoader)
 {
-  Instance* nameObject = JniTranslate<jobject, Instance*>{}(name);
+  GcRootRef<Instance> nameObject = JniTranslate<jobject, GcRootRef<Instance>>{}(name);
 
   assert(classLoader == nullptr && "TODO: Support non-boostrap classloader");
-  types::JString nameStr = utils::getStringValue(nameObject);
+  types::JString nameStr = utils::getStringValue(nameObject.get());
 
   std::string nameStrUtf8 = types::convertJString(nameStr);
   auto loaded = env->FindClass(nameStrUtf8.data());
@@ -88,8 +89,8 @@ JNIEXPORT jarray JNICALL Java_java_lang_Class_getDeclaredFields0(JNIEnv* env, jc
     return nullptr;
   }
 
-  ClassInstance* fieldClsInstance = JniTranslate<jclass, ClassInstance*>{}(fieldCls);
-  ClassInstance* clsInstance = JniTranslate<jclass, ClassInstance*>{}(klass);
+  GcRootRef<ClassInstance> fieldClsInstance = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(fieldCls);
+  GcRootRef<ClassInstance> clsInstance = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(klass);
   JavaThread& thread = jni::threadFromJniEnv(env);
 
   std::vector<Instance*> fields;
@@ -103,23 +104,25 @@ JNIEXPORT jarray JNICALL Java_java_lang_Class_getDeclaredFields0(JNIEnv* env, jc
     }
   }
 
-  auto fieldsArray = thread.heap().allocateArray<Instance*>((*thread.resolveClass(u"[Ljava/lang/reflect/Field;"))->asArrayClass(), fields.size());
+  auto fieldsArray =
+      thread.heap().gc().pin(thread.heap().allocateArray<Instance*>((*thread.resolveClass(u"[Ljava/lang/reflect/Field;"))->asArrayClass(), fields.size()));
   for (int i = 0; i < fields.size(); i++) {
     fieldsArray->setArrayElement(i, fields.at(i));
   }
 
-  return JniTranslate<ArrayInstance*, jarray>{}(fieldsArray);
+  return JniTranslate<GcRootRef<ArrayInstance>, jarray>{}(fieldsArray);
 }
 
 JNIEXPORT jobject JNICALL Java_java_lang_Class_initClassName(JNIEnv* env, jclass klass)
 {
-  ClassInstance* clsInstance = JniTranslate<jclass, ClassInstance*>{}(klass);
+  GcRootRef<ClassInstance> clsInstance = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(klass);
 
   auto name = clsInstance->target()->className();
   std::ranges::replace(name, u'/', u'.');
 
   Instance* str = jni::threadFromJniEnv(env).heap().intern(name);
+  GcRootRef<Instance> strRef = jni::threadFromJniEnv(env).heap().gc().pin(str);
 
-  return JniTranslate<Instance*, jobject>{}(str);
+  return JniTranslate<GcRootRef<Instance>, jobject>{}(strRef);
 }
 }

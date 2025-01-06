@@ -16,6 +16,6 @@ JNIEXPORT jclass JNICALL Java_jdk_internal_reflect_Reflection_getCallerClass(JNI
   // Returns the class of the caller of the method calling this method ignoring frames associated with java.lang.reflect.Method.invoke() and its implementation.
   CallFrame* previous = frame.previous()->previous();
 
-  return JniTranslate<ClassInstance*, jclass>{}(previous->currentClass()->classInstance()->asClassInstance());
+  return JniTranslate<GcRootRef<ClassInstance>, jclass>{}(previous->currentClass()->classInstance());
 }
 }

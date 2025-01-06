@@ -1,8 +1,8 @@
 #include <jni.h>
 
 #include "vm/Instance.h"
-
-#include <vm/JniImplementation.h>
+#include "vm/JniImplementation.h"
+#include "vm/Thread.h"
 
 using namespace geevm;
 
@@ -17,7 +17,7 @@ JNIEXPORT void JNICALL Java_java_lang_Thread_registerNatives(JNIEnv* env, jclass
 JNIEXPORT jobject JNICALL Java_java_lang_Thread_currentThread(JNIEnv* env, jclass klass)
 {
   JavaThread& thread = jni::threadFromJniEnv(env);
-  return JniTranslate<Instance*, jobject>{}(thread.instance());
+  return JniTranslate<GcRootRef<Instance>, jobject>{}(thread.instance());
 }
 
 JNIEXPORT void JNICALL Java_java_lang_Thread_setPriority0(JNIEnv* env, jobject thread)

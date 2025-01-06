@@ -1,18 +1,17 @@
 #ifndef GEEVM_VM_CLASS_H
 #define GEEVM_VM_CLASS_H
 
-#include "Frame.h"
-#include "Thread.h"
-
 #include <unordered_map>
 
 #include "class_file/ClassFile.h"
 #include "common/Hash.h"
 #include "common/JvmTypes.h"
 #include "vm/Field.h"
+#include "vm/Frame.h"
 #include "vm/Instance.h"
 #include "vm/Method.h"
 #include "vm/Runtime.h"
+#include "vm/Thread.h"
 
 namespace geevm
 {
@@ -81,7 +80,7 @@ public:
     return mSuperInterfaces;
   }
 
-  Instance* classInstance() const;
+  GcRootRef<ClassInstance> classInstance() const;
   void setClassInstance(ClassInstance* instance);
 
   // Methods and fields
@@ -191,7 +190,7 @@ private:
   JClass* mSuperClass = nullptr;
   std::vector<JClass*> mSuperInterfaces;
 
-  ClassInstance* mClassInstance = nullptr;
+  GcRootRef<ClassInstance> mClassInstance = nullptr;
 };
 
 class InstanceClass : public JClass

@@ -1,5 +1,6 @@
 #include "vm/Instance.h"
 #include "vm/JniImplementation.h"
+#include "vm/Thread.h"
 
 #include <vector>
 
@@ -32,7 +33,7 @@ JNIEXPORT void JNICALL Java_java_io_FileOutputStream_writeBytes(JNIEnv* env, job
 
   auto fd = env->GetIntField(descriptor, fdField);
 
-  auto array = JniTranslate<jbyteArray, JavaArray<int8_t>*>{}(bytes);
+  auto array = JniTranslate<jbyteArray, GcRootRef<JavaArray<int8_t>>>{}(bytes);
   std::vector<jbyte> buffer;
   for (int32_t i = 0; i < length; i++) {
     auto res = array->getArrayElement(i);

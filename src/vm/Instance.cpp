@@ -1,4 +1,5 @@
 #include "vm/Instance.h"
+#include "vm/Class.h"
 
 #include <iostream>
 

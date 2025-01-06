@@ -3,6 +3,7 @@
 
 #include "common/JvmError.h"
 #include "vm/Frame.h"
+#include "vm/GarbageCollector.h"
 
 #include <list>
 #include <thread>
@@ -41,14 +42,9 @@ public:
     return mNativeThread;
   }
 
-  Instance* instance()
+  GcRootRef<Instance> instance()
   {
     return mThreadInstance;
-  }
-
-  void setThreadInstance(Instance* instance)
-  {
-    mThreadInstance = instance;
   }
 
   // Virtual machine and heap access
@@ -87,7 +83,7 @@ public:
 
   void clearException();
 
-  Instance* currentException() const
+  GcRootRef<Instance> currentException() const
   {
     return mCurrentException;
   }
@@ -97,9 +93,9 @@ private:
   // Method to run and arguments
   JMethod* mMethod = nullptr;
   std::vector<Value> mArguments;
-  Instance* mThreadInstance = nullptr;
+  GcRootRef<Instance> mThreadInstance;
   std::list<CallFrame> mCallStack;
-  Instance* mCurrentException = nullptr;
+  GcRootRef<Instance> mCurrentException;
   std::jthread mNativeThread;
 };
 

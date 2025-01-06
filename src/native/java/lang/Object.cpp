@@ -21,7 +21,7 @@ JNIEXPORT jclass JNICALL Java_java_lang_Object_getClass(JNIEnv* env, jobject obj
 
 JNIEXPORT jint JNICALL Java_java_lang_Object_hashCode(JNIEnv* env, jobject obj)
 {
-  auto objectRef = JniTranslate<jobject, Instance*>{}(obj);
+  auto objectRef = JniTranslate<jobject, GcRootRef<Instance>>{}(obj);
   return objectRef->hashCode();
 }
 

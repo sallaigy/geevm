@@ -1,7 +1,8 @@
 #ifndef GEEVM_JNIIMPLEMENTATION_H
 #define GEEVM_JNIIMPLEMENTATION_H
 
-#include "Instance.h"
+#include "vm/GarbageCollector.h"
+#include "vm/Instance.h"
 
 #include <bit>
 #include <jni.h>
@@ -38,15 +39,15 @@ struct JniTranslate;
   {                                                                  \
   };
 
-GEEVM_JNI_TRANSLATE(jobject, Instance*)
-GEEVM_JNI_TRANSLATE(jclass, ClassInstance*)
-GEEVM_JNI_TRANSLATE(jarray, ArrayInstance*)
-GEEVM_JNI_TRANSLATE(jthrowable, Instance*)
-GEEVM_JNI_TRANSLATE(jstring, Instance*)
+GEEVM_JNI_TRANSLATE(jobject, GcRootRef<Instance>)
+GEEVM_JNI_TRANSLATE(jclass, GcRootRef<ClassInstance>)
+GEEVM_JNI_TRANSLATE(jarray, GcRootRef<ArrayInstance>)
+GEEVM_JNI_TRANSLATE(jthrowable, GcRootRef<Instance>)
+GEEVM_JNI_TRANSLATE(jstring, GcRootRef<Instance>)
 GEEVM_JNI_TRANSLATE(jfieldID, JField*)
 GEEVM_JNI_TRANSLATE(jmethodID, JMethod*)
-GEEVM_JNI_TRANSLATE(jbyteArray, JavaArray<int8_t>*)
-GEEVM_JNI_TRANSLATE(jobjectArray, JavaArray<Instance*>*)
+GEEVM_JNI_TRANSLATE(jbyteArray, GcRootRef<JavaArray<int8_t>>)
+GEEVM_JNI_TRANSLATE(jobjectArray, GcRootRef<JavaArray<Instance*>>)
 
 namespace jni
 {

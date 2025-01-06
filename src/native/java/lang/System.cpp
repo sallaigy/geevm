@@ -1,6 +1,9 @@
+#include "vm/Class.h"
 #include "vm/Instance.h"
 #include "vm/JniImplementation.h"
+#include "vm/Thread.h"
 
+#include <chrono>
 #include <cstring>
 #include <format>
 
@@ -35,8 +38,8 @@ JNIEXPORT void JNICALL Java_java_lang_System_arraycopy(JNIEnv* env, jclass klass
     return;
   }
 
-  auto sourceArray = JniTranslate<jobject, Instance*>{}(src)->asArrayInstance();
-  auto targetArray = JniTranslate<jobject, Instance*>{}(dest)->asArrayInstance();
+  auto sourceArray = JniTranslate<jobject, GcRootRef<Instance>>{}(src)->asArrayInstance();
+  auto targetArray = JniTranslate<jobject, GcRootRef<Instance>>{}(dest)->asArrayInstance();
 
   if (sourceArray == nullptr || targetArray == nullptr) {
     thread.throwException(u"java/lang/ArrayStoreException", u"not an array instance");

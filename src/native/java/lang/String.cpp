@@ -13,11 +13,13 @@ extern "C"
 
 JNIEXPORT jobject JNICALL Java_java_lang_String_intern(JNIEnv* env, jstring obj)
 {
-  auto str = JniTranslate<jobject, Instance*>{}(obj);
-  types::JString strValue = utils::getStringValue(str);
-  Instance* interned = jni::threadFromJniEnv(env).heap().intern(strValue);
+  auto str = JniTranslate<jobject, GcRootRef<Instance>>{}(obj);
+  types::JString strValue = utils::getStringValue(str.get());
 
-  return JniTranslate<Instance*, jobject>{}(interned);
+  JavaThread& thread = jni::threadFromJniEnv(env);
+  Instance* interned = thread.heap().intern(strValue);
+
+  return JniTranslate<GcRootRef<Instance>, jobject>{}(thread.heap().gc().pin(interned));
 }
 
 JNIEXPORT jobject JNICALL Java_java_lang_StringUTF16_isBigEndian(JNIEnv*, jstring)
