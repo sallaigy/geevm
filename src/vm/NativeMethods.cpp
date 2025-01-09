@@ -78,7 +78,9 @@ std::optional<Value> NativeMethod::invoke(JavaThread& thread, const std::vector<
   // The first parameter is JNIEnv*, a pointer
   argTypes.push_back(&ffi_type_pointer);
 
-  std::list<jvalue> argValues;
+  std::vector<jvalue> argValues;
+  argValues.reserve(args.size() + 1);
+
   size_t argIdx = 0;
 
   JniImplementation impl(thread);

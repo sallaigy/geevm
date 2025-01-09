@@ -137,7 +137,12 @@ std::optional<Value> JavaThread::executeCall(JMethod* method, const std::vector<
       if (stackTrace != nullptr) {
         message += u"\n";
 
-        for (Instance* elem : *stackTrace->asArray<Instance*>()) {
+        // We'll have to be careful while iterating here. The array and the stack trace elements may get relocated
+        // by the garbage collector during iteration.
+        GcRootRef<JavaArray<Instance*>> stackTraceArray = heap().gc().pin(stackTrace->asArray<Instance*>());
+        for (int32_t i = 0; i < stackTraceArray->length(); i++) {
+          Instance* elem = stackTraceArray->getArrayElement(i).value();
+
           auto toStringMethod = elem->getClass()->getVirtualMethod(u"toString", u"()Ljava/lang/String;");
           auto ret = this->executeCall(*toStringMethod, {Value::from<Instance*>(elem)});
           assert(ret.has_value());
@@ -146,6 +151,8 @@ std::optional<Value> JavaThread::executeCall(JMethod* method, const std::vector<
           message += utils::getStringValue(ret->get<Instance*>());
           message += u"\n";
         }
+
+        heap().gc().release(stackTraceArray);
       }
 
       std::cerr << types::convertJString(message) << std::endl;
@@ -201,7 +208,8 @@ void JavaThread::throwException(const types::JString& name, const types::JString
 void JavaThread::clearException()
 {
   assert(mCurrentException != nullptr && "There should be an exception instance");
-  mCurrentException.reset();
+  heap().gc().release(mCurrentException);
+  mCurrentException = nullptr;
 }
 
 Instance* JavaThread::createStackTrace()

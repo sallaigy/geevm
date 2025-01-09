@@ -747,7 +747,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       }
       case INSTANCEOF: {
         auto index = cursor.readU2();
-        Instance* objectRef = frame.popOperand<Instance*>();
+        GcRootRef<Instance> objectRef = mThread.heap().gc().pin(frame.popOperand<Instance*>());
         if (objectRef == nullptr) {
           frame.pushOperand<int32_t>(0);
         } else {
@@ -765,6 +765,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
           }
         }
 
+        mThread.heap().gc().release(objectRef);
         break;
       }
       case MONITORENTER: {
@@ -809,29 +810,30 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         std::optional<JClass*> elementClass = (*klass)->asArrayClass()->elementClass();
         assert(elementClass.has_value());
 
-        auto makeInnerArray = [this](auto& self, std::vector<int32_t> dimensionCounts, ArrayClass* arrayClass) -> ArrayInstance* {
+        auto makeInnerArray = [this](auto& self, std::vector<int32_t> dimensionCounts, ArrayClass* arrayClass) -> GcRootRef<ArrayInstance> {
           auto count = dimensionCounts.back();
           dimensionCounts.pop_back();
 
-          ArrayInstance* newArray;
+          GcRootRef<ArrayInstance> newArray = nullptr;
           if (!dimensionCounts.empty()) {
-            auto outerArray = mThread.heap().allocateArray<Instance*>(arrayClass, count);
+            auto outerArray = mThread.heap().gc().pin(mThread.heap().allocateArray<Instance*>(arrayClass, count));
             ArrayClass* innerArrayClass = (*arrayClass->elementClass())->asArrayClass();
             for (int32_t i = 0; i < count; i++) {
               auto innerArray = self(self, dimensionCounts, innerArrayClass);
-              outerArray->setArrayElement(i, innerArray);
+              outerArray->setArrayElement(i, innerArray.get());
+              mThread.heap().gc().release(innerArray);
             }
             newArray = outerArray;
           } else {
-            newArray = mThread.heap().allocateArray(arrayClass, count);
+            newArray = mThread.heap().gc().pin(mThread.heap().allocateArray(arrayClass, count));
           }
 
           return newArray;
         };
 
-        ArrayInstance* result = makeInnerArray(makeInnerArray, dimensionCounts, (*klass)->asArrayClass());
-
-        frame.pushOperand<Instance*>(result);
+        GcRootRef<ArrayInstance> result = makeInnerArray(makeInnerArray, dimensionCounts, (*klass)->asArrayClass());
+        frame.pushOperand<Instance*>(result.get());
+        mThread.heap().gc().release(result);
         break;
       }
       case IFNULL: unaryJumpIf<Instance*, nullptr, std::equal_to<Instance*>>(cursor); break;

@@ -52,7 +52,9 @@ public:
 
   T* get() const
   {
-    assert(mReference != nullptr);
+    if (mReference == nullptr) {
+      return nullptr;
+    }
     return static_cast<T*>(*mReference);
   }
 
@@ -87,8 +89,24 @@ public:
   template<std::derived_from<Instance> T>
   GcRootRef<T> pin(T* object)
   {
+    if (object == nullptr) {
+      return nullptr;
+    }
+
     Instance** root = &mRootList.emplace_back(object);
     return GcRootRef<T>(root);
+  }
+
+  template<std::derived_from<Instance> T>
+  void release(GcRootRef<T> object)
+  {
+    if (object == nullptr) {
+      return;
+    }
+
+    mRootList.remove_if([&object](Instance* val) {
+      return object.get() == val;
+    });
   }
 
   // Locks the garbage collector, preventing it from running.

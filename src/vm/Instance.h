@@ -178,6 +178,9 @@ private:
 static_assert(std::is_trivially_copyable_v<Instance>);
 static_assert(std::is_trivially_copyable_v<ArrayInstance>);
 static_assert(std::is_trivially_copyable_v<ClassInstance>);
+static_assert(std::is_trivially_destructible_v<Instance>);
+static_assert(std::is_trivially_destructible_v<ArrayInstance>);
+static_assert(std::is_trivially_destructible_v<ClassInstance>);
 
 } // namespace geevm
 

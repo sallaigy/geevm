@@ -116,22 +116,19 @@ types::JString FieldType::toJavaString() const
 {
   types::JString str;
 
-  return map(
-      []<PrimitiveType Type>() {
-        return types::JString{PrimitiveTypeTraits<Type>::Name};
-      },
-      [](const types::JString& className) {
-        auto buff = types::JString{className};
-        std::ranges::replace(buff, u'/', u'.');
-        return buff;
-      },
-      [](const ArrayType& array) {
-        auto elementString = array.getElementType().toJavaString();
-        for (size_t i = 0; i < array.getDimensions(); i++) {
-          elementString += u"[]";
-        }
-        return elementString;
-      });
+  return map([]<PrimitiveType Type>() {
+    return types::JString{PrimitiveTypeTraits<Type>::Name};
+  }, [](const types::JString& className) {
+    auto buff = types::JString{className};
+    std::ranges::replace(buff, u'/', u'.');
+    return buff;
+  }, [](const ArrayType& array) {
+    auto elementString = array.getElementType().toJavaString();
+    for (size_t i = 0; i < array.getDimensions(); i++) {
+      elementString += u"[]";
+    }
+    return elementString;
+  });
 }
 
 std::optional<ArrayType> FieldType::asArrayType() const
@@ -171,16 +168,13 @@ types::JString MethodDescriptor::formatAsJavaSignature(const types::JString& nam
 
 std::size_t FieldType::sizeOf() const
 {
-  return this->map(
-      []<PrimitiveType Type>() {
-        return sizeof(typename PrimitiveTypeTraits<Type>::Representation);
-      },
-      [](types::JStringRef _) {
-        return sizeof(void*);
-      },
-      [](const ArrayType& _) {
-        return sizeof(void*);
-      });
+  return this->map([]<PrimitiveType Type>() {
+    return sizeof(typename PrimitiveTypeTraits<Type>::Representation);
+  }, [](types::JStringRef _) {
+    return sizeof(void*);
+  }, [](const ArrayType& _) {
+    return sizeof(void*);
+  });
 }
 
 types::JString ArrayType::className() const
@@ -188,16 +182,13 @@ types::JString ArrayType::className() const
   types::JString buff = u"[";
 
   auto elementTy = getElementType();
-  buff += elementTy.map(
-      []<PrimitiveType Type>() {
-        return u"L" + types::JString{PrimitiveTypeTraits<Type>::ClassName} + u";";
-      },
-      [](types::JStringRef className) {
-        return u"L" + types::JString{className} + u";";
-      },
-      [](const ArrayType& array) {
-        return array.className();
-      });
+  buff += elementTy.map([]<PrimitiveType Type>() -> types::JString {
+    return types::JString{PrimitiveTypeTraits<Type>::Descriptor};
+  }, [](types::JStringRef className) -> types::JString {
+    return u"L" + types::JString{className} + u";";
+  }, [](const ArrayType& array) -> types::JString {
+    return array.className();
+  });
 
   return buff;
 }
