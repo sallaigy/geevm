@@ -48,8 +48,8 @@ void* GarbageCollector::allocate(size_t size)
   //     return nullptr;
   //   }
   // }
-
   this->performGarbageCollection();
+
   void* current = mBumpPtr;
 
   size_t adjustedSize = alignTo(size, alignof(std::max_align_t));

@@ -69,7 +69,7 @@ JNIEXPORT jobject JNICALL Java_java_lang_Class_getName0(JNIEnv* env, jclass klas
   return JniTranslate<GcRootRef<Instance>, jobject>{}(strRef);
 }
 
-JNIEXPORT jclass JNICALL Java_java_lang_Class_forName0(JNIEnv* env, jclass klass, jstring name, jboolean initialize, jobject classLoader)
+JNIEXPORT jclass JNICALL Java_java_lang_Class_forName0(JNIEnv* env, jclass klass, jstring name, jboolean initialize, jobject classLoader, jclass caller)
 {
   GcRootRef<Instance> nameObject = JniTranslate<jobject, GcRootRef<Instance>>{}(name);
 

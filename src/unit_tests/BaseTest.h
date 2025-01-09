@@ -22,8 +22,6 @@ protected:
   {
     return fs::path{FixturesPath}.append(path);
   }
-
-private:
 };
 
 } // namespace geevm::testing
