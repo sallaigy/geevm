@@ -1,4 +1,3 @@
-
 # Load GoogleTest
 FetchContent_Declare(
   gtest

@@ -60,8 +60,16 @@ target_include_directories(geevm PUBLIC ${JNI_INCLUDE_DIRS})
 target_link_libraries(geevm libzip::zip)
 target_link_libraries(geevm ffi)
 
+FetchContent_Declare(
+  argparse
+  GIT_REPOSITORY "https://github.com/p-ranav/argparse"
+  GIT_TAG v3.1
+)
+FetchContent_MakeAvailable(argparse)
+
 add_executable(java src/bin/java.cpp)
 target_link_libraries(java geevm)
 target_link_libraries(java geevm-libjava)
 target_link_options(java PRIVATE "-Wl,--no-as-needed")
 target_include_directories(java PUBLIC src)
+target_include_directories(java PRIVATE "${argparse_SOURCE_DIR}/include")

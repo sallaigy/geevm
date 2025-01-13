@@ -12,7 +12,7 @@ extern "C"
 
 JNIEXPORT jint JNICALL Java_jdk_internal_misc_Signal_findSignal0(JNIEnv*, jclass, jstring signal)
 {
-  static std::unordered_map<types::JStringRef, int32_t> signalMap{{u"HUP", SIGHUP}};
+  static std::unordered_map<types::JStringRef, int32_t> signalMap{{u"HUP", SIGHUP}, {u"INT", SIGINT}, {u"TERM", SIGTERM}};
 
   auto nameStr = utils::getStringValue(JniTranslate<jobject, GcRootRef<Instance>>{}(signal).get());
 

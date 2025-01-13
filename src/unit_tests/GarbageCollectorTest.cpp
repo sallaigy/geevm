@@ -7,7 +7,7 @@
 
 using namespace geevm;
 
-static std::string HelloWorldClass = "class_file/org/geevm/tests/classfile/HelloWorld.class";
+static const std::string HelloWorldClass = "class_file/org/geevm/tests/classfile/HelloWorld.class";
 
 class GarbageCollectorTest : public geevm::testing::BaseTest
 {
@@ -23,7 +23,7 @@ public:
   }
 
 protected:
-  Vm mVm;
+  Vm mVm{VmSettings{}};
   JavaThread mThread;
   InstanceClass mHelloWorldClass;
 };

@@ -3,7 +3,7 @@
 
 #include "vm/Frame.h"
 
-#include <functional>
+#include <jni.h>
 
 namespace geevm
 {
@@ -25,6 +25,8 @@ public:
   std::optional<Value> invoke(JavaThread& thread, const std::vector<Value>& args);
 
 private:
+  std::optional<Value> translateReturnValue(jvalue returnValue) const;
+
   const JMethod* mMethod;
   void* mHandle;
 };

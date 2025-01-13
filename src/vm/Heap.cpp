@@ -6,7 +6,7 @@ using namespace geevm;
 static constexpr size_t MaxPermRegionSize = 2048 * 1024;
 
 JavaHeap::JavaHeap(Vm& vm)
-  : mInternedStrings(vm), mGC(vm, 2048 * 1024)
+  : mInternedStrings(vm), mGC(vm)
 {
   mPermanentRegion = static_cast<char*>(::operator new(MaxPermRegionSize));
   mPermanentBumpPtr = mPermanentRegion;
