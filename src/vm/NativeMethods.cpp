@@ -14,6 +14,8 @@
 
 using namespace geevm;
 
+static void findReturnType(const MethodDescriptor& descriptor, ffi_type** returnType, jvalue* returnValue, void** result);
+
 std::optional<NativeMethod> NativeMethodRegistry::getNativeMethod(const JMethod* method)
 {
   auto dl = DynamicLibrary::create();
@@ -70,9 +72,84 @@ std::optional<NativeMethod> NativeMethodRegistry::getNativeMethod(const JMethod*
   return std::nullopt;
 }
 
+std::optional<Value> NativeMethod::translateReturnValue(jvalue returnValue) const
+{
+  if (mMethod->descriptor().returnType().isVoid()) {
+    return std::nullopt;
+  }
+
+  if (auto primitive = mMethod->descriptor().returnType().getType().asPrimitive(); primitive) {
+    switch (*primitive) {
+      case PrimitiveType::Byte: return Value::from<int8_t>(returnValue.b);
+      case PrimitiveType::Char: return Value::from<char16_t>(returnValue.c);
+      case PrimitiveType::Double: return Value::from<double>(returnValue.d);
+      case PrimitiveType::Float: return Value::from<float>(returnValue.f);
+      case PrimitiveType::Int: return Value::from<int32_t>(returnValue.i);
+      case PrimitiveType::Long: return Value::from<int64_t>(returnValue.j);
+      case PrimitiveType::Short: return Value::from<int16_t>(returnValue.s);
+      case PrimitiveType::Boolean: return Value::from<int32_t>(returnValue.z ? 1 : 0);
+      default: std::unreachable();
+    }
+  }
+
+  // Must be an instance or array
+  return Value::from<Instance*>(JniTranslate<jobject, GcRootRef<>>{}(returnValue.l).get());
+}
+
+void findReturnType(const MethodDescriptor& descriptor, ffi_type** returnType, jvalue* returnValue, void** result)
+{
+  if (descriptor.returnType().isVoid()) {
+    *returnType = &ffi_type_void;
+    result = nullptr;
+  } else {
+    if (auto primitive = descriptor.returnType().getType().asPrimitive(); primitive) {
+      switch (*primitive) {
+        case PrimitiveType::Byte:
+          *returnType = &ffi_type_sint8;
+          *result = &returnValue->b;
+          break;
+        case PrimitiveType::Char:
+          *returnType = &ffi_type_uint16;
+          *result = &returnValue->c;
+          break;
+        case PrimitiveType::Double:
+          *returnType = &ffi_type_double;
+          *result = &returnValue->d;
+          break;
+        case PrimitiveType::Float:
+          *returnType = &ffi_type_float;
+          *result = &returnValue->f;
+          break;
+        case PrimitiveType::Int:
+          *returnType = &ffi_type_sint32;
+          *result = &returnValue->i;
+          break;
+        case PrimitiveType::Long:
+          *returnType = &ffi_type_sint64;
+          *result = &returnValue->j;
+          break;
+        case PrimitiveType::Short:
+          *returnType = &ffi_type_sint16;
+          *result = &returnValue->s;
+          break;
+        case PrimitiveType::Boolean:
+          *returnType = &ffi_type_uint8;
+          *result = &returnValue->z;
+          break;
+      }
+    } else {
+      *returnType = &ffi_type_pointer;
+      *result = &returnValue->l;
+    }
+  }
+}
+
 std::optional<Value> NativeMethod::invoke(JavaThread& thread, const std::vector<Value>& args)
 {
+  // Prepare all state we will need to do the method invocation.
   ffi_cif cif;
+
+  // The types used on the FFI interface
   std::vector<ffi_type*> argTypes;
 
   // The first parameter is JNIEnv*, a pointer
@@ -80,6 +157,8 @@ std::optional<Value> NativeMethod::invoke(JavaThread& thread, const std::vector<
 
   std::vector<jvalue> argValues;
   argValues.reserve(args.size() + 1);
+
+  std::vector<GcRootRef<>> pinnedObjects;
 
   size_t argIdx = 0;
 
@@ -97,6 +176,7 @@ std::optional<Value> NativeMethod::invoke(JavaThread& thread, const std::vector<
   } else {
     auto javaThis = thread.heap().gc().pin(args.at(0).get<Instance*>());
     argTypes.push_back(&ffi_type_pointer);
+    pinnedObjects.push_back(javaThis);
     argValues.push_back(jvalue{.l = JniTranslate<GcRootRef<Instance>, jobject>{}(javaThis)});
     actualArgs.push_back(&argValues.back().l);
     argIdx = 1;
@@ -161,8 +241,9 @@ std::optional<Value> NativeMethod::invoke(JavaThread& thread, const std::vector<
       }
     } else {
       // Must object or array reference
-      GcRootRef<Instance> ref = thread.heap().gc().pin(current.get<Instance*>());
-      argValues.push_back(jvalue{.l = JniTranslate<GcRootRef<Instance>, jobject>{}(ref)});
+      GcRootRef<> ref = thread.heap().gc().pin(current.get<Instance*>());
+      pinnedObjects.push_back(ref);
+      argValues.push_back(jvalue{.l = JniTranslate<GcRootRef<>, jobject>{}(ref)});
       argTypes.push_back(&ffi_type_pointer);
       actualArgs.push_back(&argValues.back().l);
     }
@@ -171,78 +252,27 @@ std::optional<Value> NativeMethod::invoke(JavaThread& thread, const std::vector<
   ffi_type* returnType;
   void* result;
   jvalue returnValue;
-  if (mMethod->descriptor().returnType().isVoid()) {
-    returnType = &ffi_type_void;
-    result = nullptr;
-  } else {
-    if (auto primitive = mMethod->descriptor().returnType().getType().asPrimitive(); primitive) {
-      switch (*primitive) {
-        case PrimitiveType::Byte:
-          returnType = &ffi_type_sint8;
-          result = &returnValue.b;
-          break;
-        case PrimitiveType::Char:
-          returnType = &ffi_type_uint16;
-          result = &returnValue.c;
-          break;
-        case PrimitiveType::Double:
-          returnType = &ffi_type_double;
-          result = &returnValue.d;
-          break;
-        case PrimitiveType::Float:
-          returnType = &ffi_type_float;
-          result = &returnValue.f;
-          break;
-        case PrimitiveType::Int:
-          returnType = &ffi_type_sint32;
-          result = &returnValue.i;
-          break;
-        case PrimitiveType::Long:
-          returnType = &ffi_type_sint64;
-          result = &returnValue.j;
-          break;
-        case PrimitiveType::Short:
-          returnType = &ffi_type_sint16;
-          result = &returnValue.s;
-          break;
-        case PrimitiveType::Boolean:
-          returnType = &ffi_type_uint8;
-          result = &returnValue.z;
-          break;
-      }
-    } else {
-      returnType = &ffi_type_pointer;
-      result = &returnValue.l;
-    }
-  }
+
+  findReturnType(mMethod->descriptor(), &returnType, &returnValue, &result);
 
   assert(actualArgs.size() == mMethod->descriptor().parameters().size() + 2);
   assert(actualArgs.size() == argTypes.size());
 
   if (ffi_prep_cif(&cif, FFI_DEFAULT_ABI, argTypes.size(), returnType, argTypes.data()) != FFI_OK) {
-    thread.throwException(u"java/lang/RuntimeException", u"Failed to invoke nativ method");
+    thread.throwException(u"java/lang/RuntimeException", u"Failed to invoke native method");
     return std::nullopt;
   }
 
   ffi_call(&cif, FFI_FN(mHandle), result, actualArgs.data());
 
-  if (mMethod->descriptor().returnType().isVoid()) {
-    return std::nullopt;
+  std::optional<Value> toReturn = translateReturnValue(returnValue);
+
+  for (auto& ref : pinnedObjects) {
+    if (ref == nullptr) {
+      continue;
+    }
+    thread.heap().gc().release(ref);
   }
 
-  if (auto primitive = mMethod->descriptor().returnType().getType().asPrimitive(); primitive) {
-    switch (*primitive) {
-      case PrimitiveType::Byte: return Value::from<int8_t>(returnValue.b);
-      case PrimitiveType::Char: return Value::from<char16_t>(returnValue.c);
-      case PrimitiveType::Double: return Value::from<double>(returnValue.d);
-      case PrimitiveType::Float: return Value::from<float>(returnValue.f);
-      case PrimitiveType::Int: return Value::from<int32_t>(returnValue.i);
-      case PrimitiveType::Long: return Value::from<int64_t>(returnValue.j);
-      case PrimitiveType::Short: return Value::from<int16_t>(returnValue.s);
-      case PrimitiveType::Boolean: return Value::from<int32_t>(returnValue.z ? 1 : 0);
-    }
-    std::unreachable();
-  } else {
-    return Value::from<Instance*>(JniTranslate<jobject, GcRootRef<Instance>>{}(returnValue.l).get());
-  }
+  return toReturn;
 }

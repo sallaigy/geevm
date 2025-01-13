@@ -14,6 +14,79 @@ namespace geevm
 class Vm;
 class Instance;
 
+class RootList
+{
+public:
+  struct Node
+  {
+    Instance* instance;
+    Node* next;
+    Node* prev = nullptr;
+
+    Node(Instance* instance, Node* next, Node* prev)
+      : instance(instance), next(next), prev(prev)
+    {
+    }
+  };
+
+  struct Iterator
+  {
+    Node* node;
+
+    explicit Iterator(Node* node)
+      : node(node)
+    {
+    }
+
+    bool operator==(const Iterator& other) const
+    {
+      return node == other.node;
+    }
+
+    Iterator& operator=(const Iterator& rhs)
+    {
+      node = rhs.node;
+      return *this;
+    }
+
+    Iterator& operator++()
+    {
+      node = node->next;
+      return *this;
+    }
+
+    Instance*& operator*()
+    {
+      return node->instance;
+    }
+
+    Instance*& operator->()
+    {
+      return node->instance;
+    }
+  };
+
+  RootList() = default;
+
+  Node* insert(Instance* reference);
+  void remove(Node* node);
+
+  ~RootList();
+
+  Iterator begin()
+  {
+    return Iterator(mHead);
+  }
+
+  Iterator end()
+  {
+    return Iterator(nullptr);
+  }
+
+private:
+  Node* mHead = nullptr;
+};
+
 /// A special reference that marks the object it points to as a GC root.
 /// As the garbage collector may relocate memory, this reference provides safe access to an object, even if the GC
 /// decides to relocate the object it refers to.
@@ -23,8 +96,10 @@ class GcRootRef
   template<std::derived_from<Instance> U>
   friend class GcRootRef;
 
+  friend class GarbageCollector;
+
 public:
-  explicit GcRootRef(Instance** root)
+  explicit GcRootRef(RootList::Node* root)
     : mReference(root)
   {
   }
@@ -47,7 +122,7 @@ public:
 
   T* operator->() const
   {
-    return static_cast<T*>(*mReference);
+    return static_cast<T*>(mReference->instance);
   }
 
   T* get() const
@@ -55,12 +130,16 @@ public:
     if (mReference == nullptr) {
       return nullptr;
     }
-    return static_cast<T*>(*mReference);
+    return static_cast<T*>(mReference->instance);
   }
 
   bool operator==(GcRootRef<T> other) const
   {
-    return mReference == other.mReference;
+    if (mReference == nullptr || other.mReference == nullptr) {
+      return mReference == other.mReference;
+    }
+
+    return mReference->instance == other.mReference->instance;
   }
 
   bool operator==(std::nullptr_t) const
@@ -74,13 +153,13 @@ public:
   }
 
 private:
-  Instance** mReference;
+  RootList::Node* mReference;
 };
 
 class GarbageCollector
 {
 public:
-  explicit GarbageCollector(Vm& vm, size_t heapSize);
+  explicit GarbageCollector(Vm& vm);
 
   [[nodiscard]] void* allocate(size_t size);
 
@@ -93,7 +172,7 @@ public:
       return nullptr;
     }
 
-    Instance** root = &mRootList.emplace_back(object);
+    RootList::Node* root = mRootList.insert(object);
     return GcRootRef<T>(root);
   }
 
@@ -104,9 +183,7 @@ public:
       return;
     }
 
-    mRootList.remove_if([&object](Instance* val) {
-      return object.get() == val;
-    });
+    mRootList.remove(object.mReference);
   }
 
   // Locks the garbage collector, preventing it from running.
@@ -122,15 +199,16 @@ private:
 
 private:
   Vm& mVm;
-  // Garbage-collected heap
-  size_t mHeapSize;
   char* mFromRegion;
   char* mToRegion;
   char* mBumpPtr;
   // Enabling/disabling GC
   bool mIsGcRunning = false;
-  // Others
-  std::list<Instance*> mRootList;
+  // Root lists
+  RootList mRootList;
+  // GC settings
+  size_t mHeapSize = 0;
+  bool mRunAfterEveryAllocation = false;
 };
 
 } // namespace geevm

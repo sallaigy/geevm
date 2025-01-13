@@ -3,7 +3,6 @@
 
 #include "common/JvmTypes.h"
 #include "vm/Class.h"
-#include "vm/Frame.h"
 #include "vm/GarbageCollector.h"
 #include "vm/Instance.h"
 #include "vm/StringHeap.h"
@@ -24,8 +23,8 @@ class JavaHeap
 public:
   explicit JavaHeap(Vm& vm);
 
-  template<class T = Instance, class... Args>
-    requires(std::is_base_of_v<Instance, T>)
+  /// Allocates heap memory for and constructs an instance of `klass`.
+  template<std::derived_from<Instance> T = Instance, class... Args>
   T* allocate(InstanceClass* klass, Args&&... args)
   {
     size_t size = klass->allocationSize();
@@ -35,8 +34,7 @@ public:
     return object;
   }
 
-  template<class T = Instance, class... Args>
-    requires(std::is_base_of_v<Instance, T>)
+  template<std::derived_from<Instance> T = Instance, class... Args>
   T* allocatePerm(InstanceClass* klass, Args&&... args)
   {
     size_t size = klass->allocationSize();

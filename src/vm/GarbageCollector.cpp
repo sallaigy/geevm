@@ -15,8 +15,8 @@ static std::size_t alignTo(size_t size, size_t alignment)
   return (size + (alignment - 1)) & ~(alignment - 1);
 }
 
-GarbageCollector::GarbageCollector(Vm& vm, size_t heapSize)
-  : mVm(vm), mHeapSize(heapSize)
+GarbageCollector::GarbageCollector(Vm& vm)
+  : mVm(vm), mHeapSize(vm.settings().maxHeapSize), mRunAfterEveryAllocation(vm.settings().runGcAfterEveryAllocation)
 {
   mFromRegion = static_cast<char*>(::operator new(mHeapSize / 2));
   mToRegion = static_cast<char*>(::operator new(mHeapSize / 2));
@@ -38,17 +38,18 @@ void GarbageCollector::unlockGC()
 
 void* GarbageCollector::allocate(size_t size)
 {
-  // char* end = mFromRegion + mHeapSize / 2;
-  // if (mBumpPtr + size > end) {
-  //   // The 'from' region is full, let's do GC
-  //   this->performGarbageCollection();
-  //   char* end2 = mFromRegion + mHeapSize / 2;
-  //   if (mBumpPtr + size > end2) {
-  //     // FIXME: This should be JVMExpected
-  //     return nullptr;
-  //   }
-  // }
-  this->performGarbageCollection();
+  char* end = mFromRegion + mHeapSize / 2;
+  if (mBumpPtr + size > end) {
+    // The 'from' region is full, let's do GC
+    this->performGarbageCollection();
+    char* end2 = mFromRegion + mHeapSize / 2;
+    if (mBumpPtr + size > end2) {
+      // FIXME: This should be JVMExpected
+      return nullptr;
+    }
+  } else if (mRunAfterEveryAllocation) {
+    this->performGarbageCollection();
+  }
 
   void* current = mBumpPtr;
 

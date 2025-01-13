@@ -242,6 +242,7 @@ Instance* JavaThread::createStackTrace()
   JavaArray<Instance*>* array = heap().allocateArray<Instance*>((*stackTraceArrayCls)->asArrayClass(), stackTrace.size());
   for (int32_t i = 0; i < stackTrace.size(); i++) {
     array->setArrayElement(i, stackTrace[i].get());
+    heap().gc().release(stackTrace[i]);
   }
 
   return array;

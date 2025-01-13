@@ -15,11 +15,17 @@
 namespace geevm
 {
 
+struct VmSettings
+{
+  bool runGcAfterEveryAllocation = false;
+  uint32_t maxHeapSize = 2048 * 1024;
+};
+
 class Vm
 {
 public:
-  explicit Vm()
-    : mBootstrapClassLoader(*this), mHeap(*this)
+  explicit Vm(VmSettings settings)
+    : mSettings(settings), mBootstrapClassLoader(*this), mHeap(*this)
   {
     mMainThread = mThreads.emplace_back(std::make_unique<JavaThread>(*this)).get();
   }
@@ -55,12 +61,18 @@ public:
     });
   }
 
+  const VmSettings& settings()
+  {
+    return mSettings;
+  }
+
 private:
   /// Resolves and initializes a core class
   JClass* requireClass(const types::JString& name);
   void setUpJavaLangClass();
 
 private:
+  VmSettings mSettings;
   BootstrapClassLoader mBootstrapClassLoader;
   std::unordered_map<types::JString, std::unique_ptr<JClass>> mLoadedClasses;
   NativeMethodRegistry mNativeMethods;
