@@ -22,7 +22,8 @@ void* JavaHeap::allocateSpaceOnPerm(size_t size)
   assert(mPermanentBumpPtr + size <= mPermanentRegion + MaxPermRegionSize);
 
   char* current = mPermanentBumpPtr;
-  mPermanentBumpPtr += size;
+  size_t adjustedSize = alignTo(size, alignof(std::max_align_t));
+  mPermanentBumpPtr += adjustedSize;
   return current;
 }
 

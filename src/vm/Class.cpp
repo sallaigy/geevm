@@ -146,11 +146,6 @@ void JClass::initialize(JavaThread& thread)
   mStatus = Status::Initialized;
 }
 
-static std::size_t alignTo(size_t size, size_t alignment)
-{
-  return (size + (alignment - 1)) & ~(alignment - 1);
-}
-
 void InstanceClass::linkFields()
 {
   if (!mFields.empty()) {
@@ -475,6 +470,22 @@ size_t JClass::headerSize() const
 
   if (auto arrayClass = this->asArrayClass(); arrayClass) {
     return sizeof(ArrayInstance);
+  }
+
+  std::unreachable();
+}
+
+std::size_t JClass::alignment() const
+{
+  if (auto instanceClass = this->asInstanceClass(); instanceClass) {
+    if (instanceClass->className() == u"java/lang/Class") {
+      return alignof(ClassInstance);
+    }
+    return alignof(Instance);
+  }
+
+  if (auto arrayClass = this->asArrayClass(); arrayClass) {
+    return alignof(ArrayInstance);
   }
 
   std::unreachable();

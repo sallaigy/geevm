@@ -250,7 +250,7 @@ std::optional<Value> NativeMethod::invoke(JavaThread& thread, const std::vector<
   }
 
   ffi_type* returnType;
-  void* result;
+  void* result = nullptr;
   jvalue returnValue;
 
   findReturnType(mMethod->descriptor(), &returnType, &returnValue, &result);

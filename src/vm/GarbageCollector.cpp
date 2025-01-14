@@ -10,11 +10,6 @@
 
 using namespace geevm;
 
-static std::size_t alignTo(size_t size, size_t alignment)
-{
-  return (size + (alignment - 1)) & ~(alignment - 1);
-}
-
 GarbageCollector::GarbageCollector(Vm& vm)
   : mVm(vm), mHeapSize(vm.settings().maxHeapSize), mRunAfterEveryAllocation(vm.settings().runGcAfterEveryAllocation)
 {
