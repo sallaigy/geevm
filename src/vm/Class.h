@@ -171,6 +171,7 @@ public:
   }
 
   size_t headerSize() const;
+  size_t alignment() const;
 
 private:
   void linkSuperClass(types::JStringRef className, BootstrapClassLoader& classLoader);

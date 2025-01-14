@@ -16,4 +16,9 @@
 #define ASAN_UNPOISON_MEMORY_REGION(addr, size) ((void)(addr), (void)(size))
 #endif
 
+inline std::size_t alignTo(size_t size, size_t alignment)
+{
+  return (size + (alignment - 1)) & ~(alignment - 1);
+}
+
 #endif // GEEVM_COMMON_MEMORY_H
