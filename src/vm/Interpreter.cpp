@@ -99,6 +99,19 @@ private:
 
   void newArray(CodeCursor& cursor);
 
+  template<class T, class F>
+    requires std::is_integral_v<T> && std::is_signed_v<T>
+  struct WrapSignedArithmetic
+  {
+    T operator()(T a, T b) const
+    {
+      using U = std::make_unsigned_t<T>;
+      auto result = F{}(std::bit_cast<U>(a), std::bit_cast<U>(b));
+
+      return std::bit_cast<T>(result);
+    }
+  };
+
 private:
   JavaThread& mThread;
 };
@@ -333,16 +346,16 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       //==--------------------------------------------------------------------==
       // Arithmetic operators
       //==--------------------------------------------------------------------==
-      case IADD: simpleOp<int32_t, std::plus<int32_t>>(); break;
-      case LADD: simpleOp<int64_t, std::plus<int64_t>>(); break;
+      case IADD: simpleOp<int32_t, WrapSignedArithmetic<int32_t, std::plus<>>>(); break;
+      case LADD: simpleOp<int64_t, WrapSignedArithmetic<int64_t, std::plus<>>>(); break;
       case FADD: simpleOp<float, std::plus<float>>(); break;
       case DADD: simpleOp<double, std::plus<double>>(); break;
-      case ISUB: simpleOp<int32_t, std::minus<int32_t>>(); break;
-      case LSUB: simpleOp<int64_t, std::minus<int64_t>>(); break;
+      case ISUB: simpleOp<int32_t, WrapSignedArithmetic<int32_t, std::minus<>>>(); break;
+      case LSUB: simpleOp<int64_t, WrapSignedArithmetic<int64_t, std::minus<>>>(); break;
       case FSUB: simpleOp<float, std::minus<float>>(); break;
       case DSUB: simpleOp<double, std::minus<double>>(); break;
-      case IMUL: simpleOp<int32_t, std::multiplies<int32_t>>(); break;
-      case LMUL: simpleOp<int64_t, std::multiplies<int64_t>>(); break;
+      case IMUL: simpleOp<int32_t, WrapSignedArithmetic<int32_t, std::multiplies<>>>(); break;
+      case LMUL: simpleOp<int64_t, WrapSignedArithmetic<int64_t, std::multiplies<>>>(); break;
       case FMUL: simpleOp<float, std::multiplies<float>>(); break;
       case DMUL: simpleOp<double, std::multiplies<double>>(); break;
       case IDIV: div<int32_t>(); break;
