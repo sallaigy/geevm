@@ -6,7 +6,7 @@ import org.geevm.util.Printer;
 public class MultiDimensionalArrayFiveDim {
 
     public static void main(String[] args) {
-        int[][][][][] t = new int[9][8][7][6][5];
+        int[][][][][] t = new int[6][5][4][3][2];
         for (int i = 0; i < t.length; i++) {
             for (int j = 0; j < t[i].length; j++) {
                 for (int k = 0; k < t[i][j].length; k++) {
