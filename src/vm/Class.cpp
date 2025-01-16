@@ -215,14 +215,14 @@ Value InstanceClass::getInitialFieldValue(const FieldType& fieldType, types::u2 
       case PrimitiveType::Double: return Value::from(entry.data.doubleFloat);
     }
     // No other primitive types are possible
-    std::unreachable();
+    GEEVM_UNREACHBLE("Unknown primitive type");
   }
 
   if (auto objectName = fieldType.asReference(); objectName && *objectName == u"java/lang/String") {
     return Value::from(mRuntimeConstantPool->getString(cvIndex));
   }
 
-  assert(false && "Unknown field type!");
+  GEEVM_UNREACHBLE("Unknown field type");
 }
 
 void InstanceClass::prepareMethods()
@@ -456,7 +456,7 @@ types::JString JClass::javaClassName() const
     return arrayClass->fieldType().toJavaString();
   }
 
-  assert(false && "A class must be an instance or an array!");
+  GEEVM_UNREACHBLE("A class must be an instance or an array!");
 }
 
 size_t JClass::headerSize() const
@@ -472,7 +472,7 @@ size_t JClass::headerSize() const
     return sizeof(ArrayInstance);
   }
 
-  std::unreachable();
+  GEEVM_UNREACHBLE("A class must be an instance or an array!");
 }
 
 std::size_t JClass::alignment() const
@@ -488,7 +488,7 @@ std::size_t JClass::alignment() const
     return alignof(ArrayInstance);
   }
 
-  std::unreachable();
+  GEEVM_UNREACHBLE("A class must be an instance or an array!");
 }
 
 void InstanceClass::initializeRuntimeConstantPool(StringHeap& stringHeap, BootstrapClassLoader& classLoader)
