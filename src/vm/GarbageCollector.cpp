@@ -1,7 +1,7 @@
 #include "vm/GarbageCollector.h"
 
+#include "common/Debug.h"
 #include "common/JvmError.h"
-#include "common/Memory.h"
 #include "vm/Class.h"
 #include "vm/Vm.h"
 
@@ -104,7 +104,7 @@ Instance* GarbageCollector::copyObject(Instance* instance, std::unordered_map<In
       }
     }
   } else {
-    assert(false);
+    GEEVM_UNREACHBLE("A class must be either an instance class or an array")
   }
 
   return copy;

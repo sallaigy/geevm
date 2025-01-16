@@ -88,8 +88,8 @@ std::optional<Value> NativeMethod::translateReturnValue(jvalue returnValue) cons
       case PrimitiveType::Long: return Value::from<int64_t>(returnValue.j);
       case PrimitiveType::Short: return Value::from<int16_t>(returnValue.s);
       case PrimitiveType::Boolean: return Value::from<int32_t>(returnValue.z ? 1 : 0);
-      default: std::unreachable();
     }
+    GEEVM_UNREACHBLE("Unknown primitive type");
   }
 
   // Must be an instance or array

@@ -176,7 +176,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
           // TODO: Check if class is loaded
           frame.pushOperand<Instance*>((*klass)->classInstance().get());
         } else {
-          assert(false && "Unknown LDC type!");
+          GEEVM_UNREACHBLE("Unknown LDC type!");
         }
         break;
       }
@@ -195,7 +195,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
           // TODO: Check if class is loaded
           frame.pushOperand<Instance*>((*klass)->classInstance().get());
         } else {
-          assert(false && "Unknown LDC_W type!");
+          GEEVM_UNREACHBLE("Unknown LDC_W type!");
         }
         break;
       }
@@ -208,7 +208,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         } else if (entry.tag == ConstantPool::Tag::CONSTANT_Long) {
           frame.pushOperand<int64_t>(entry.data.doubleInteger);
         } else {
-          assert(false && "ldc2_w target entry must be double or long");
+          GEEVM_UNREACHBLE("ldc2_w target entry must be double or long");
         }
 
         break;
@@ -858,7 +858,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       case IMPDEP2:
         // Reserved opcodes
         break;
-      default: assert(false && "Unknown opcode!");
+      default: GEEVM_UNREACHBLE("Unknown opcode");
     }
 
     // Handle exception
@@ -876,7 +876,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
     }
   }
 
-  assert(false && "Should be unreachable");
+  GEEVM_UNREACHBLE("Interpreter unexepectedly broke execution loop");
 }
 
 std::optional<types::u2> DefaultInterpreter::tryHandleException(GcRootRef<Instance> exception, RuntimeConstantPool& rt, const Code& code, size_t pc)
@@ -905,21 +905,6 @@ std::optional<types::u2> DefaultInterpreter::tryHandleException(GcRootRef<Instan
   }
 
   return std::nullopt;
-}
-
-static bool compareInt(Predicate predicate, int32_t val1, int32_t val2)
-{
-  switch (predicate) {
-    using enum Predicate;
-    case Eq: return val1 == val2;
-    case NotEq: return val1 != val2;
-    case Gt: return val1 > val2;
-    case Lt: return val1 < val2;
-    case GtEq: return val1 >= val2;
-    case LtEq: return val1 <= val2;
-  }
-
-  std::unreachable();
 }
 
 void DefaultInterpreter::invoke(JMethod* method)
@@ -1176,7 +1161,7 @@ void DefaultInterpreter::newArray(CodeCursor& cursor)
     case ArrayType::T_SHORT: arrayClsName = u"[S"; break;
     case ArrayType::T_INT: arrayClsName = u"[I"; break;
     case ArrayType::T_LONG: arrayClsName = u"[J"; break;
-    default: assert(false && "impossible"); break;
+    default: GEEVM_UNREACHBLE("Unknown array type");
   }
 
   auto arrayClass = mThread.resolveClass(arrayClsName);

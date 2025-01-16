@@ -3,6 +3,7 @@
 
 #include "common/JvmTypes.h"
 
+#include <common/Debug.h>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -168,7 +169,7 @@ decltype(auto) FieldType::map(const PrimitiveMapFunc& primitiveMapper, const Cla
       case PrimitiveType::Short: return primitiveMapper.template operator()<PrimitiveType::Short>();
       case PrimitiveType::Boolean: return primitiveMapper.template operator()<PrimitiveType::Boolean>();
     }
-    std::unreachable();
+    GEEVM_UNREACHBLE("Unknown primitive type");
   }
 
   if (auto array = this->asArrayType(); array) {
@@ -179,7 +180,7 @@ decltype(auto) FieldType::map(const PrimitiveMapFunc& primitiveMapper, const Cla
     return classMapper(*reference);
   }
 
-  std::unreachable();
+  GEEVM_UNREACHBLE("Unknown descriptor type");
 }
 
 } // namespace geevm
