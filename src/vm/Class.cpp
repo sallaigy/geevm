@@ -94,9 +94,8 @@ void JClass::linkSuperClass(types::JStringRef className, BootstrapClassLoader& c
   // TODO: We should not copy the name here
   auto loaded = classLoader.loadClass(types::JString{className});
   if (!loaded) {
-    // TODO
-    assert(false && "TODO: Handle class load failure");
-    return;
+    // TODO: Handle class load failure
+    geevm_panic("Failed to load class during linking");
   }
 
   mSuperClass = *loaded;
@@ -108,9 +107,8 @@ void JClass::linkSuperInterfaces(const std::vector<types::JStringRef>& interface
     // TODO: We should not copy the name here
     auto loaded = classLoader.loadClass(types::JString{interface});
     if (!loaded) {
-      // TODO
-      assert(false && "TODO: Handle class load failure");
-      return;
+      // TODO: Handle class load failure
+      geevm_panic("Failed to load class during linking");
     }
     mSuperInterfaces.push_back(*loaded);
   }

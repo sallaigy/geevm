@@ -45,5 +45,7 @@ JvmExpected<T> makeError(Args&&... args)
   return std::unexpected(VmError{args...});
 }
 
+[[noreturn]] void geevm_panic(const char* message);
+
 } // namespace geevm
 #endif // GEEVM_COMMON_VMERROR_H

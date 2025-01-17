@@ -24,14 +24,14 @@ JMethod* RuntimeConstantPool::getMethodRef(types::u2 index)
 
   auto klass = mBootstrapClassLoader.loadClass(className);
   if (!klass) {
-    // TODO
-    assert(false && "Should resolve class in getMethodRef");
+    // TODO: class resolution failure in getMethodRef
+    geevm_panic("getMethodRef: class resolution failure");
   }
 
   auto method = (*klass)->getVirtualMethod(types::JString{methodName}, types::JString{descriptor});
   if (!method.has_value()) {
-    // TODO
-    assert(false);
+    // TODO: method not found in getMethodRef
+    geevm_panic("getMethodRef: method resolution failure");
   }
 
   auto [it, _] = mMethodRefs.try_emplace(index, *method);
