@@ -52,9 +52,6 @@ public:
   JavaHeap& heap();
   JvmExpected<JClass*> resolveClass(const types::JString& name);
 
-  Instance* newInstance(InstanceClass* klass);
-  Instance* newInstance(const types::JString& className);
-
   // Call stack
   //==------------------------------------------------------------------------==
   CallFrame& currentFrame()

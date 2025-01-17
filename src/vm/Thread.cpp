@@ -53,17 +53,6 @@ JvmExpected<JClass*> JavaThread::resolveClass(const types::JString& name)
   return mVm.resolveClass(name);
 }
 
-Instance* JavaThread::newInstance(const types::JString& className)
-{
-  auto klass = mVm.resolveClass(className);
-  if (!klass) {
-    // TODO
-    assert(false && "TODO");
-  }
-
-  return heap().allocate((*klass)->asInstanceClass());
-}
-
 std::optional<Value> JavaThread::invoke(JMethod* method)
 {
   CallFrame& current = currentFrame();
@@ -192,7 +181,8 @@ void JavaThread::throwException(const types::JString& name, const types::JString
 {
   auto klass = mVm.resolveClass(name);
   if (!klass) {
-    assert(false && "TODO: failure to resolve exception class");
+    // TODO: handle failure to resolve exception class
+    geevm_panic("failure to resolve exception class");
   }
 
   GcRootRef<Instance> exceptionInstance = heap().gc().pin(heap().allocate((*klass)->asInstanceClass()));

@@ -33,14 +33,14 @@ void GarbageCollector::unlockGC()
 
 void* GarbageCollector::allocate(size_t size)
 {
-  char* end = mFromRegion + mHeapSize / 2;
+  const char* end = mFromRegion + mHeapSize / 2;
   if (mBumpPtr + size > end) {
     // The 'from' region is full, let's do GC
     this->performGarbageCollection();
-    char* end2 = mFromRegion + mHeapSize / 2;
+    const char* end2 = mFromRegion + mHeapSize / 2;
     if (mBumpPtr + size > end2) {
-      // FIXME: This should be JVMExpected
-      return nullptr;
+      // TODO: Throw OutOfMemoryException
+      geevm_panic("out of heap memory");
     }
   } else if (mRunAfterEveryAllocation) {
     this->performGarbageCollection();

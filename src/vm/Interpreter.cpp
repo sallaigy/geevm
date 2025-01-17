@@ -686,7 +686,8 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
           Instance* instance = mThread.heap().allocate(instanceClass);
           frame.pushOperand<Instance*>(instance);
         } else {
-          assert(false && "TODO new with array class");
+          // TODO: New with array class
+          geevm_panic("new called with array class");
         }
 
         break;
