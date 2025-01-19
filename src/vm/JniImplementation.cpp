@@ -119,8 +119,8 @@ void initializeFunctions(JNINativeInterface_& functions)
     auto objectInstance = JniTranslate<jobject, GcRootRef<Instance>>{}(object);
     auto fieldOffset = JniTranslate<jfieldID, JField*>{}(field)->offset();
 
-    GcRootRef<Instance> ret = jni::threadFromJniEnv(env).heap().gc().pin(objectInstance->getFieldValue<Instance*>(fieldOffset));
-    return JniTranslate<GcRootRef<Instance>, jobject>{}(ret);
+    GcRootRef<> ret = jni::threadFromJniEnv(env).heap().gc().pin(objectInstance->getFieldValue<Instance*>(fieldOffset)).release();
+    return JniTranslate<GcRootRef<>, jobject>{}(ret);
   };
 
   functions.GetStaticIntField = getStaticField<int32_t>;

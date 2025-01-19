@@ -174,7 +174,7 @@ std::optional<Value> NativeMethod::invoke(JavaThread& thread, const std::vector<
     argValues.push_back(jvalue{.l = JniTranslate<GcRootRef<ClassInstance>, jclass>{}(klass)});
     actualArgs.push_back(&argValues.back().l);
   } else {
-    auto javaThis = thread.heap().gc().pin(args.at(0).get<Instance*>());
+    auto javaThis = thread.heap().gc().pin(args.at(0).get<Instance*>()).release();
     argTypes.push_back(&ffi_type_pointer);
     pinnedObjects.push_back(javaThis);
     argValues.push_back(jvalue{.l = JniTranslate<GcRootRef<Instance>, jobject>{}(javaThis)});
@@ -241,7 +241,7 @@ std::optional<Value> NativeMethod::invoke(JavaThread& thread, const std::vector<
       }
     } else {
       // Must object or array reference
-      GcRootRef<> ref = thread.heap().gc().pin(current.get<Instance*>());
+      GcRootRef<> ref = thread.heap().gc().pin(current.get<Instance*>()).release();
       pinnedObjects.push_back(ref);
       argValues.push_back(jvalue{.l = JniTranslate<GcRootRef<>, jobject>{}(ref)});
       argTypes.push_back(&ffi_type_pointer);

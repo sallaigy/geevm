@@ -89,7 +89,7 @@ JNIEXPORT jobject JNICALL Java_jdk_internal_misc_Unsafe_getReferenceVolatile(JNI
 
   Instance** target = reinterpret_cast<Instance**>(reinterpret_cast<char*>(instance.get()) + offset);
   std::atomic_ref<Instance**> atomicRef(target);
-  auto loaded = jni::threadFromJniEnv(env).heap().gc().pin(*atomicRef.load());
+  auto loaded = jni::threadFromJniEnv(env).heap().gc().pin(*atomicRef.load()).release();
 
   return JniTranslate<GcRootRef<Instance>, jobject>{}(loaded);
 }

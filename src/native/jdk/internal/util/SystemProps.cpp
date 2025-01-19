@@ -30,7 +30,7 @@ JNIEXPORT jobjectArray JNICALL Java_jdk_internal_util_SystemProps_00024Raw_platf
   auto targetClass = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(strArrayClass)->target();
 
   auto* allocatedArray = thread.heap().allocateArray<Instance*>(targetClass->asArrayClass(), arrayLength);
-  GcRootRef<JavaArray<Instance*>> propsArray = thread.heap().gc().pin(allocatedArray);
+  GcRootRef<JavaArray<Instance*>> propsArray = thread.heap().gc().pin(allocatedArray).release();
   propsArray->setArrayElement(18, thread.heap().intern(temp));
   propsArray->setArrayElement(36, thread.heap().intern(temp));
   propsArray->setArrayElement(37, thread.heap().intern(temp));
@@ -55,7 +55,8 @@ JNIEXPORT jobjectArray JNICALL Java_jdk_internal_util_SystemProps_00024Raw_vmPro
 
   auto targetClass = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(strArrayClass)->target();
 
-  GcRootRef<JavaArray<Instance*>> propsArray = thread.heap().gc().pin(thread.heap().allocateArray<Instance*>(targetClass->asArrayClass(), arrayLength));
+  GcRootRef<JavaArray<Instance*>> propsArray =
+      thread.heap().gc().pin(thread.heap().allocateArray<Instance*>(targetClass->asArrayClass(), arrayLength)).release();
   propsArray->setArrayElement(0, thread.heap().intern(u"java.home"));
   propsArray->setArrayElement(1, thread.heap().intern(types::convertString(std::getenv("JDK17_PATH"))));
 

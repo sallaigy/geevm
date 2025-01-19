@@ -84,7 +84,7 @@ void JClass::prepare(BootstrapClassLoader& classLoader, JavaHeap& heap)
   }
 
   auto classClass = classLoader.loadClass(u"java/lang/Class");
-  mClassInstance = heap.gc().pin(heap.allocate<ClassInstance>((*classClass)->asInstanceClass(), this));
+  mClassInstance = heap.gc().pin(heap.allocate<ClassInstance>((*classClass)->asInstanceClass(), this)).release();
 
   mStatus = Status::Prepared;
 }

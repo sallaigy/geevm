@@ -1,7 +1,7 @@
 #ifndef GEEVM_VM_GARBAGECOLLECTOR_H
 #define GEEVM_VM_GARBAGECOLLECTOR_H
 
-#include "common/JvmError.h"
+#include "vm/Instance.h"
 
 #include <cassert>
 #include <cstddef>
@@ -13,6 +13,7 @@ namespace geevm
 
 class Vm;
 class Instance;
+class GarbageCollector;
 
 class RootList
 {
@@ -95,15 +96,15 @@ class GcRootRef
 {
   template<std::derived_from<Instance> U>
   friend class GcRootRef;
-
   friend class GarbageCollector;
 
-public:
+protected:
   explicit GcRootRef(RootList::Node* root)
     : mReference(root)
   {
   }
 
+public:
   /*implicit*/ GcRootRef(std::nullptr_t)
     : mReference(nullptr)
   {
@@ -115,7 +116,7 @@ public:
   GcRootRef& operator=(GcRootRef&& other) = default;
 
   template<std::derived_from<T> U>
-  GcRootRef(const GcRootRef<U>& other)
+  /*implicit*/ GcRootRef(const GcRootRef<U>& other)
     : mReference(other.mReference)
   {
   }
@@ -147,13 +148,67 @@ public:
     return mReference == nullptr;
   }
 
+  bool operator==(const Instance* other) const
+  {
+    if (mReference == nullptr) {
+      return other == nullptr;
+    }
+
+    return mReference->instance == other;
+  }
+
   void reset()
   {
     mReference = nullptr;
   }
 
-private:
+protected:
   RootList::Node* mReference;
+};
+
+/// A scoped, owning version of a GcRootRef. When this reference goes out of scope, the referenced object is unpinned by the garbage collector.
+template<std::derived_from<Instance> T = Instance>
+class ScopedGcRootRef : private GcRootRef<T>
+{
+  friend class GarbageCollector;
+
+  ScopedGcRootRef(RootList::Node* root, GarbageCollector* gc)
+    : GcRootRef<T>(root), mGC(gc)
+  {
+    assert(mGC != nullptr);
+  }
+
+public:
+  ScopedGcRootRef(const ScopedGcRootRef&) = delete;
+  ScopedGcRootRef& operator=(const ScopedGcRootRef&) = delete;
+
+  ScopedGcRootRef(ScopedGcRootRef&& other) noexcept
+    : GcRootRef<T>(other.release()), mGC(other.mGC)
+  {
+  }
+  ScopedGcRootRef& operator=(ScopedGcRootRef&& other) noexcept
+  {
+    this->~ScopedGcRootRef();
+    this = new (this) ScopedGcRootRef(std::move(other));
+    return *this;
+  }
+
+  using GcRootRef<T>::operator->;
+  using GcRootRef<T>::operator==;
+
+  /// Releases ownership of the GC root held by this reference, returning a non-owning GC root ref.
+  /// After calling this method, it is the responsibility of the caller to free the given reference.
+  [[nodiscard]] GcRootRef<T> release()
+  {
+    GcRootRef<T> copy(*this);
+    this->reset();
+    return copy;
+  }
+
+  ~ScopedGcRootRef();
+
+private:
+  GarbageCollector* mGC;
 };
 
 class GarbageCollector
@@ -165,17 +220,20 @@ public:
 
   void performGarbageCollection();
 
+  /// Marks the given object as a GC root. The return value of this function is a special reference that
+  /// is GC-safe and is not invalidated when the GC relocates the pointed object.
   template<std::derived_from<Instance> T>
-  GcRootRef<T> pin(T* object)
+  ScopedGcRootRef<T> pin(T* object)
   {
     if (object == nullptr) {
-      return nullptr;
+      return ScopedGcRootRef<T>(nullptr, this);
     }
 
     RootList::Node* root = mRootList.insert(object);
-    return GcRootRef<T>(root);
+    return ScopedGcRootRef<T>(root, this);
   }
 
+  /// Releases a given root reference. All other root references are invalidated.
   template<std::derived_from<Instance> T>
   void release(GcRootRef<T> object)
   {
@@ -210,6 +268,12 @@ private:
   size_t mHeapSize = 0;
   bool mRunAfterEveryAllocation = false;
 };
+
+template<std::derived_from<Instance> T>
+ScopedGcRootRef<T>::~ScopedGcRootRef()
+{
+  mGC->release(*this);
+}
 
 } // namespace geevm
 
