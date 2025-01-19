@@ -40,11 +40,11 @@ TEST_F(GarbageCollectorTest, allocate_and_pin_object)
   // Pinning makes an object into a "GC root"
   auto pinned = gc().pin(object);
 
-  ASSERT_EQ(pinned.get(), object);
+  ASSERT_EQ(pinned, object);
   gc().performGarbageCollection();
 
   // The underlying object got relocated, so the pointers should not be equal anymore
-  ASSERT_NE(pinned.get(), object);
+  ASSERT_NE(pinned, object);
 
   // Because the object was pinned, this access is still valid
   ASSERT_EQ(pinned->getClass()->className(), u"org/geevm/tests/classfile/HelloWorld");
@@ -69,11 +69,11 @@ TEST_F(GarbageCollectorTest, allocate_and_pin_array)
   gc().unlockGC();
 
   auto pinned = gc().pin(array);
-  ASSERT_EQ(pinned.get(), array);
+  ASSERT_EQ(pinned, array);
 
   gc().performGarbageCollection();
 
-  ASSERT_NE(pinned.get(), array);
+  ASSERT_NE(pinned, array);
   ASSERT_EQ(pinned->getClass(), &arrayClass);
 
   // All memory accesses should still be valid
@@ -84,4 +84,16 @@ TEST_F(GarbageCollectorTest, allocate_and_pin_array)
     // But the memory access should be valid
     ASSERT_EQ(object->getClass(), &mHelloWorldClass);
   }
+}
+
+TEST_F(GarbageCollectorTest, compare_scoped_ref_to_null)
+{
+  // Prevent GC from running during test setup
+  gc().lockGC();
+  auto object = mVm.heap().allocate(&mHelloWorldClass);
+  gc().unlockGC();
+
+  auto pinned = gc().pin(object);
+
+  ASSERT_FALSE(pinned == nullptr);
 }

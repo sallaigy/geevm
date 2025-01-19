@@ -761,7 +761,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       }
       case INSTANCEOF: {
         auto index = cursor.readU2();
-        GcRootRef<Instance> objectRef = mThread.heap().gc().pin(frame.popOperand<Instance*>());
+        ScopedGcRootRef<> objectRef = mThread.heap().gc().pin(frame.popOperand<Instance*>());
         if (objectRef == nullptr) {
           frame.pushOperand<int32_t>(0);
         } else {
@@ -778,8 +778,6 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
             frame.pushOperand<int32_t>(0);
           }
         }
-
-        mThread.heap().gc().release(objectRef);
         break;
       }
       case MONITORENTER: {
@@ -830,7 +828,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
 
           GcRootRef<ArrayInstance> newArray = nullptr;
           if (!dimensionCounts.empty()) {
-            auto outerArray = mThread.heap().gc().pin(mThread.heap().allocateArray<Instance*>(arrayClass, count));
+            auto outerArray = mThread.heap().gc().pin(mThread.heap().allocateArray<Instance*>(arrayClass, count)).release();
             ArrayClass* innerArrayClass = (*arrayClass->elementClass())->asArrayClass();
             for (int32_t i = 0; i < count; i++) {
               auto innerArray = self(self, dimensionCounts, innerArrayClass);
@@ -839,7 +837,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
             }
             newArray = outerArray;
           } else {
-            newArray = mThread.heap().gc().pin(mThread.heap().allocateArray(arrayClass, count));
+            newArray = mThread.heap().gc().pin(mThread.heap().allocateArray(arrayClass, count)).release();
           }
 
           return newArray;

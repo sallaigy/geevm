@@ -42,7 +42,7 @@ JNIEXPORT jobject JNICALL Java_java_lang_Throwable_getStackTraceElement(JNIEnv* 
 
   assert(elem.has_value());
 
-  auto elemRef = jni::threadFromJniEnv(env).heap().gc().pin(*elem);
+  auto elemRef = jni::threadFromJniEnv(env).heap().gc().pin(*elem).release();
   return JniTranslate<GcRootRef<Instance>, jobject>{}(elemRef);
 }
 }

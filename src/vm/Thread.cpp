@@ -19,7 +19,7 @@ void JavaThread::initialize(const types::JString& name, Instance* threadGroup)
   auto klass = mVm.resolveClass(u"java/lang/Thread");
   assert(klass.has_value());
 
-  mThreadInstance = heap().gc().pin(heap().allocate((*klass)->asInstanceClass()));
+  mThreadInstance = heap().gc().pin(heap().allocate((*klass)->asInstanceClass())).release();
 
   auto nameInstance = heap().intern(name);
   mThreadInstance->setFieldValue<Instance*>(u"name", u"Ljava/lang/String;", nameInstance);
@@ -128,7 +128,7 @@ std::optional<Value> JavaThread::executeCall(JMethod* method, const std::vector<
 
         // We'll have to be careful while iterating here. The array and the stack trace elements may get relocated
         // by the garbage collector during iteration.
-        GcRootRef<JavaArray<Instance*>> stackTraceArray = heap().gc().pin(stackTrace->asArray<Instance*>());
+        ScopedGcRootRef<JavaArray<Instance*>> stackTraceArray = heap().gc().pin(stackTrace->asArray<Instance*>());
         for (int32_t i = 0; i < stackTraceArray->length(); i++) {
           Instance* elem = stackTraceArray->getArrayElement(i).value();
 
@@ -140,8 +140,6 @@ std::optional<Value> JavaThread::executeCall(JMethod* method, const std::vector<
           message += utils::getStringValue(ret->get<Instance*>());
           message += u"\n";
         }
-
-        heap().gc().release(stackTraceArray);
       }
 
       std::cerr << types::convertJString(message) << std::endl;
@@ -172,7 +170,7 @@ std::optional<Value> JavaThread::executeNative(JMethod* method, CallFrame& frame
 void JavaThread::throwException(Instance* exceptionInstance)
 {
   assert(mCurrentException == nullptr && "There is already an exception instance");
-  mCurrentException = mVm.heap().gc().pin(exceptionInstance);
+  mCurrentException = mVm.heap().gc().pin(exceptionInstance).release();
   currentFrame().clearOperandStack();
   currentFrame().pushOperand(exceptionInstance);
 }
@@ -185,7 +183,7 @@ void JavaThread::throwException(const types::JString& name, const types::JString
     geevm_panic("failure to resolve exception class");
   }
 
-  GcRootRef<Instance> exceptionInstance = heap().gc().pin(heap().allocate((*klass)->asInstanceClass()));
+  GcRootRef<Instance> exceptionInstance = heap().gc().pin(heap().allocate((*klass)->asInstanceClass())).release();
   Instance* messageInstance = heap().intern(message);
   exceptionInstance->setFieldValue(u"detailMessage", u"Ljava/lang/String;", messageInstance);
 
@@ -221,7 +219,7 @@ Instance* JavaThread::createStackTrace()
     }
 
     if (include) {
-      auto stackTraceElement = heap().gc().pin(heap().allocate((*stackTraceElementCls)->asInstanceClass()));
+      auto stackTraceElement = heap().gc().pin(heap().allocate((*stackTraceElementCls)->asInstanceClass())).release();
       stackTraceElement->setFieldValue<Instance*>(u"declaringClass", u"Ljava/lang/String;", heap().intern(callFrame.currentClass()->javaClassName()));
       stackTraceElement->setFieldValue<Instance*>(u"declaringClassObject", u"Ljava/lang/Class;", callFrame.currentClass()->classInstance().get());
       stackTraceElement->setFieldValue<Instance*>(u"methodName", u"Ljava/lang/String;", heap().intern(callFrame.currentMethod()->name()));
