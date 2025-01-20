@@ -57,7 +57,7 @@ JField* RuntimeConstantPool::getFieldRef(types::u2 index)
   return it->second;
 }
 
-Instance* RuntimeConstantPool::getString(types::u2 index)
+GcRootRef<Instance> RuntimeConstantPool::getString(types::u2 index)
 {
   if (auto it = mStrings.find(index); it != mStrings.end()) {
     return it->second;

@@ -34,16 +34,6 @@ public:
     return object;
   }
 
-  template<std::derived_from<Instance> T = Instance, class... Args>
-  T* allocatePerm(InstanceClass* klass, Args&&... args)
-  {
-    size_t size = klass->allocationSize();
-    void* mem = this->allocateSpaceOnPerm(size);
-
-    auto object = new (mem) T(klass, std::forward<Args>(args)...);
-    return object;
-  }
-
   template<JvmType T>
   JavaArray<T>* allocateArray(ArrayClass* klass, int32_t length)
   {
@@ -56,21 +46,9 @@ public:
     return array;
   }
 
-  template<JvmType T>
-  JavaArray<T>* allocateArrayOnPerm(ArrayClass* klass, int32_t length)
-  {
-    assert(length >= 0);
-
-    size_t size = klass->allocationSize(length);
-    void* mem = this->allocateSpaceOnPerm(size);
-
-    auto array = new (mem) JavaArray<T>(klass, length);
-    return array;
-  }
-
   ArrayInstance* allocateArray(ArrayClass* klass, int32_t length);
 
-  Instance* intern(const types::JString& utf8)
+  GcRootRef<Instance> intern(const types::JString& utf8)
   {
     return mInternedStrings.intern(utf8);
   }
@@ -85,18 +63,10 @@ public:
     return mGC;
   }
 
-  ~JavaHeap();
-
-private:
-  void* allocateSpaceOnPerm(size_t size);
-
 private:
   StringHeap mInternedStrings;
   // Garbage-collected heap
   GarbageCollector mGC;
-  // Permanent heap
-  char* mPermanentRegion;
-  char* mPermanentBumpPtr;
 };
 
 } // namespace geevm

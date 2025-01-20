@@ -217,7 +217,7 @@ Value InstanceClass::getInitialFieldValue(const FieldType& fieldType, types::u2 
   }
 
   if (auto objectName = fieldType.asReference(); objectName && *objectName == u"java/lang/String") {
-    return Value::from(mRuntimeConstantPool->getString(cvIndex));
+    return Value::from(mRuntimeConstantPool->getString(cvIndex).get());
   }
 
   GEEVM_UNREACHBLE("Unknown field type");
