@@ -974,6 +974,7 @@ void DefaultInterpreter::arrayStore()
 
       if (!elementClass->isInstanceOf(*arrayElementClass)) {
         mThread.throwException(u"java/lang/ArrayStoreException");
+        return;
       }
     }
   }

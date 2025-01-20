@@ -46,6 +46,11 @@ void* GarbageCollector::allocate(size_t size)
     this->performGarbageCollection();
   }
 
+  return this->allocateUnchecked(size);
+}
+
+void* GarbageCollector::allocateUnchecked(size_t size)
+{
   void* current = mBumpPtr;
 
   size_t adjustedSize = alignTo(size, alignof(std::max_align_t));
@@ -74,38 +79,10 @@ Instance* GarbageCollector::copyObject(Instance* instance, std::unordered_map<In
     objectSize = klass->asInstanceClass()->allocationSize();
   }
 
-  void* mem = this->allocate(objectSize);
+  void* mem = this->allocateUnchecked(objectSize);
   std::memcpy(mem, instance, objectSize);
-  Instance* copy = reinterpret_cast<Instance*>(mem);
+  auto* copy = static_cast<Instance*>(mem);
   map.insert({instance, copy});
-
-  if (auto instanceClass = klass->asInstanceClass(); instanceClass) {
-    for (auto& [_, field] : klass->fields()) {
-      if (!field->isStatic() && field->fieldType().isReferenceOrArray()) {
-        auto* fieldValue = instance->getFieldValue<Instance*>(field->offset());
-        Instance* copiedField = this->copyObject(fieldValue, map);
-        copy->setFieldValue<Instance*>(field->offset(), copiedField);
-      }
-    }
-  } else if (auto arrayClass = klass->asArrayClass(); arrayClass) {
-    auto elementType = arrayClass->fieldType().asArrayType()->getElementType();
-
-    map.insert({instance, copy});
-    if (arrayClass->fieldType().asArrayType()->getElementType().isReferenceOrArray()) {
-      JavaArray<Instance*>* arrayOfObjects = instance->asArray<Instance*>();
-      for (int32_t i = 0; i < arrayOfObjects->length(); i++) {
-        Instance* elem = *arrayOfObjects->getArrayElement(i);
-        Instance* copyOfElem = this->copyObject(elem, map);
-
-        if (elem != nullptr) {
-          assert((elem->getClass() == nullptr && copyOfElem->getClass() == nullptr) || elem->getClass()->className() == copyOfElem->getClass()->className());
-        }
-        copy->asArray<Instance*>()->setArrayElement(i, copyOfElem);
-      }
-    }
-  } else {
-    GEEVM_UNREACHBLE("A class must be either an instance class or an array")
-  }
 
   return copy;
 }
@@ -122,14 +99,15 @@ void GarbageCollector::performGarbageCollection()
   mBumpPtr = mFromRegion;
 
   std::unordered_map<Instance*, Instance*> map;
+  char* scanPtr = mFromRegion;
 
   // Update manually pinned roots
-  for (auto it = mRootList.begin(); it != mRootList.end(); ++it) {
-    Instance* copy = this->copyObject(*it, map);
-    *it = copy;
+  for (auto& root : mRootList) {
+    Instance* copy = this->copyObject(root, map);
+    root = copy;
   }
 
-  for (auto& [_, klass] : mVm.bootstrapClassLoader().loadedClasses()) {
+  for (const auto& [_, klass] : mVm.bootstrapClassLoader().loadedClasses()) {
     // Copy and update the class instance
     // The class instance can be null if GC was triggered during class initialization
     for (auto& [_, field] : klass->fields()) {
@@ -160,11 +138,56 @@ void GarbageCollector::performGarbageCollection()
     }
   }
 
+  while (scanPtr < mBumpPtr) {
+    auto* instance = reinterpret_cast<Instance*>(scanPtr);
+    size_t objectSize = this->processReferences(instance, map);
+
+    size_t adjustedSize = alignTo(objectSize, alignof(std::max_align_t));
+    scanPtr += adjustedSize;
+  }
+
   // Clear up the previous region
   std::memset(mToRegion, 0, mHeapSize / 2);
   ASAN_POISON_MEMORY_REGION(mToRegion, mHeapSize / 2);
 
   this->unlockGC();
+}
+
+size_t GarbageCollector::processReferences(Instance* instance, std::unordered_map<Instance*, Instance*>& map)
+{
+  auto klass = instance->getClass();
+  std::size_t objectSize = 0;
+  if (auto arrayClass = klass->asArrayClass(); arrayClass) {
+    objectSize = arrayClass->allocationSize(instance->asArrayInstance()->length());
+  } else {
+    objectSize = klass->asInstanceClass()->allocationSize();
+  }
+
+  if (auto instanceClass = klass->asInstanceClass(); instanceClass) {
+    for (auto& [_, field] : klass->fields()) {
+      if (!field->isStatic() && field->fieldType().isReferenceOrArray()) {
+        auto* fieldValue = instance->getFieldValue<Instance*>(field->offset());
+        Instance* copiedField = this->copyObject(fieldValue, map);
+        instance->setFieldValue<Instance*>(field->offset(), copiedField);
+      }
+    }
+  } else if (auto arrayClass = klass->asArrayClass(); arrayClass) {
+    auto elementType = arrayClass->fieldType().asArrayType()->getElementType();
+
+    if (arrayClass->fieldType().asArrayType()->getElementType().isReferenceOrArray()) {
+      JavaArray<Instance*>* arrayOfObjects = instance->asArray<Instance*>();
+      for (int32_t i = 0; i < arrayOfObjects->length(); i++) {
+        Instance* elem = *arrayOfObjects->getArrayElement(i);
+        Instance* copyOfElem = this->copyObject(elem, map);
+
+        arrayOfObjects->setArrayElement(i, copyOfElem);
+      }
+    }
+  } else {
+    GEEVM_UNREACHBLE("A class must be either an instance class or an array")
+  }
+
+  return objectSize;
 }
 
 GarbageCollector::~GarbageCollector()
