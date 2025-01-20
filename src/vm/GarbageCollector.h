@@ -189,7 +189,7 @@ public:
   ScopedGcRootRef& operator=(ScopedGcRootRef&& other) noexcept
   {
     this->~ScopedGcRootRef();
-    this = new (this) ScopedGcRootRef(std::move(other));
+    new (this) ScopedGcRootRef(std::move(other));
     return *this;
   }
 
