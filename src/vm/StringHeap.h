@@ -1,9 +1,9 @@
 #ifndef GEEVM_STRINGHEAP_H
 #define GEEVM_STRINGHEAP_H
 
-#include "GarbageCollector.h"
+#include "common/JvmTypes.h"
+#include "vm/GarbageCollector.h"
 
-#include <common/JvmTypes.h>
 #include <unordered_map>
 
 namespace geevm
@@ -17,15 +17,15 @@ class StringHeap
 public:
   explicit StringHeap(Vm& vm);
 
-  Instance* intern(const types::JString& utf8);
-  std::unordered_map<types::JString, Instance*>& strings()
+  GcRootRef<Instance> intern(const types::JString& utf8);
+  std::unordered_map<types::JString, GcRootRef<>>& strings()
   {
     return mInternedStrings;
   }
 
 private:
   Vm& mVm;
-  std::unordered_map<types::JString, Instance*> mInternedStrings;
+  std::unordered_map<types::JString, GcRootRef<>> mInternedStrings;
 };
 
 } // namespace geevm

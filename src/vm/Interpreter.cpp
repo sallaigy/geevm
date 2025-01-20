@@ -170,7 +170,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         } else if (entry.tag == ConstantPool::Tag::CONSTANT_Float) {
           frame.pushOperand<float>(entry.data.singleFloat);
         } else if (entry.tag == ConstantPool::Tag::CONSTANT_String) {
-          frame.pushOperand<Instance*>(runtimeConstantPool.getString(index));
+          frame.pushOperand<Instance*>(runtimeConstantPool.getString(index).get());
         } else if (entry.tag == ConstantPool::Tag::CONSTANT_Class) {
           auto klass = runtimeConstantPool.getClass(index);
           // TODO: Check if class is loaded
@@ -189,7 +189,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         } else if (entry.tag == ConstantPool::Tag::CONSTANT_Float) {
           frame.pushOperand<float>(entry.data.singleFloat);
         } else if (entry.tag == ConstantPool::Tag::CONSTANT_String) {
-          frame.pushOperand<Instance*>(runtimeConstantPool.getString(index));
+          frame.pushOperand<Instance*>(runtimeConstantPool.getString(index).get());
         } else if (entry.tag == ConstantPool::Tag::CONSTANT_Class) {
           auto klass = runtimeConstantPool.getClass(index);
           // TODO: Check if class is loaded

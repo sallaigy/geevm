@@ -63,10 +63,8 @@ JNIEXPORT jobject JNICALL Java_java_lang_Class_getName0(JNIEnv* env, jclass klas
   auto name = cls->target()->className();
   std::ranges::replace(name, u'/', u'.');
 
-  Instance* str = jni::threadFromJniEnv(env).heap().intern(name);
-  GcRootRef<> strRef = jni::threadFromJniEnv(env).heap().gc().pin(str).release();
-
-  return JniTranslate<GcRootRef<Instance>, jobject>{}(strRef);
+  GcRootRef<> str = jni::threadFromJniEnv(env).heap().intern(name);
+  return JniTranslate<GcRootRef<Instance>, jobject>{}(str);
 }
 
 JNIEXPORT jclass JNICALL Java_java_lang_Class_forName0(JNIEnv* env, jclass klass, jstring name, jboolean initialize, jobject classLoader, jclass caller)
@@ -89,9 +87,7 @@ JNIEXPORT jobject JNICALL Java_java_lang_Class_initClassName(JNIEnv* env, jclass
   auto name = clsInstance->target()->className();
   std::ranges::replace(name, u'/', u'.');
 
-  Instance* str = jni::threadFromJniEnv(env).heap().intern(name);
-  GcRootRef<Instance> strRef = jni::threadFromJniEnv(env).heap().gc().pin(str).release();
-
-  return JniTranslate<GcRootRef<Instance>, jobject>{}(strRef);
+  GcRootRef<> str = jni::threadFromJniEnv(env).heap().intern(name);
+  return JniTranslate<GcRootRef<Instance>, jobject>{}(str);
 }
 }

@@ -3,28 +3,9 @@
 
 using namespace geevm;
 
-static constexpr size_t MaxPermRegionSize = 2048 * 1024;
-
 JavaHeap::JavaHeap(Vm& vm)
   : mInternedStrings(vm), mGC(vm)
 {
-  mPermanentRegion = static_cast<char*>(::operator new(MaxPermRegionSize));
-  mPermanentBumpPtr = mPermanentRegion;
-}
-
-JavaHeap::~JavaHeap()
-{
-  ::operator delete(mPermanentRegion);
-}
-
-void* JavaHeap::allocateSpaceOnPerm(size_t size)
-{
-  assert(mPermanentBumpPtr + size <= mPermanentRegion + MaxPermRegionSize);
-
-  char* current = mPermanentBumpPtr;
-  size_t adjustedSize = alignTo(size, alignof(std::max_align_t));
-  mPermanentBumpPtr += adjustedSize;
-  return current;
 }
 
 ArrayInstance* JavaHeap::allocateArray(ArrayClass* klass, int32_t length)

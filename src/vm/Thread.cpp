@@ -22,7 +22,7 @@ void JavaThread::initialize(const types::JString& name, Instance* threadGroup)
   mThreadInstance = heap().gc().pin(heap().allocate((*klass)->asInstanceClass())).release();
 
   auto nameInstance = heap().intern(name);
-  mThreadInstance->setFieldValue<Instance*>(u"name", u"Ljava/lang/String;", nameInstance);
+  mThreadInstance->setFieldValue<Instance*>(u"name", u"Ljava/lang/String;", nameInstance.get());
   mThreadInstance->setFieldValue<Instance*>(u"group", u"Ljava/lang/ThreadGroup;", threadGroup);
   mThreadInstance->setFieldValue<Instance*>(u"uncaughtExceptionHandler", u"Ljava/lang/Thread$UncaughtExceptionHandler;", threadGroup);
   mThreadInstance->setFieldValue<int32_t>(u"priority", u"I", 10);
@@ -184,8 +184,8 @@ void JavaThread::throwException(const types::JString& name, const types::JString
   }
 
   GcRootRef<Instance> exceptionInstance = heap().gc().pin(heap().allocate((*klass)->asInstanceClass())).release();
-  Instance* messageInstance = heap().intern(message);
-  exceptionInstance->setFieldValue(u"detailMessage", u"Ljava/lang/String;", messageInstance);
+  GcRootRef<Instance> messageInstance = heap().intern(message);
+  exceptionInstance->setFieldValue(u"detailMessage", u"Ljava/lang/String;", messageInstance.get());
 
   auto stackTrace = createStackTrace();
   exceptionInstance->setFieldValue(u"stackTrace", u"[Ljava/lang/StackTraceElement;", stackTrace);
@@ -209,7 +209,7 @@ Instance* JavaThread::createStackTrace()
 
   auto throwable = resolveClass(u"java/lang/Throwable");
 
-  std::vector<GcRootRef<>> stackTrace;
+  std::vector<ScopedGcRootRef<>> stackTrace;
 
   bool include = false;
   for (auto it = callStack().rbegin(); it != callStack().rend(); ++it) {
@@ -219,18 +219,21 @@ Instance* JavaThread::createStackTrace()
     }
 
     if (include) {
-      auto stackTraceElement = heap().gc().pin(heap().allocate((*stackTraceElementCls)->asInstanceClass())).release();
-      stackTraceElement->setFieldValue<Instance*>(u"declaringClass", u"Ljava/lang/String;", heap().intern(callFrame.currentClass()->javaClassName()));
-      stackTraceElement->setFieldValue<Instance*>(u"declaringClassObject", u"Ljava/lang/Class;", callFrame.currentClass()->classInstance().get());
-      stackTraceElement->setFieldValue<Instance*>(u"methodName", u"Ljava/lang/String;", heap().intern(callFrame.currentMethod()->name()));
-      stackTrace.push_back(stackTraceElement);
+      auto stackTraceElement = heap().gc().pin(heap().allocate((*stackTraceElementCls)->asInstanceClass()));
+      auto declaringClass = heap().intern(callFrame.currentClass()->javaClassName());
+      auto declaringClassObject = callFrame.currentClass()->classInstance();
+      auto methodName = heap().intern(callFrame.currentMethod()->name());
+
+      stackTraceElement->setFieldValue<Instance*>(u"declaringClass", u"Ljava/lang/String;", declaringClass.get());
+      stackTraceElement->setFieldValue<Instance*>(u"declaringClassObject", u"Ljava/lang/Class;", declaringClassObject.get());
+      stackTraceElement->setFieldValue<Instance*>(u"methodName", u"Ljava/lang/String;", methodName.get());
+      stackTrace.emplace_back(std::move(stackTraceElement));
     }
   }
 
   JavaArray<Instance*>* array = heap().allocateArray<Instance*>((*stackTraceArrayCls)->asArrayClass(), stackTrace.size());
   for (int32_t i = 0; i < stackTrace.size(); i++) {
     array->setArrayElement(i, stackTrace[i].get());
-    heap().gc().release(stackTrace[i]);
   }
 
   return array;

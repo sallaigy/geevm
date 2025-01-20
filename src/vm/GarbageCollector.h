@@ -195,6 +195,7 @@ public:
 
   using GcRootRef<T>::operator->;
   using GcRootRef<T>::operator==;
+  using GcRootRef<T>::get;
 
   /// Releases ownership of the GC root held by this reference, returning a non-owning GC root ref.
   /// After calling this method, it is the responsibility of the caller to free the given reference.
