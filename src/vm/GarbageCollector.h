@@ -255,6 +255,11 @@ public:
 
 private:
   Instance* copyObject(Instance* instance, std::unordered_map<Instance*, Instance*>& map);
+  size_t processReferences(Instance* instance, std::unordered_map<Instance*, Instance*>& map);
+
+  /// Allocate space on the garbage-collected heap _without_ checking for heap boundaries.
+  /// Used inside the garbage collector when it is known that there is enough space available.
+  void* allocateUnchecked(size_t size);
 
 private:
   Vm& mVm;
