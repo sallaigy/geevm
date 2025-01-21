@@ -158,8 +158,6 @@ std::optional<Value> NativeMethod::invoke(JavaThread& thread, const std::vector<
   std::vector<jvalue> argValues;
   argValues.reserve(args.size() + 1);
 
-  std::vector<GcRootRef<>> pinnedObjects;
-
   size_t argIdx = 0;
 
   JniImplementation impl(thread);
@@ -174,9 +172,8 @@ std::optional<Value> NativeMethod::invoke(JavaThread& thread, const std::vector<
     argValues.push_back(jvalue{.l = JniTranslate<GcRootRef<ClassInstance>, jclass>{}(klass)});
     actualArgs.push_back(&argValues.back().l);
   } else {
-    auto javaThis = thread.heap().gc().pin(args.at(0).get<Instance*>()).release();
+    auto javaThis = thread.addJniHandle(args.at(0).get<Instance*>());
     argTypes.push_back(&ffi_type_pointer);
-    pinnedObjects.push_back(javaThis);
     argValues.push_back(jvalue{.l = JniTranslate<GcRootRef<Instance>, jobject>{}(javaThis)});
     actualArgs.push_back(&argValues.back().l);
     argIdx = 1;
@@ -241,8 +238,7 @@ std::optional<Value> NativeMethod::invoke(JavaThread& thread, const std::vector<
       }
     } else {
       // Must object or array reference
-      GcRootRef<> ref = thread.heap().gc().pin(current.get<Instance*>()).release();
-      pinnedObjects.push_back(ref);
+      GcRootRef<> ref = thread.addJniHandle(current.get<Instance*>());
       argValues.push_back(jvalue{.l = JniTranslate<GcRootRef<>, jobject>{}(ref)});
       argTypes.push_back(&ffi_type_pointer);
       actualArgs.push_back(&argValues.back().l);
@@ -266,13 +262,6 @@ std::optional<Value> NativeMethod::invoke(JavaThread& thread, const std::vector<
   ffi_call(&cif, FFI_FN(mHandle), result, actualArgs.data());
 
   std::optional<Value> toReturn = translateReturnValue(returnValue);
-
-  for (auto& ref : pinnedObjects) {
-    if (ref == nullptr) {
-      continue;
-    }
-    thread.heap().gc().release(ref);
-  }
 
   return toReturn;
 }

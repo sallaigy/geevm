@@ -1,7 +1,7 @@
 #include "vm/Class.h"
+#include "common/Memory.h"
 #include "vm/Instance.h"
-
-#include "Vm.h"
+#include "vm/Vm.h"
 
 #include <algorithm>
 #include <utility>

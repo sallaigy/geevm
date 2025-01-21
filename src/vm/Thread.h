@@ -85,6 +85,18 @@ public:
     return mCurrentException;
   }
 
+  // JNI references
+  //==------------------------------------------------------------------------==
+
+  /// Marks the given object as JNI reference in the current native frame.
+  /// JNI references are GC-safe as long as the stack frame that produced them is alive.
+  /// Note that this method call is valid only in native frames.
+  GcRootRef<Instance> addJniHandle(Instance* instance);
+
+private:
+  void prepareNativeFrame();
+  void releaseNativeFrame();
+
 private:
   Vm& mVm;
   // Method to run and arguments
@@ -93,6 +105,10 @@ private:
   GcRootRef<Instance> mThreadInstance;
   std::list<CallFrame> mCallStack;
   GcRootRef<Instance> mCurrentException;
+
+  // List of JNI references
+  std::vector<std::vector<GcRootRef<>>> mJniHandles;
+
   std::jthread mNativeThread;
 };
 
