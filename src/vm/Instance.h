@@ -2,11 +2,9 @@
 #define GEEVM_VM_INSTANCE_H
 
 #include "common/JvmError.h"
-#include "vm/Frame.h"
+#include "vm/Value.h"
 
-#include <common/Memory.h>
 #include <cstdint>
-#include <span>
 
 namespace geevm
 {

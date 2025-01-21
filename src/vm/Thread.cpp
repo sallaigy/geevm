@@ -82,7 +82,9 @@ std::optional<Value> JavaThread::executeCall(JMethod* method, const std::vector<
 
   std::optional<Value> returnValue;
   if (method->isNative()) {
+    this->prepareNativeFrame();
     returnValue = this->executeNative(method, frame, args);
+    this->releaseNativeFrame();
   } else {
     for (int i = 0; i < args.size(); ++i) {
       frame.storeGenericValue(i, args[i]);
@@ -237,4 +239,29 @@ Instance* JavaThread::createStackTrace()
   }
 
   return array;
+}
+
+GcRootRef<> JavaThread::addJniHandle(Instance* instance)
+{
+  assert(currentFrame().currentMethod()->isNative());
+  GcRootRef<>& handle = mJniHandles.back().emplace_back(this->heap().gc().pin(instance).release());
+
+  return handle;
+}
+
+void JavaThread::prepareNativeFrame()
+{
+  assert(currentFrame().currentMethod()->isNative());
+  mJniHandles.emplace_back();
+}
+
+void JavaThread::releaseNativeFrame()
+{
+  assert(currentFrame().currentMethod()->isNative());
+  auto& handles = mJniHandles.back();
+  for (GcRootRef<>& handle : handles) {
+    heap().gc().release(handle);
+  }
+
+  mJniHandles.pop_back();
 }

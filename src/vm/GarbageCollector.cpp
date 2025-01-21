@@ -2,6 +2,7 @@
 
 #include "common/Debug.h"
 #include "common/JvmError.h"
+#include "common/Memory.h"
 #include "vm/Class.h"
 #include "vm/Vm.h"
 

@@ -119,7 +119,7 @@ void initializeFunctions(JNINativeInterface_& functions)
     auto objectInstance = JniTranslate<jobject, GcRootRef<Instance>>{}(object);
     auto fieldOffset = JniTranslate<jfieldID, JField*>{}(field)->offset();
 
-    GcRootRef<> ret = jni::threadFromJniEnv(env).heap().gc().pin(objectInstance->getFieldValue<Instance*>(fieldOffset)).release();
+    GcRootRef<> ret = jni::threadFromJniEnv(env).addJniHandle(objectInstance->getFieldValue<Instance*>(fieldOffset));
     return JniTranslate<GcRootRef<>, jobject>{}(ret);
   };
 
