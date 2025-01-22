@@ -42,7 +42,7 @@ public:
     return mNativeThread;
   }
 
-  GcRootRef<Instance> instance()
+  GcRootRef<> instance()
   {
     return mThreadInstance;
   }
@@ -80,7 +80,7 @@ public:
 
   void clearException();
 
-  GcRootRef<Instance> currentException() const
+  GcRootRef<> currentException() const
   {
     return mCurrentException;
   }

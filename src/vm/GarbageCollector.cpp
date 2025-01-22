@@ -1,5 +1,4 @@
 #include "vm/GarbageCollector.h"
-
 #include "common/Debug.h"
 #include "common/JvmError.h"
 #include "common/Memory.h"
