@@ -31,9 +31,13 @@ size_t Instance::getFieldOffset(types::JStringRef fieldName, types::JStringRef d
   return field->offset();
 }
 
-int32_t Instance::hashCode() const
+int32_t Instance::hashCode()
 {
-  return static_cast<int32_t>(std::hash<const Instance*>{}(this));
+  if (mHashCode == 0) {
+    mHashCode = static_cast<int32_t>(std::hash<const Instance*>{}(this));
+  }
+
+  return mHashCode;
 }
 
 ArrayInstance::ArrayInstance(ArrayClass* arrayClass, size_t length)

@@ -68,7 +68,7 @@ public:
   void* fieldsStart();
   const void* fieldsStart() const;
 
-  int32_t hashCode() const;
+  int32_t hashCode();
 
   Instance* copyTo(void* dest);
 
@@ -84,6 +84,11 @@ private:
 
 protected:
   JClass* mClass;
+
+  /// Object hash code. As the garbage collector may relocate the object, we cannot reliably
+  /// use the object address to produce the hash code. Instead, we use a lazily-calculated value
+  /// derived from the object address at the time of the first call.
+  int32_t mHashCode = 0;
 };
 
 class ArrayInstance : public Instance

@@ -130,7 +130,6 @@ static void notImplemented(Opcode opcode)
 
 std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t startPc)
 {
-  static int ycnt = 0;
   CodeCursor cursor(code.bytes(), startPc);
 
   while (cursor.hasNext()) {
