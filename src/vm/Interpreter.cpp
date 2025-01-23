@@ -1,7 +1,4 @@
 #include "vm/Interpreter.h"
-
-#include <iostream>
-
 #include "class_file/Code.h"
 #include "class_file/Opcode.h"
 #include "vm/Frame.h"
@@ -14,16 +11,6 @@ using namespace geevm;
 
 namespace
 {
-
-enum class Predicate
-{
-  Eq,
-  NotEq,
-  Lt,
-  LtEq,
-  Gt,
-  GtEq
-};
 
 class DefaultInterpreter : public Interpreter
 {
@@ -39,7 +26,7 @@ private:
   void invoke(JMethod* method);
   void handleErrorAsException(const VmError& error);
 
-  std::optional<types::u2> tryHandleException(GcRootRef<Instance> exception, RuntimeConstantPool& rt, const Code& code, size_t pc);
+  std::optional<types::u2> tryHandleException(GcRootRef<> exception, RuntimeConstantPool& rt, const Code& code, size_t pc);
 
   CallFrame& currentFrame()
   {
@@ -98,6 +85,8 @@ private:
   void unaryJumpIf(CodeCursor& cursor);
 
   void newArray(CodeCursor& cursor);
+  void newReferenceArray(CodeCursor& cursor);
+  void newMultiArray(CodeCursor& cursor);
 
   template<class T, class F>
     requires std::is_integral_v<T> && std::is_signed_v<T>
@@ -111,6 +100,11 @@ private:
       return std::bit_cast<T>(result);
     }
   };
+
+  void ldc(types::u2 index);
+
+  void lookupSwitch(CodeCursor& cursor);
+  void tableSwitch(CodeCursor& cursor);
 
 private:
   JavaThread& mThread;
@@ -139,7 +133,9 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
 
     switch (opcode) {
       using enum Opcode;
-      case NOP: notImplemented(opcode); break;
+      case NOP:
+        // Nothing to do
+        break;
       //==--------------------------------------------------------------------==
       // Constant push
       //==--------------------------------------------------------------------==
@@ -160,52 +156,16 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       case DCONST_1: frame.pushOperand<double>(1.0); break;
       case BIPUSH: frame.pushOperand<int32_t>(std::bit_cast<int8_t>(cursor.readU1())); break;
       case SIPUSH: frame.pushOperand<int32_t>(std::bit_cast<int16_t>(cursor.readU2())); break;
-      case LDC: {
-        types::u1 index = cursor.readU1();
-        auto entry = frame.currentClass()->constantPool().getEntry(index);
-
-        if (entry.tag == ConstantPool::Tag::CONSTANT_Integer) {
-          frame.pushOperand<int32_t>(entry.data.singleInteger);
-        } else if (entry.tag == ConstantPool::Tag::CONSTANT_Float) {
-          frame.pushOperand<float>(entry.data.singleFloat);
-        } else if (entry.tag == ConstantPool::Tag::CONSTANT_String) {
-          frame.pushOperand<Instance*>(runtimeConstantPool.getString(index).get());
-        } else if (entry.tag == ConstantPool::Tag::CONSTANT_Class) {
-          auto klass = runtimeConstantPool.getClass(index);
-          // TODO: Check if class is loaded
-          frame.pushOperand<Instance*>((*klass)->classInstance().get());
-        } else {
-          GEEVM_UNREACHBLE("Unknown LDC type!");
-        }
-        break;
-      }
-      case LDC_W: {
-        types::u2 index = cursor.readU2();
-        auto& entry = frame.currentClass()->constantPool().getEntry(index);
-
-        if (entry.tag == ConstantPool::Tag::CONSTANT_Integer) {
-          frame.pushOperand<int32_t>(entry.data.singleInteger);
-        } else if (entry.tag == ConstantPool::Tag::CONSTANT_Float) {
-          frame.pushOperand<float>(entry.data.singleFloat);
-        } else if (entry.tag == ConstantPool::Tag::CONSTANT_String) {
-          frame.pushOperand<Instance*>(runtimeConstantPool.getString(index).get());
-        } else if (entry.tag == ConstantPool::Tag::CONSTANT_Class) {
-          auto klass = runtimeConstantPool.getClass(index);
-          // TODO: Check if class is loaded
-          frame.pushOperand<Instance*>((*klass)->classInstance().get());
-        } else {
-          GEEVM_UNREACHBLE("Unknown LDC_W type!");
-        }
-        break;
-      }
+      case LDC: ldc(cursor.readU1()); break;
+      case LDC_W: ldc(cursor.readU2()); break;
       case LDC2_W: {
         types::u2 index = cursor.readU2();
-        auto& entry = frame.currentClass()->constantPool().getEntry(index);
+        auto& [tag, data] = frame.currentClass()->constantPool().getEntry(index);
 
-        if (entry.tag == ConstantPool::Tag::CONSTANT_Double) {
-          frame.pushOperand<double>(entry.data.doubleFloat);
-        } else if (entry.tag == ConstantPool::Tag::CONSTANT_Long) {
-          frame.pushOperand<int64_t>(entry.data.doubleInteger);
+        if (tag == ConstantPool::Tag::CONSTANT_Double) {
+          frame.pushOperand<double>(data.doubleFloat);
+        } else if (tag == ConstantPool::Tag::CONSTANT_Long) {
+          frame.pushOperand<int64_t>(data.doubleInteger);
         } else {
           GEEVM_UNREACHBLE("ldc2_w target entry must be double or long");
         }
@@ -306,7 +266,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         break;
       }
       case DUP: {
-        // TOOD: Duplicate instead of pop / push
+        // TODO: Duplicate instead of pop / push
         auto value = frame.popGenericOperand();
         frame.pushGenericOperand(value);
         frame.pushGenericOperand(value);
@@ -406,7 +366,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       case L2D: castInteger<int64_t, double>(); break;
       case F2I: castFloatToInt<float, int32_t>(); break;
       case F2L: castFloatToInt<float, int64_t>(); break;
-      case F2D: frame.pushOperand<double>(static_cast<double>(frame.popOperand<float>())); break;
+      case F2D: frame.pushOperand<double>(frame.popOperand<float>()); break;
       case D2I: castFloatToInt<double, int32_t>(); break;
       case D2L: castFloatToInt<double, int64_t>(); break;
       case D2F: frame.pushOperand<float>(static_cast<float>(frame.popOperand<double>())); break;
@@ -447,70 +407,8 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       }
       case JSR: notImplemented(opcode); break;
       case RET: notImplemented(opcode); break;
-      case TABLESWITCH: {
-        auto opcodePos = cursor.position() - 1;
-        while (cursor.position() % 4 != 0) {
-          cursor.next();
-        }
-
-        auto defaultOffset = std::bit_cast<int32_t>(cursor.readU4());
-        auto low = std::bit_cast<int32_t>(cursor.readU4());
-        auto high = std::bit_cast<int32_t>(cursor.readU4());
-        assert(low <= high);
-
-        int32_t count = high - low + 1;
-
-        std::vector<int32_t> table;
-        table.reserve(count);
-
-        for (int32_t i = 0; i < count; i++) {
-          int32_t offset = std::bit_cast<int32_t>(cursor.readU4());
-          table.push_back(offset);
-        }
-
-        auto index = frame.popOperand<int32_t>();
-        if (index < low || index > high) {
-          cursor.set(opcodePos + defaultOffset);
-        } else {
-          int32_t targetOffset = table.at(index - low);
-          cursor.set(opcodePos + targetOffset);
-        }
-
-        break;
-      }
-      case LOOKUPSWITCH: {
-        auto opcodePos = cursor.position() - 1;
-        while (cursor.position() % 4 != 0) {
-          cursor.next();
-        }
-
-        int32_t defaultOffset = std::bit_cast<int32_t>(cursor.readU4());
-        int32_t numPairs = std::bit_cast<int32_t>(cursor.readU4());
-
-        std::vector<std::pair<int32_t, int32_t>> pairs;
-        for (int32_t i = 0; i < numPairs; i++) {
-          auto matchValue = cursor.readU4();
-          auto offset = std::bit_cast<int32_t>(cursor.readU4());
-          pairs.emplace_back(matchValue, offset);
-        }
-
-        auto key = frame.popOperand<int32_t>();
-        bool matched = false;
-
-        for (int32_t i = 0; i < numPairs; i++) {
-          if (pairs[i].first == key) {
-            cursor.set(opcodePos + pairs[i].second);
-            matched = true;
-            break;
-          }
-        }
-
-        if (!matched) {
-          cursor.set(opcodePos + defaultOffset);
-        }
-
-        break;
-      }
+      case TABLESWITCH: tableSwitch(cursor); break;
+      case LOOKUPSWITCH: lookupSwitch(cursor); break;
       //==--------------------------------------------------------------------==
       // Returns
       //==--------------------------------------------------------------------==
@@ -692,39 +590,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         break;
       }
       case NEWARRAY: newArray(cursor); break;
-      case ANEWARRAY: {
-        auto index = cursor.readU2();
-        int32_t count = frame.popOperand<int32_t>();
-
-        auto klass = runtimeConstantPool.getClass(index);
-        if (!klass) {
-          this->handleErrorAsException(klass.error());
-          break;
-        }
-
-        types::JString elementClassName;
-        if ((*klass)->isArrayType()) {
-          elementClassName = u"[" + (*klass)->className();
-        } else {
-          elementClassName = u"[L" + (*klass)->className() + u";";
-        }
-
-        auto arrayClass = mThread.resolveClass(elementClassName);
-        if (!arrayClass) {
-          this->handleErrorAsException(arrayClass.error());
-          break;
-        }
-
-        if (count < 0) {
-          mThread.throwException(u"java/lang/NegativeArraySizeException", u"");
-          break;
-        }
-
-        ArrayInstance* array = mThread.heap().allocateArray<Instance*>((*arrayClass)->asArrayClass(), count);
-        frame.pushOperand<Instance*>(array);
-
-        break;
-      }
+      case ANEWARRAY: newReferenceArray(cursor); break;
       case ARRAYLENGTH: {
         ArrayInstance* arrayRef = frame.popOperand<Instance*>()->asArrayInstance();
         frame.pushOperand<int32_t>(arrayRef->length());
@@ -803,50 +669,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         }
         break;
       }
-      case MULTIANEWARRAY: {
-        uint16_t index = cursor.readU2();
-        uint8_t dimensions = cursor.readU1();
-
-        auto klass = runtimeConstantPool.getClass(index);
-        if (!klass) {
-          this->handleErrorAsException(klass.error());
-          break;
-        }
-
-        std::vector<int32_t> dimensionCounts;
-        for (uint8_t dim = 0; dim < dimensions; dim++) {
-          dimensionCounts.push_back(frame.popOperand<int32_t>());
-        }
-
-        std::optional<JClass*> elementClass = (*klass)->asArrayClass()->elementClass();
-        assert(elementClass.has_value());
-
-        auto makeInnerArray = [this](auto& self, std::vector<int32_t> dimensionCounts, ArrayClass* arrayClass) -> GcRootRef<ArrayInstance> {
-          auto count = dimensionCounts.back();
-          dimensionCounts.pop_back();
-
-          GcRootRef<ArrayInstance> newArray = nullptr;
-          if (!dimensionCounts.empty()) {
-            auto outerArray = mThread.heap().gc().pin(mThread.heap().allocateArray<Instance*>(arrayClass, count)).release();
-            ArrayClass* innerArrayClass = (*arrayClass->elementClass())->asArrayClass();
-            for (int32_t i = 0; i < count; i++) {
-              auto innerArray = self(self, dimensionCounts, innerArrayClass);
-              outerArray->setArrayElement(i, innerArray.get());
-              mThread.heap().gc().release(innerArray);
-            }
-            newArray = outerArray;
-          } else {
-            newArray = mThread.heap().gc().pin(mThread.heap().allocateArray(arrayClass, count)).release();
-          }
-
-          return newArray;
-        };
-
-        GcRootRef<ArrayInstance> result = makeInnerArray(makeInnerArray, dimensionCounts, (*klass)->asArrayClass());
-        frame.pushOperand<Instance*>(result.get());
-        mThread.heap().gc().release(result);
-        break;
-      }
+      case MULTIANEWARRAY: newMultiArray(cursor); break;
       case IFNULL: unaryJumpIf<Instance*, nullptr, std::equal_to<Instance*>>(cursor); break;
       case IFNONNULL: unaryJumpIf<Instance*, nullptr, std::not_equal_to<Instance*>>(cursor); break;
       case GOTO_W: notImplemented(opcode); break;
@@ -877,7 +700,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
   GEEVM_UNREACHBLE("Interpreter unexepectedly broke execution loop");
 }
 
-std::optional<types::u2> DefaultInterpreter::tryHandleException(GcRootRef<Instance> exception, RuntimeConstantPool& rt, const Code& code, size_t pc)
+std::optional<types::u2> DefaultInterpreter::tryHandleException(GcRootRef<> exception, RuntimeConstantPool& rt, const Code& code, size_t pc)
 {
   for (auto& entry : code.exceptionTable()) {
     if (pc < entry.startPc || pc >= entry.endPc) {
@@ -903,6 +726,26 @@ std::optional<types::u2> DefaultInterpreter::tryHandleException(GcRootRef<Instan
   }
 
   return std::nullopt;
+}
+
+void DefaultInterpreter::ldc(types::u2 index)
+{
+  auto& runtimeConstantPool = currentFrame().currentClass()->runtimeConstantPool();
+  auto& [tag, data] = currentFrame().currentClass()->constantPool().getEntry(index);
+
+  if (tag == ConstantPool::Tag::CONSTANT_Integer) {
+    currentFrame().pushOperand<int32_t>(data.singleInteger);
+  } else if (tag == ConstantPool::Tag::CONSTANT_Float) {
+    currentFrame().pushOperand<float>(data.singleFloat);
+  } else if (tag == ConstantPool::Tag::CONSTANT_String) {
+    currentFrame().pushOperand<Instance*>(runtimeConstantPool.getString(index).get());
+  } else if (tag == ConstantPool::Tag::CONSTANT_Class) {
+    auto klass = runtimeConstantPool.getClass(index);
+    // TODO: Check if class is loaded
+    currentFrame().pushOperand<Instance*>((*klass)->classInstance().get());
+  } else {
+    GEEVM_UNREACHBLE("Unknown LDC/LDC_W type!");
+  }
 }
 
 void DefaultInterpreter::invoke(JMethod* method)
@@ -1176,4 +1019,146 @@ void DefaultInterpreter::newArray(CodeCursor& cursor)
 
   ArrayInstance* newInstance = mThread.heap().allocateArray((*arrayClass)->asArrayClass(), count);
   currentFrame().pushOperand<Instance*>(newInstance);
+}
+
+void DefaultInterpreter::newReferenceArray(CodeCursor& cursor)
+{
+  auto index = cursor.readU2();
+  int32_t count = currentFrame().popOperand<int32_t>();
+
+  auto klass = currentFrame().currentClass()->runtimeConstantPool().getClass(index);
+  if (!klass) {
+    this->handleErrorAsException(klass.error());
+    return;
+  }
+
+  types::JString elementClassName;
+  if ((*klass)->isArrayType()) {
+    elementClassName = u"[" + (*klass)->className();
+  } else {
+    elementClassName = u"[L" + (*klass)->className() + u";";
+  }
+
+  auto arrayClass = mThread.resolveClass(elementClassName);
+  if (!arrayClass) {
+    this->handleErrorAsException(arrayClass.error());
+    return;
+  }
+
+  if (count < 0) {
+    mThread.throwException(u"java/lang/NegativeArraySizeException", u"");
+    return;
+  }
+
+  ArrayInstance* array = mThread.heap().allocateArray<Instance*>((*arrayClass)->asArrayClass(), count);
+  currentFrame().pushOperand<Instance*>(array);
+}
+
+void DefaultInterpreter::newMultiArray(CodeCursor& cursor)
+{
+  uint16_t index = cursor.readU2();
+  uint8_t dimensions = cursor.readU1();
+
+  auto klass = currentFrame().currentClass()->runtimeConstantPool().getClass(index);
+  if (!klass) {
+    this->handleErrorAsException(klass.error());
+    return;
+  }
+
+  std::vector<int32_t> dimensionCounts;
+  for (uint8_t dim = 0; dim < dimensions; dim++) {
+    dimensionCounts.push_back(currentFrame().popOperand<int32_t>());
+  }
+
+  std::optional<JClass*> elementClass = (*klass)->asArrayClass()->elementClass();
+  assert(elementClass.has_value());
+
+  auto makeInnerArray = [this](auto& self, std::vector<int32_t> dimensionCounts, ArrayClass* arrayClass) -> GcRootRef<ArrayInstance> {
+    auto count = dimensionCounts.back();
+    dimensionCounts.pop_back();
+
+    GcRootRef<ArrayInstance> newArray = nullptr;
+    if (!dimensionCounts.empty()) {
+      auto outerArray = mThread.heap().gc().pin(mThread.heap().allocateArray<Instance*>(arrayClass, count)).release();
+      ArrayClass* innerArrayClass = (*arrayClass->elementClass())->asArrayClass();
+      for (int32_t i = 0; i < count; i++) {
+        auto innerArray = self(self, dimensionCounts, innerArrayClass);
+        outerArray->setArrayElement(i, innerArray.get());
+        mThread.heap().gc().release(innerArray);
+      }
+      newArray = outerArray;
+    } else {
+      newArray = mThread.heap().gc().pin(mThread.heap().allocateArray(arrayClass, count)).release();
+    }
+
+    return newArray;
+  };
+
+  GcRootRef<ArrayInstance> result = makeInnerArray(makeInnerArray, dimensionCounts, (*klass)->asArrayClass());
+  currentFrame().pushOperand<Instance*>(result.get());
+  mThread.heap().gc().release(result);
+}
+
+void DefaultInterpreter::lookupSwitch(CodeCursor& cursor)
+{
+  auto opcodePos = cursor.position() - 1;
+  while (cursor.position() % 4 != 0) {
+    cursor.next();
+  }
+
+  int32_t defaultOffset = std::bit_cast<int32_t>(cursor.readU4());
+  int32_t numPairs = std::bit_cast<int32_t>(cursor.readU4());
+
+  std::vector<std::pair<int32_t, int32_t>> pairs;
+  for (int32_t i = 0; i < numPairs; i++) {
+    auto matchValue = cursor.readU4();
+    auto offset = std::bit_cast<int32_t>(cursor.readU4());
+    pairs.emplace_back(matchValue, offset);
+  }
+
+  auto key = currentFrame().popOperand<int32_t>();
+  bool matched = false;
+
+  for (int32_t i = 0; i < numPairs; i++) {
+    if (pairs[i].first == key) {
+      cursor.set(opcodePos + pairs[i].second);
+      matched = true;
+      break;
+    }
+  }
+
+  if (!matched) {
+    cursor.set(opcodePos + defaultOffset);
+  }
+}
+
+void DefaultInterpreter::tableSwitch(CodeCursor& cursor)
+{
+  auto opcodePos = cursor.position() - 1;
+  while (cursor.position() % 4 != 0) {
+    cursor.next();
+  }
+
+  auto defaultOffset = std::bit_cast<int32_t>(cursor.readU4());
+  auto low = std::bit_cast<int32_t>(cursor.readU4());
+  auto high = std::bit_cast<int32_t>(cursor.readU4());
+  assert(low <= high);
+
+  int32_t count = high - low + 1;
+
+  std::vector<int32_t> table;
+  table.reserve(count);
+
+  for (int32_t i = 0; i < count; i++) {
+    int32_t offset = std::bit_cast<int32_t>(cursor.readU4());
+    table.push_back(offset);
+  }
+
+  auto index = currentFrame().popOperand<int32_t>();
+  if (index < low || index > high) {
+    cursor.set(opcodePos + defaultOffset);
+  } else {
+    int32_t targetOffset = table.at(index - low);
+    cursor.set(opcodePos + targetOffset);
+  }
 }
