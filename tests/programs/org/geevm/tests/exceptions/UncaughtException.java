@@ -6,9 +6,9 @@ import org.geevm.util.Printer;
 public class UncaughtException {
     public static void main(String[] args) {
         callee();
-        // CHECK: Exception java.lang.IllegalStateException: 'Exception thrown in callee.'
-        // CHECK-NEXT: at org.geevm.tests.exceptions.UncaughtException.callee(Unknown Source)
-        // CHECK-NEXT: at org.geevm.tests.exceptions.UncaughtException.main(Unknown Source)
+        // CHECK: Exception in thread "main" java.lang.IllegalStateException: Exception thrown in callee.
+        // CHECK-NEXT: at org.geevm.tests.exceptions.UncaughtException.callee(UncaughtException.java:16)
+        // CHECK-NEXT: at org.geevm.tests.exceptions.UncaughtException.main(UncaughtException.java:8)
     }
 
     public static void callee() {

@@ -100,51 +100,13 @@ std::optional<Value> JavaThread::executeCall(JMethod* method, const std::vector<
       current->clearOperandStack();
       current->pushOperand<Instance*>(mCurrentException.get());
     } else {
-      Instance* handler = mThreadInstance->getFieldValue<Instance*>(u"uncaughtExceptionHandler", u"Ljava/lang/Thread$UncaughtExceptionHandler;");
+      auto handler = mThreadInstance->getFieldValue<Instance*>(u"uncaughtExceptionHandler", u"Ljava/lang/Thread$UncaughtExceptionHandler;");
       auto handlerMethod = handler->getClass()->getVirtualMethod(u"uncaughtException", u"(Ljava/lang/Thread;Ljava/lang/Throwable;)V");
       assert(handlerMethod.has_value());
 
-      // FIXME: We should execute the handler, but we do not support `System.err` / `System.out` yet.
-      // this->executeCall((*handlerMethod), {Value::Reference(handler), Value::Reference(mThreadInstance), Value::Reference(mCurrentException)});
-      auto exceptionMessage = mCurrentException->getFieldValue<Instance*>(u"detailMessage", u"Ljava/lang/String;");
-      assert(exceptionMessage->getClass()->className() == u"java/lang/String");
-
-      types::JString message = u"Exception ";
-
-      auto exceptionClsName = mCurrentException->getClass()->javaClassName();
-
-      message += exceptionClsName;
-      message += u": '";
-      message += utils::getStringValue(exceptionMessage);
-      message += u"'";
-
-      // Instance* stackTrace = mCurrentException->getFieldValue(u"stackTrace", u"[Ljava/lang/StackTraceElement;").asReference();
-      auto getStackTrace = mCurrentException->getClass()->getVirtualMethod(u"getOurStackTrace", u"()[Ljava/lang/StackTraceElement;");
-
-      GcRootRef<Instance> exceptionInstance = mCurrentException;
-      mCurrentException.reset();
-      Instance* stackTrace = this->executeCall((*getStackTrace), {Value::from<Instance*>(exceptionInstance.get())})->get<Instance*>();
-
-      if (stackTrace != nullptr) {
-        message += u"\n";
-
-        // We'll have to be careful while iterating here. The array and the stack trace elements may get relocated
-        // by the garbage collector during iteration.
-        ScopedGcRootRef<JavaArray<Instance*>> stackTraceArray = heap().gc().pin(stackTrace->asArray<Instance*>());
-        for (int32_t i = 0; i < stackTraceArray->length(); i++) {
-          Instance* elem = stackTraceArray->getArrayElement(i).value();
-
-          auto toStringMethod = elem->getClass()->getVirtualMethod(u"toString", u"()Ljava/lang/String;");
-          auto ret = this->executeCall(*toStringMethod, {Value::from<Instance*>(elem)});
-          assert(ret.has_value());
-
-          message += u"  at ";
-          message += utils::getStringValue(ret->get<Instance*>());
-          message += u"\n";
-        }
-      }
-
-      std::cerr << types::convertJString(message) << std::endl;
+      Instance* currentException = mCurrentException.get();
+      this->clearException();
+      this->executeCall((*handlerMethod), {Value::from(handler), Value::from(mThreadInstance.get()), Value::from(currentException)});
       // TODO: We should exit with exit code 1, but some of our current tests would break
       std::exit(0);
     }
@@ -202,6 +164,36 @@ void JavaThread::clearException()
   mCurrentException = nullptr;
 }
 
+static int32_t getFrameLineNumber(const CallFrame& callFrame)
+{
+  if (!callFrame.currentMethod()->isNative()) {
+    int32_t lineNumber = -1;
+    size_t pc = callFrame.programCounter();
+    const Code& code = callFrame.currentMethod()->getCode();
+    auto& lineNumbers = code.lineNumberTable();
+    for (size_t i = 0; i < lineNumbers.size(); ++i) {
+      if (i == lineNumbers.size() - 1) {
+        // This is the last entry in the table
+        if (lineNumbers[i].startPc < pc) {
+          lineNumber = lineNumbers[i].lineNumber;
+        }
+      } else if (lineNumbers[i].startPc <= pc && pc < lineNumbers[i + 1].startPc) {
+        lineNumber = lineNumbers[i].lineNumber;
+      }
+    }
+
+    if (lineNumber != -1) {
+      return lineNumber;
+    }
+  } else {
+    // -2 is the magic line number in the JDK for native methods
+    return -2;
+  }
+
+  // We signify unknown line numbers as -1
+  return -1;
+}
+
 Instance* JavaThread::createStackTrace()
 {
   auto stackTraceElementCls = resolveClass(u"java/lang/StackTraceElement");
@@ -226,9 +218,21 @@ Instance* JavaThread::createStackTrace()
       auto declaringClassObject = callFrame.currentClass()->classInstance();
       auto methodName = heap().intern(callFrame.currentMethod()->name());
 
+      GcRootRef<> sourceFile = nullptr;
+      if (auto sourceFileStr = callFrame.currentClass()->sourceFile(); sourceFileStr) {
+        sourceFile = heap().intern(*sourceFileStr);
+      }
+
       stackTraceElement->setFieldValue<Instance*>(u"declaringClass", u"Ljava/lang/String;", declaringClass.get());
       stackTraceElement->setFieldValue<Instance*>(u"declaringClassObject", u"Ljava/lang/Class;", declaringClassObject.get());
       stackTraceElement->setFieldValue<Instance*>(u"methodName", u"Ljava/lang/String;", methodName.get());
+      stackTraceElement->setFieldValue<Instance*>(u"fileName", u"Ljava/lang/String;", sourceFile.get());
+
+      int32_t lineNumber = getFrameLineNumber(callFrame);
+      if (lineNumber != -1) {
+        stackTraceElement->setFieldValue<int32_t>(u"lineNumber", u"I", getFrameLineNumber(callFrame));
+      }
+
       stackTrace.emplace_back(std::move(stackTraceElement));
     }
   }

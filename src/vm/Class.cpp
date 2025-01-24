@@ -297,7 +297,7 @@ std::optional<JField*> JClass::lookupField(const types::JString& name, const typ
   return std::nullopt;
 }
 
-std::optional<JField*> JClass::lookupFieldByName(const types::JString& string)
+std::optional<JField*> JClass::lookupFieldByName(types::JStringRef string)
 {
   for (auto& [key, field] : mFields) {
     if (key.first == string) {

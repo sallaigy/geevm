@@ -192,7 +192,8 @@ public:
   //==--------------------------------------------------------------------==//
 
   ClassFile(types::u2 minorVersion, types::u2 majorVersion, std::unique_ptr<ConstantPool> constantPool, ClassAccessFlags accessFlags, types::u2 thisClass,
-            types::u2 superClass, std::vector<types::u2> interfaces, std::vector<FieldInfo> fields, std::vector<MethodInfo> methods)
+            types::u2 superClass, std::vector<types::u2> interfaces, std::vector<FieldInfo> fields, std::vector<MethodInfo> methods,
+            std::optional<types::u2> sourceFileIndex)
     : mMinorVersion(minorVersion),
       mMajorVersion(majorVersion),
       mConstantPool(std::move(constantPool)),
@@ -201,7 +202,8 @@ public:
       mSuperClass(superClass),
       mInterfaces(std::move(interfaces)),
       mFields(std::move(fields)),
-      mMethods(std::move(methods))
+      mMethods(std::move(methods)),
+      mSourceFileIndex(sourceFileIndex)
   {
   }
 
@@ -247,6 +249,12 @@ public:
     return *mConstantPool;
   }
 
+  // Attributes
+  std::optional<types::u2> sourceFileIndex() const
+  {
+    return mSourceFileIndex;
+  }
+
 private:
   types::u2 mMinorVersion;
   types::u2 mMajorVersion;
@@ -260,7 +268,7 @@ private:
   std::vector<MethodInfo> mMethods;
 
   // Attributes
-  std::optional<types::u2> source_file_index;
+  std::optional<types::u2> mSourceFileIndex;
 };
 
 class ClassFileReadError : public std::runtime_error
