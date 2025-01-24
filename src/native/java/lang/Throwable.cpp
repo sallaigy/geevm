@@ -15,7 +15,7 @@ JNIEXPORT jobject JNICALL Java_java_lang_Throwable_fillInStackTrace(JNIEnv* env,
   JavaThread& thread = jni::threadFromJniEnv(env);
   auto array = thread.createStackTrace();
 
-  exceptionInstance->setFieldValue<Instance*>(u"stackTrace", u"[Ljava/lang/StackTraceElement;", nullptr);
+  exceptionInstance->setFieldValue<Instance*>(u"stackTrace", u"[Ljava/lang/StackTraceElement;", array);
   exceptionInstance->setFieldValue<Instance*>(u"backtrace", u"Ljava/lang/Object;", array);
   exceptionInstance->setFieldValue<int32_t>(u"depth", u"I", array->asArrayInstance()->length());
 

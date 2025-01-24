@@ -46,13 +46,13 @@ JNIEXPORT jint JNICALL Java_jdk_internal_misc_Unsafe_arrayIndexScale0(JNIEnv*, j
   return klass->target()->asArrayClass()->fieldType().asArrayType()->getElementType().sizeOf();
 }
 
-JNIEXPORT jlong JNICALL Java_jdk_internal_misc_Unsafe_objectFieldOffset1(JNIEnv* env, jobject theUnsafe, jclass klass, jstring fieldName)
+JNIEXPORT jlong JNICALL Java_jdk_internal_misc_Unsafe_objectFieldOffset1(JNIEnv* env, jobject, jclass klass, jstring fieldName)
 {
   auto classInstance = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(klass);
-  auto nameObj = JniTranslate<jobject, GcRootRef<Instance>>{}(fieldName);
 
-  auto nameStr = utils::getStringValue(nameObj.get());
-  auto field = classInstance->target()->lookupFieldByName(nameStr);
+  auto nameStr = env->GetStringChars(fieldName, nullptr);
+  auto field = classInstance->target()->lookupFieldByName(reinterpret_cast<const char16_t*>(nameStr));
+  env->ReleaseStringChars(fieldName, nameStr);
 
   if (!field.has_value()) {
     return -1;
