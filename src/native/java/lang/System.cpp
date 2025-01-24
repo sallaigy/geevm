@@ -137,4 +137,9 @@ JNIEXPORT void JNICALL Java_java_lang_System_setErr0(JNIEnv* env, jclass klass, 
   }
   env->SetStaticObjectField(klass, fieldId, stream);
 }
+
+JNIEXPORT jint JNICALL Java_java_lang_System_identityHashCode(JNIEnv*, jclass, jobject object)
+{
+  return JniTranslate<jobject, GcRootRef<Instance>>{}(object)->hashCode();
+}
 }

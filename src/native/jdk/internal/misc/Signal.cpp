@@ -10,15 +10,18 @@ using namespace geevm;
 extern "C"
 {
 
-JNIEXPORT jint JNICALL Java_jdk_internal_misc_Signal_findSignal0(JNIEnv*, jclass, jstring signal)
+JNIEXPORT jint JNICALL Java_jdk_internal_misc_Signal_findSignal0(JNIEnv* env, jclass, jstring signal)
 {
-  static std::unordered_map<types::JStringRef, int32_t> signalMap{{u"HUP", SIGHUP}, {u"INT", SIGINT}, {u"TERM", SIGTERM}};
+  static std::unordered_map<std::string_view, int32_t> signalMap{{"HUP", SIGHUP}, {"INT", SIGINT}, {"TERM", SIGTERM}};
 
-  auto nameStr = utils::getStringValue(JniTranslate<jobject, GcRootRef<Instance>>{}(signal).get());
+  auto nameStr = env->GetStringUTFChars(signal, nullptr);
 
   if (auto it = signalMap.find(nameStr); it != signalMap.end()) {
+    env->ReleaseStringUTFChars(signal, nameStr);
     return it->second;
   }
+
+  env->ReleaseStringUTFChars(signal, nameStr);
 
   return -1;
 }

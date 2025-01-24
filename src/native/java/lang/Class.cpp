@@ -25,19 +25,20 @@ JNIEXPORT jboolean JNICALL Java_java_lang_Class_desiredAssertionStatus0(JNIEnv* 
   return JNI_FALSE;
 }
 
-JNIEXPORT jclass JNICALL Java_java_lang_Class_getPrimitiveClass(JNIEnv* env, jclass klass, jstring name)
+JNIEXPORT jclass JNICALL Java_java_lang_Class_getPrimitiveClass(JNIEnv* env, jclass, jstring name)
 {
-  auto stringObject = geevm::JniTranslate<jobject, GcRootRef<Instance>>{}(name);
-  types::JString buffer = utils::getStringValue(stringObject.get());
+  const char* buffer = env->GetStringUTFChars(name, nullptr);
 
-  static std::unordered_map<types::JStringRef, types::JStringRef> classNames = {
-      {u"float", u"java/lang/Float"}, {u"double", u"java/lang/Double"}, {u"int", u"java/lang/Integer"},   {u"byte", u"java/lang/Byte"},
-      {u"short", u"java/lang/Short"}, {u"long", u"java/lang/Long"},     {u"char", u"java/lang/Character"}};
+  static std::unordered_map<std::string_view, std::string_view> classNames = {
+      {"float", "java/lang/Float"}, {"double", "java/lang/Double"}, {"int", "java/lang/Integer"},    {"byte", "java/lang/Byte"},
+      {"short", "java/lang/Short"}, {"long", "java/lang/Long"},     {"char", "java/lang/Character"}, {"boolean", "java/lang/Boolean"}};
 
   assert(classNames.contains(buffer));
 
-  auto className = types::convertJString(types::JString{classNames.at(buffer)});
-  auto loaded = env->FindClass(className.c_str());
+  auto className = classNames.at(buffer);
+  auto loaded = env->FindClass(className.data());
+
+  env->ReleaseStringUTFChars(name, buffer);
 
   return loaded;
 }
@@ -69,14 +70,12 @@ JNIEXPORT jobject JNICALL Java_java_lang_Class_getName0(JNIEnv* env, jclass klas
 
 JNIEXPORT jclass JNICALL Java_java_lang_Class_forName0(JNIEnv* env, jclass klass, jstring name, jboolean initialize, jobject classLoader, jclass caller)
 {
-  GcRootRef<Instance> nameObject = JniTranslate<jobject, GcRootRef<Instance>>{}(name);
-
   assert(classLoader == nullptr && "TODO: Support non-boostrap classloader");
-  types::JString nameStr = utils::getStringValue(nameObject.get());
+  auto nameStr = env->GetStringUTFChars(name, nullptr);
 
-  std::string nameStrUtf8 = types::convertJString(nameStr);
-  auto loaded = env->FindClass(nameStrUtf8.data());
+  auto loaded = env->FindClass(nameStr);
 
+  env->ReleaseStringUTFChars(name, nameStr);
   return loaded;
 }
 

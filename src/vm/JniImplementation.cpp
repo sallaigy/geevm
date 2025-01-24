@@ -1,11 +1,12 @@
 #include "vm/JniImplementation.h"
-
-#include "Heap.h"
 #include "vm/Class.h"
 #include "vm/Field.h"
+#include "vm/Heap.h"
 #include "vm/Instance.h"
 #include "vm/Thread.h"
+#include "vm/VmUtils.h"
 
+#include <cstring>
 #include <jni.h>
 
 using namespace geevm;
@@ -124,4 +125,44 @@ void initializeFunctions(JNINativeInterface_& functions)
   };
 
   functions.GetStaticIntField = getStaticField<int32_t>;
+
+  functions.GetStringChars = [](JNIEnv*, jstring string, jboolean* isCopy) -> const jchar* {
+    auto stringInstance = JniTranslate<jstring, GcRootRef<>>{}(string);
+    types::JString value = utils::getStringValue(stringInstance.get());
+
+    jchar* buffer = new jchar[value.size() + 1];
+    for (size_t i = 0; i < value.size(); ++i) {
+      buffer[i] = value[i];
+    }
+    buffer[value.size()] = 0;
+
+    if (isCopy != nullptr) {
+      *isCopy = JNI_TRUE;
+    }
+
+    return buffer;
+  };
+
+  functions.ReleaseStringChars = [](JNIEnv* env, jstring string, const jchar* chars) -> void {
+    delete[] chars;
+  };
+
+  functions.GetStringUTFChars = [](JNIEnv*, jstring string, jboolean* isCopy) -> const char* {
+    auto stringInstance = JniTranslate<jstring, GcRootRef<>>{}(string);
+    types::JString value = utils::getStringValue(stringInstance.get());
+    std::string utf8 = types::convertJString(value);
+
+    char* buffer = new char[value.size() + 1];
+    std::memcpy(buffer, utf8.c_str(), value.size() + 1);
+
+    if (isCopy != nullptr) {
+      *isCopy = JNI_TRUE;
+    }
+
+    return buffer;
+  };
+
+  functions.ReleaseStringUTFChars = [](JNIEnv*, jstring, const char* chars) -> void {
+    delete[] chars;
+  };
 }
