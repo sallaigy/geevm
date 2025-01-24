@@ -115,7 +115,7 @@ public:
   }
 
   std::optional<JField*> lookupField(const types::JString& name, const types::JString& descriptor);
-  std::optional<JField*> lookupFieldByName(const types::JString& string);
+  std::optional<JField*> lookupFieldByName(types::JStringRef string);
 
   const std::unordered_map<NameAndDescriptor, std::unique_ptr<JField>, PairHash>& fields() const
   {
@@ -218,6 +218,16 @@ public:
   size_t allocationSize() const
   {
     return mAllocationSize;
+  }
+
+  std::optional<types::JString> sourceFile()
+  {
+    if (auto idx = mClassFile->sourceFileIndex(); idx) {
+      auto name = constantPool().getString(*idx);
+      return types::JString{name};
+    }
+
+    return std::nullopt;
   }
 
 private:

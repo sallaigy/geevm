@@ -8,7 +8,7 @@ public class UnknownNativeMethod {
 
     public static native void callee();
 
-    // CHECK: Exception java.lang.UnsatisfiedLinkError: 'void org.geevm.tests.errors.UnknownNativeMethod.callee()'
-    // CHECK-NEXT: at org.geevm.tests.errors.UnknownNativeMethod.callee(Unknown Source)
-    // CHECK-NEXT: at org.geevm.tests.errors.UnknownNativeMethod.main(Unknown Source)
+    // CHECK: Exception in thread "main" java.lang.UnsatisfiedLinkError: void org.geevm.tests.errors.UnknownNativeMethod.callee()
+    // CHECK-NEXT: at org.geevm.tests.errors.UnknownNativeMethod.callee(Native Method)
+    // CHECK-NEXT: at org.geevm.tests.errors.UnknownNativeMethod.main(UnknownNativeMethod.java:6)
 }

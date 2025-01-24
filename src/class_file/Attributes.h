@@ -27,16 +27,24 @@ public:
     types::u2 index;
   };
 
+  struct LineNumberTableEntry
+  {
+    types::u2 startPc;
+    types::u2 lineNumber;
+  };
+
   // Constructors
   //==--------------------------------------------------------------------==//
   Code(types::u2 maxStack, types::u2 maxLocals, std::vector<types::u1> bytes, std::vector<ExceptionTableEntry> exceptionTable,
-       std::vector<LocalVariableTableEntry> localVariableTable, std::vector<LocalVariableTableEntry> localVariableTypeTable)
+       std::vector<LocalVariableTableEntry> localVariableTable, std::vector<LocalVariableTableEntry> localVariableTypeTable,
+       std::vector<LineNumberTableEntry> lineNumberTable)
     : mMaxStack{maxStack},
       mMaxLocals{maxLocals},
       mBytes{std::move(bytes)},
       mExceptionTable{std::move(exceptionTable)},
       mLocalVariableTable{std::move(localVariableTable)},
-      mLocalVariableTypeTable{std::move(localVariableTypeTable)}
+      mLocalVariableTypeTable{std::move(localVariableTypeTable)},
+      mLineNumberTable{std::move(lineNumberTable)}
   {
   }
 
@@ -73,6 +81,11 @@ public:
     return mLocalVariableTypeTable;
   }
 
+  const std::vector<LineNumberTableEntry>& lineNumberTable() const
+  {
+    return mLineNumberTable;
+  }
+
 private:
   types::u2 mMaxStack;
   types::u2 mMaxLocals;
@@ -80,6 +93,7 @@ private:
   std::vector<ExceptionTableEntry> mExceptionTable;
   std::vector<LocalVariableTableEntry> mLocalVariableTable;
   std::vector<LocalVariableTableEntry> mLocalVariableTypeTable;
+  std::vector<LineNumberTableEntry> mLineNumberTable;
 };
 
 } // namespace geevm

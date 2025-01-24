@@ -131,6 +131,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
     CallFrame& frame = mThread.currentFrame();
     RuntimeConstantPool& runtimeConstantPool = frame.currentClass()->runtimeConstantPool();
 
+    frame.setProgramCounter(cursor.position());
     switch (opcode) {
       using enum Opcode;
       case NOP:

@@ -124,11 +124,22 @@ public:
     mOperandStack.clear();
   }
 
+  int64_t programCounter() const
+  {
+    return mProgramCounter;
+  }
+
+  void setProgramCounter(int64_t value)
+  {
+    mProgramCounter = value;
+  }
+
 private:
   std::vector<Value> mLocalVariables;
   std::vector<Value> mOperandStack;
   JMethod* mMethod;
   CallFrame* mPrevious;
+  int64_t mProgramCounter;
 };
 
 } // namespace geevm

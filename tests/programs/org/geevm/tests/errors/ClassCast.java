@@ -7,7 +7,7 @@ public class ClassCast {
     public static void main(String[] args) {
         Object x = new ClassCast();
         Printer.println((String) x);
-    // CHECK: Exception java.lang.ClassCastException: 'class org.geevm.tests.errors.ClassCast cannot be cast to class java.lang.String'
-    // CHECK-NEXT: at org.geevm.tests.errors.ClassCast.main(Unknown Source)
+    // CHECK: Exception in thread "main" java.lang.ClassCastException: class org.geevm.tests.errors.ClassCast cannot be cast to class java.lang.String
+    // CHECK-NEXT: at org.geevm.tests.errors.ClassCast.main(ClassCast.java:9)
     }
 }

@@ -104,14 +104,30 @@ public:
     std::vector<FieldInfo> fields = this->readFields(*constantPool);
     std::vector<MethodInfo> methods = this->readMethods(*constantPool);
 
+    std::optional<types::u2> sourceFileIndex;
+
+    types::u2 attrCount = mStream.readU2();
+    for (types::u2 i = 0; i < attrCount; i++) {
+      types::u2 attrNameIndex = mStream.readU2();
+      types::u4 attributeLength = mStream.readU4();
+      auto attrName = constantPool->getString(attrNameIndex);
+
+      if (attrName == u"SourceFile") {
+        sourceFileIndex = mStream.readU2();
+      } else {
+        mStream.readVector(attributeLength);
+      }
+    }
+
     return std::make_unique<ClassFile>(minorVersion, majorVersion, std::move(constantPool), classAccessFlags, thisClass, superClass, interfaces, fields,
-                                       std::move(methods));
+                                       std::move(methods), sourceFileIndex);
   }
 
   std::unique_ptr<ConstantPool> readConstantPool();
 
   std::vector<FieldInfo> readFields(const ConstantPool& constantPool);
   std::vector<MethodInfo> readMethods(const ConstantPool& constantPool);
+  Code readCode(const ConstantPool& constantPool);
 
 private:
   ClassFileStream& mStream;
@@ -301,31 +317,7 @@ std::vector<MethodInfo> ClassFileReader::readMethods(const ConstantPool& constan
       auto attrName = constantPool.getString(attrNameIndex);
 
       if (attrName == u"Code") {
-        types::u2 maxStack = mStream.readU2();
-        types::u2 maxLocals = mStream.readU2();
-
-        types::u4 codeLength = mStream.readU4();
-        std::vector<types::u1> bytes = mStream.readVector(codeLength);
-
-        types::u2 exceptionTableLength = mStream.readU2();
-        std::vector<Code::ExceptionTableEntry> exceptionTable;
-        for (types::u2 j = 0; j < exceptionTableLength; ++j) {
-          types::u2 startPc = mStream.readU2();
-          types::u2 endPc = mStream.readU2();
-          types::u2 handlerPc = mStream.readU2();
-          types::u2 catchType = mStream.readU2();
-          exceptionTable.emplace_back(startPc, endPc, handlerPc, catchType);
-        }
-
-        // Code attributes
-        types::u2 codeAttributesCount = mStream.readU2();
-        for (types::u2 j = 0; j < codeAttributesCount; ++j) {
-          types::u2 codeAttrNameIndex = mStream.readU2();
-          types::u2 codeAttrLength = mStream.readU4();
-          mStream.readVector(codeAttrLength);
-        }
-
-        code.emplace(maxStack, maxLocals, bytes, exceptionTable, std::vector<Code::LocalVariableTableEntry>{}, std::vector<Code::LocalVariableTableEntry>{});
+        code.emplace(readCode(constantPool));
       } else if (attrName == u"Exceptions") {
         types::u2 numberOfExceptions = mStream.readU2();
         for (types::u2 j = 0; j < numberOfExceptions; ++j) {
@@ -341,4 +333,45 @@ std::vector<MethodInfo> ClassFileReader::readMethods(const ConstantPool& constan
   }
 
   return methods;
+}
+
+Code ClassFileReader::readCode(const ConstantPool& constantPool)
+{
+  types::u2 maxStack = mStream.readU2();
+  types::u2 maxLocals = mStream.readU2();
+
+  types::u4 codeLength = mStream.readU4();
+  std::vector<types::u1> bytes = mStream.readVector(codeLength);
+
+  types::u2 exceptionTableLength = mStream.readU2();
+  std::vector<Code::ExceptionTableEntry> exceptionTable;
+  for (types::u2 j = 0; j < exceptionTableLength; ++j) {
+    types::u2 startPc = mStream.readU2();
+    types::u2 endPc = mStream.readU2();
+    types::u2 handlerPc = mStream.readU2();
+    types::u2 catchType = mStream.readU2();
+    exceptionTable.emplace_back(startPc, endPc, handlerPc, catchType);
+  }
+
+  std::vector<Code::LineNumberTableEntry> lineNumberTable;
+  // Code attributes
+  types::u2 codeAttributesCount = mStream.readU2();
+  for (types::u2 i = 0; i < codeAttributesCount; ++i) {
+    types::u2 codeAttrNameIndex = mStream.readU2();
+    types::u2 codeAttrLength = mStream.readU4();
+    auto attrName = constantPool.getString(codeAttrNameIndex);
+    if (attrName == u"LineNumberTable") {
+      types::u2 numEntries = mStream.readU2();
+      for (types::u2 j = 0; j < numEntries; ++j) {
+        types::u2 startPc = mStream.readU2();
+        types::u2 lineNumber = mStream.readU2();
+        lineNumberTable.emplace_back(startPc, lineNumber);
+      }
+    } else {
+      mStream.readVector(codeAttrLength);
+    }
+  }
+
+  return Code{maxStack,       maxLocals, bytes, exceptionTable, std::vector<Code::LocalVariableTableEntry>{}, std::vector<Code::LocalVariableTableEntry>{},
+              lineNumberTable};
 }
