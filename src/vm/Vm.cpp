@@ -14,6 +14,8 @@ void Vm::initialize()
   JClass* javaLangString = this->requireClass(u"java/lang/String");
   javaLangString->setStaticFieldValue(u"COMPACT_STRINGS", u"Z", Value::from<int32_t>(0));
 
+  mHeap.initialize(javaLangString->asInstanceClass(), this->requireClass(u"[B")->asArrayClass());
+
   this->requireClass(u"java/lang/Throwable");
 
   auto threadGroupCls = this->requireClass(u"java/lang/ThreadGroup");

@@ -1,11 +1,8 @@
 #include "vm/Runtime.h"
-
-#include "ClassLoader.h"
-#include "StringHeap.h"
-#include "vm/Field.h"
+#include "common/JvmError.h"
+#include "vm/ClassLoader.h"
+#include "vm/Heap.h"
 #include "vm/Method.h"
-
-#include <common/JvmError.h>
 
 using namespace geevm;
 
@@ -67,7 +64,7 @@ GcRootRef<Instance> RuntimeConstantPool::getString(types::u2 index)
   assert(entry.tag == ConstantPool::Tag::CONSTANT_String);
 
   types::JStringRef utf8 = mConstantPool.getString(entry.data.stringInfo.stringIndex);
-  auto [res, _] = mStrings.try_emplace(index, mStringHeap.intern(types::JString{utf8}));
+  auto [res, _] = mStrings.try_emplace(index, mHeap.intern(types::JString{utf8}));
 
   return res->second;
 }

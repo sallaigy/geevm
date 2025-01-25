@@ -41,7 +41,7 @@ JvmExpected<JClass*> BootstrapClassLoader::loadClass(const types::JString& name)
   auto [result, _] = mClasses.try_emplace(name, std::move(*loadResult));
   auto* klass = result->second->asInstanceClass();
 
-  klass->initializeRuntimeConstantPool(mVm.heap().stringHeap(), *this);
+  klass->initializeRuntimeConstantPool(mVm.heap(), *this);
   klass->prepare(*this, mVm.heap());
 
   return result->second.get();
@@ -61,7 +61,7 @@ JvmExpected<JClass*> BootstrapClassLoader::loadUnpreparedClass(const types::JStr
   auto [result, _] = mClasses.try_emplace(name, std::move(*loadResult));
   auto* klass = result->second->asInstanceClass();
 
-  klass->initializeRuntimeConstantPool(mVm.heap().stringHeap(), *this);
+  klass->initializeRuntimeConstantPool(mVm.heap(), *this);
 
   return result->second.get();
 }

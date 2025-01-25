@@ -15,8 +15,12 @@ class CallFrame
 {
 public:
   explicit CallFrame(JMethod* method, CallFrame* previous)
-    : mMethod(method), mLocalVariables(method->getCode().maxLocals(), Value::from<int32_t>(0)), mPrevious(previous)
+    : mMethod(method), mPrevious(previous)
   {
+    if (!method->isNative()) {
+      mLocalVariables.assign(method->getCode().maxLocals(), Value::from<int32_t>(0));
+      mOperandStack.reserve(method->getCode().maxStack());
+    }
   }
 
   InstanceClass* currentClass() const
@@ -139,7 +143,7 @@ private:
   std::vector<Value> mOperandStack;
   JMethod* mMethod;
   CallFrame* mPrevious;
-  int64_t mProgramCounter;
+  int64_t mProgramCounter = 0;
 };
 
 } // namespace geevm

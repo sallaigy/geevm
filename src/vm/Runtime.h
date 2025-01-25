@@ -16,14 +16,14 @@ class FieldRef;
 class JField;
 class Instance;
 class JClass;
-class StringHeap;
+class JavaHeap;
 class BootstrapClassLoader;
 
 class RuntimeConstantPool
 {
 public:
-  RuntimeConstantPool(const ConstantPool& constantPool, StringHeap& stringHeap, BootstrapClassLoader& bootstrapClassLoader)
-    : mConstantPool(constantPool), mStringHeap(stringHeap), mBootstrapClassLoader(bootstrapClassLoader)
+  RuntimeConstantPool(const ConstantPool& constantPool, JavaHeap& heap, BootstrapClassLoader& bootstrapClassLoader)
+    : mConstantPool(constantPool), mHeap(heap), mBootstrapClassLoader(bootstrapClassLoader)
   {
   }
 
@@ -38,11 +38,11 @@ public:
 private:
   std::unordered_map<types::u2, JMethod*> mMethodRefs;
   std::unordered_map<types::u2, JField*> mFieldRefs;
-  std::unordered_map<types::u2, GcRootRef<Instance>> mStrings;
+  std::unordered_map<types::u2, GcRootRef<>> mStrings;
   std::unordered_map<types::u2, JClass*> mClasses;
 
   const ConstantPool& mConstantPool;
-  StringHeap& mStringHeap;
+  JavaHeap& mHeap;
   BootstrapClassLoader& mBootstrapClassLoader;
 };
 
