@@ -489,10 +489,10 @@ std::size_t JClass::alignment() const
   GEEVM_UNREACHBLE("A class must be an instance or an array!");
 }
 
-void InstanceClass::initializeRuntimeConstantPool(StringHeap& stringHeap, BootstrapClassLoader& classLoader)
+void InstanceClass::initializeRuntimeConstantPool(JavaHeap& heap, BootstrapClassLoader& classLoader)
 {
   if (mRuntimeConstantPool == nullptr) {
-    mRuntimeConstantPool = std::make_unique<RuntimeConstantPool>(mClassFile->constantPool(), stringHeap, classLoader);
+    mRuntimeConstantPool = std::make_unique<RuntimeConstantPool>(mClassFile->constantPool(), heap, classLoader);
   }
 }
 

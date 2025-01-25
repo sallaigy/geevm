@@ -16,7 +16,6 @@
 namespace geevm
 {
 class Vm;
-class StringHeap;
 class InstanceClass;
 class ClassInstance;
 class ArrayClass;
@@ -231,7 +230,7 @@ public:
   }
 
 private:
-  void initializeRuntimeConstantPool(StringHeap& stringHeap, BootstrapClassLoader& classLoader);
+  void initializeRuntimeConstantPool(JavaHeap& heap, BootstrapClassLoader& classLoader);
   Value getInitialFieldValue(const FieldType& fieldType, types::u2 cvIndex);
   void prepareMethods();
 

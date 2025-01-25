@@ -5,7 +5,6 @@
 #include "vm/Class.h"
 #include "vm/GarbageCollector.h"
 #include "vm/Instance.h"
-#include "vm/StringHeap.h"
 
 namespace geevm
 {
@@ -16,12 +15,15 @@ class Instance;
 class InstanceClass;
 class ArrayClass;
 class ArrayInstance;
-class StringHeap;
 
+/// The garbage-collected Java heap.
+/// All allocations of Java objects should happen through this class.
 class JavaHeap
 {
 public:
   explicit JavaHeap(Vm& vm);
+
+  void initialize(InstanceClass* stringClass, ArrayClass* byteArrayClass);
 
   /// Allocates heap memory for and constructs an instance of `klass`.
   template<std::derived_from<Instance> T = Instance, class... Args>
@@ -34,6 +36,7 @@ public:
     return object;
   }
 
+  /// Allocates heap memory for an array instance of the array class 'klass' of a given length.
   template<JvmType T>
   JavaArray<T>* allocateArray(ArrayClass* klass, int32_t length)
   {
@@ -48,15 +51,7 @@ public:
 
   ArrayInstance* allocateArray(ArrayClass* klass, int32_t length);
 
-  GcRootRef<Instance> intern(const types::JString& utf8)
-  {
-    return mInternedStrings.intern(utf8);
-  }
-
-  StringHeap& stringHeap()
-  {
-    return mInternedStrings;
-  }
+  GcRootRef<> intern(const types::JString& utf8);
 
   GarbageCollector& gc()
   {
@@ -64,9 +59,13 @@ public:
   }
 
 private:
-  StringHeap mInternedStrings;
+  Vm& mVm;
   // Garbage-collected heap
   GarbageCollector mGC;
+  // Interned strings, including classes that need to present for string interning
+  std::unordered_map<types::JString, GcRootRef<>> mInternedStrings;
+  InstanceClass* mStringClass = nullptr;
+  ArrayClass* mByteArrayClass = nullptr;
 };
 
 } // namespace geevm
