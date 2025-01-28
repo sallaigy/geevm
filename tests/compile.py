@@ -20,6 +20,17 @@ def execute_javac(files: list[str]):
         raise RuntimeError("javac failed: " + result.stderr.decode())
 
 
+def execute_jasmin(files: list[str]):
+    jasmin = f'{os.environ['JASMIN_JAR']}'
+    os_java = f'{os.environ['JAVA_HOME']}/bin/java'
+    jasmin_command = [os_java, '-jar', jasmin]
+    for file in files:
+        jasmin_command.append(file)
+    result = subprocess.run(jasmin_command, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+    if result.returncode != 0:
+        raise RuntimeError("jasmin failed: " + result.stderr.decode())
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('inputs', nargs='+')
@@ -56,7 +67,14 @@ if __name__ == "__main__":
             shutil.copy(file, destdir / resolved_path_dir)
 
     java_files = [str(path) for path in destdir.glob('./**/*.java')]
+    jasmin_files = [str(path) for path in destdir.glob('./**/*.j')]
+
+    os.chdir(destdir)
+    if args.verbose:
+        print(f'Current working directory {os.getcwd()}')
+
     execute_javac(java_files)
+    execute_jasmin(java_files)
 
     # Execute the geevm binary
     java_tool_path = f'{os.environ['GEEVM_BINARY_DIR']}/java'
@@ -65,7 +83,7 @@ if __name__ == "__main__":
         main_class = args.main
     elif len(args.inputs) == 1:
         resolved_path = pathlib.Path(args.inputs[0]).relative_to(base_path).with_suffix('')
-        main_class = str(resolved_path).replace(os.pathsep, '.')
+        main_class = str(resolved_path).replace(os.path.sep, '.')
     else:
         raise RuntimeError("main must be set!")
 
