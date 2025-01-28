@@ -10,17 +10,7 @@
 namespace geevm
 {
 class InstanceClass;
-}
-namespace geevm
-{
 class JClass;
-
-struct MethodRef
-{
-  types::JString className;
-  types::JString methodName;
-  types::JString methodDescriptor;
-};
 
 class JMethod
 {

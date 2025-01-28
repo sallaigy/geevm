@@ -1,8 +1,6 @@
 #ifndef GEEVM_VM_CLASS_H
 #define GEEVM_VM_CLASS_H
 
-#include <unordered_map>
-
 #include "class_file/ClassFile.h"
 #include "common/Hash.h"
 #include "common/JvmTypes.h"
@@ -13,6 +11,7 @@
 #include "vm/Runtime.h"
 #include "vm/Thread.h"
 
+#include <unordered_map>
 namespace geevm
 {
 class Vm;
@@ -21,14 +20,6 @@ class ClassInstance;
 class ArrayClass;
 class JMethod;
 class JavaHeap;
-
-// using ClassAndMethod = std::pair<JClass*,JMethod*>;
-
-struct ClassAndMethod
-{
-  InstanceClass* const klass;
-  JMethod* const method;
-};
 
 class JClass
 {

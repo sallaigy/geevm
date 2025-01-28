@@ -38,8 +38,8 @@ JNIEXPORT void JNICALL Java_java_lang_System_arraycopy(JNIEnv* env, jclass klass
     return;
   }
 
-  auto sourceArray = JniTranslate<jobject, GcRootRef<Instance>>{}(src)->asArrayInstance();
-  auto targetArray = JniTranslate<jobject, GcRootRef<Instance>>{}(dest)->asArrayInstance();
+  auto sourceArray = JniTranslate<jobject, GcRootRef<Instance>>{}(src)->toArrayInstance();
+  auto targetArray = JniTranslate<jobject, GcRootRef<Instance>>{}(dest)->toArrayInstance();
 
   if (sourceArray == nullptr || targetArray == nullptr) {
     thread.throwException(u"java/lang/ArrayStoreException", u"not an array instance");
@@ -100,8 +100,8 @@ JNIEXPORT void JNICALL Java_java_lang_System_arraycopy(JNIEnv* env, jclass klass
       thread.throwException(u"java/lang/ArrayStoreException", u"source and target arrays are of different type");
     }
   } else if (sourceElementTy.asReference().has_value() && targetElementTy.asReference().has_value()) {
-    JavaArray<Instance*>* sourceRefArray = sourceArray->asArray<Instance*>();
-    JavaArray<Instance*>* targetRefArray = targetArray->asArray<Instance*>();
+    JavaArray<Instance*>* sourceRefArray = sourceArray->toArray<Instance*>();
+    JavaArray<Instance*>* targetRefArray = targetArray->toArray<Instance*>();
     for (int32_t i = 0; i < length; i++) {
       Instance* value = *sourceRefArray->getArrayElement(srcPos + i);
       targetRefArray->setArrayElement(destPos + i, value);

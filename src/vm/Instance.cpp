@@ -45,13 +45,13 @@ ArrayInstance::ArrayInstance(ArrayClass* arrayClass, size_t length)
 {
 }
 
-ArrayInstance* Instance::asArrayInstance()
+ArrayInstance* Instance::toArrayInstance()
 {
   assert(mClass->isArrayType());
   return static_cast<ArrayInstance*>(this);
 }
 
-ClassInstance* Instance::asClassInstance()
+ClassInstance* Instance::toClassInstance()
 {
   assert(getClass()->className() == u"java/lang/Class");
   return static_cast<ClassInstance*>(this);

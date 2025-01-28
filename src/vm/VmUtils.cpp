@@ -10,7 +10,7 @@ types::JString utils::getStringValue(Instance* stringInstance)
 {
   assert(stringInstance->getClass()->className() == u"java/lang/String");
 
-  JavaArray<int8_t>* array = stringInstance->getFieldValue<Instance*>(u"value", u"[B")->asArray<int8_t>();
+  JavaArray<int8_t>* array = stringInstance->getFieldValue<Instance*>(u"value", u"[B")->toArray<int8_t>();
 
   types::JString result;
   for (int i = 0; i < array->length(); i += 2) {

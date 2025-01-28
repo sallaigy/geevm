@@ -18,6 +18,11 @@ class ClassInstance;
 template<JvmType T>
 class JavaArray;
 
+/// Instance of a java object.
+///
+/// This class stores all necessary information contained within an object, including the object's class, hash code,
+/// and fields. Fields (or in the case of array instances, elements) are stored as trailing data allocated alongside
+/// this object.
 class Instance
 {
   friend class JavaHeap;
@@ -54,23 +59,20 @@ public:
     return *ptr;
   }
 
-  ArrayInstance* asArrayInstance();
+  ArrayInstance* toArrayInstance();
+  ClassInstance* toClassInstance();
 
   template<JvmType T>
-  JavaArray<T>* asArray()
+  JavaArray<T>* toArray()
   {
     // TODO: Assert class and type consistency
     return static_cast<JavaArray<T>*>(this);
   }
 
-  ClassInstance* asClassInstance();
-
   void* fieldsStart();
   const void* fieldsStart() const;
 
   int32_t hashCode();
-
-  Instance* copyTo(void* dest);
 
 private:
   size_t getFieldOffset(types::JStringRef fieldName, types::JStringRef descriptor) const;
@@ -82,7 +84,7 @@ private:
     *ptr = value;
   }
 
-protected:
+private:
   JClass* mClass;
 
   /// Object hash code. As the garbage collector may relocate the object, we cannot reliably
@@ -91,6 +93,12 @@ protected:
   int32_t mHashCode = 0;
 };
 
+/// Interface of a Java array.
+///
+/// Array elements are stored as trailing data allocated alongside instances of this class.
+///
+/// This class has no notion of the type stored, it merely knows the array length; use `JavaArray<T>` for setting and
+/// getting individual elements.
 class ArrayInstance : public Instance
 {
 protected:
@@ -106,6 +114,7 @@ private:
   int32_t mLength;
 };
 
+/// Strongly-typed handle for Java arrays.
 template<JvmType T>
 class JavaArray : public ArrayInstance
 {
@@ -156,7 +165,7 @@ private:
   }
 };
 
-/// An instance of java.lang.Class
+/// An instance of 'java.lang.Class'
 class ClassInstance : public Instance
 {
   friend class JavaHeap;
@@ -178,6 +187,7 @@ private:
   JClass* mTarget;
 };
 
+// As the garbage collector may relocate these types using memcpy, all object types _must_ be trivially copiable.
 static_assert(std::is_trivially_copyable_v<Instance>);
 static_assert(std::is_trivially_copyable_v<ArrayInstance>);
 static_assert(std::is_trivially_copyable_v<ClassInstance>);

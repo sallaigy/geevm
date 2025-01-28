@@ -12,7 +12,7 @@ JNIEXPORT void JNICALL Java_java_lang_StackTraceElement_initStackTraceElements(J
 {
   auto stackTraceArray = JniTranslate<jobjectArray, GcRootRef<JavaArray<Instance*>>>{}(elements);
   GcRootRef<Instance> throwableInstance = JniTranslate<jthrowable, GcRootRef<Instance>>{}(throwable);
-  auto storedBackTrace = throwableInstance->getFieldValue<Instance*>(u"backtrace", u"Ljava/lang/Object;")->asArray<Instance*>();
+  auto storedBackTrace = throwableInstance->getFieldValue<Instance*>(u"backtrace", u"Ljava/lang/Object;")->toArray<Instance*>();
 
   for (int32_t i = 0; i < stackTraceArray->length(); i++) {
     stackTraceArray->setArrayElement(i, *storedBackTrace->getArrayElement(i));

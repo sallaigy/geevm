@@ -593,7 +593,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       case NEWARRAY: newArray(cursor); break;
       case ANEWARRAY: newReferenceArray(cursor); break;
       case ARRAYLENGTH: {
-        ArrayInstance* arrayRef = frame.popOperand<Instance*>()->asArrayInstance();
+        ArrayInstance* arrayRef = frame.popOperand<Instance*>()->toArrayInstance();
         frame.pushOperand<int32_t>(arrayRef->length());
         break;
       }
@@ -775,7 +775,7 @@ void DefaultInterpreter::arrayLoad()
     return;
   }
 
-  JavaArray<T>* array = arrayRef->asArray<T>();
+  JavaArray<T>* array = arrayRef->toArray<T>();
   auto element = array->getArrayElement(index);
   if (!element) {
     this->handleErrorAsException(element.error());
@@ -807,7 +807,7 @@ void DefaultInterpreter::arrayStore()
     return;
   }
 
-  JavaArray<T>* array = arrayRef->asArray<T>();
+  JavaArray<T>* array = arrayRef->toArray<T>();
 
   if constexpr (std::is_same_v<std::remove_const_t<T>, Instance*>) {
     if (value != nullptr) {

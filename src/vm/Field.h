@@ -10,13 +10,6 @@ namespace geevm
 
 class InstanceClass;
 
-struct FieldRef
-{
-  JClass* klass;
-  types::JString fieldName;
-  types::JString fieldDescriptor;
-};
-
 class JField
 {
 public:
@@ -55,6 +48,10 @@ public:
     return mName;
   }
 
+  /// Returns this field's offset within the given object/class.
+  /// The value returned is contextual:
+  ///  - for instance fields, it is the byte offset from the start of the object containing the field's value,
+  ///  - for static fields, it is the index in the static fields vector that contains the slot for this field.
   size_t offset() const
   {
     return mOffset;

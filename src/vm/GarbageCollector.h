@@ -15,6 +15,10 @@ class Vm;
 class Instance;
 class GarbageCollector;
 
+/// List of objects marked as GC roots.
+///
+/// This list contains objects that were pinned as GC roots. During garbage collection, members of this list
+/// are not removed by the garbage collection algorithm.
 class RootList
 {
 public:
@@ -166,7 +170,8 @@ protected:
   RootList::Node* mReference;
 };
 
-/// A scoped, owning version of a GcRootRef. When this reference goes out of scope, the referenced object is unpinned by the garbage collector.
+/// A scoped, owning version of a GcRootRef. When this reference goes out of scope, the referenced object
+/// is unpinned by the garbage collector.
 template<std::derived_from<Instance> T = Instance>
 class ScopedGcRootRef : private GcRootRef<T>
 {
@@ -212,11 +217,23 @@ private:
   GarbageCollector* mGC;
 };
 
+/// A copying garbage collector.
+///
+/// Every time the allocation of a new object is requested, the GC checks the heap state and may decide to
+/// perform garbage collection.
+///
+/// The garbage-collected heap is split into two regions: the "from" region and the "to" region. All allocations
+/// take place on the "from" region. When the garbage collector runs, it collects all GC roots (local variables,
+/// values on the operand stack and manually rooted objects) and all objects reachable from GC roots.
+/// These objects are then copied to the "to" region, the "from" region is invalidated, then the two regions
+/// are swapped (so that the "to" region containing the copies becomes the new "from" region).
 class GarbageCollector
 {
 public:
   explicit GarbageCollector(Vm& vm);
 
+  /// Allocate \p size bytes on the garbage collected heap.
+  /// Depending on the heap state and the setup of the garbage collector, this call may trigger GC.
   [[nodiscard]] void* allocate(size_t size);
 
   void performGarbageCollection();
@@ -267,7 +284,7 @@ private:
   char* mToRegion;
   char* mBumpPtr;
   // Enabling/disabling GC
-  bool mIsGcRunning = false;
+  bool mIsGcLocked = false;
   // Root lists
   RootList mRootList;
   // GC settings
