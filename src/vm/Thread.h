@@ -28,8 +28,6 @@ public:
 
   void start(JMethod* method, std::vector<Value> arguments);
 
-  void run();
-
   // Getters
   //==------------------------------------------------------------------------==
   Vm& vm()
@@ -94,6 +92,7 @@ public:
   GcRootRef<Instance> addJniHandle(Instance* instance);
 
 private:
+  void run();
   void prepareNativeFrame();
   void releaseNativeFrame();
 

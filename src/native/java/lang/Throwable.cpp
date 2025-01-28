@@ -17,7 +17,7 @@ JNIEXPORT jobject JNICALL Java_java_lang_Throwable_fillInStackTrace(JNIEnv* env,
 
   exceptionInstance->setFieldValue<Instance*>(u"stackTrace", u"[Ljava/lang/StackTraceElement;", array);
   exceptionInstance->setFieldValue<Instance*>(u"backtrace", u"Ljava/lang/Object;", array);
-  exceptionInstance->setFieldValue<int32_t>(u"depth", u"I", array->asArrayInstance()->length());
+  exceptionInstance->setFieldValue<int32_t>(u"depth", u"I", array->toArrayInstance()->length());
 
   return throwable;
 }
@@ -31,14 +31,14 @@ JNIEXPORT jint JNICALL Java_java_lang_Throwable_getStackTraceDepth(JNIEnv* env, 
     return 0;
   }
 
-  return backtrace->asArrayInstance()->length();
+  return backtrace->toArrayInstance()->length();
 }
 
 JNIEXPORT jobject JNICALL Java_java_lang_Throwable_getStackTraceElement(JNIEnv* env, jobject throwable, jint index)
 {
   auto exceptionInstance = JniTranslate<jobject, GcRootRef<Instance>>{}(throwable);
   auto backtrace = exceptionInstance->getFieldValue<Instance*>(u"backtrace", u"Ljava/lang/Object;");
-  auto elem = backtrace->asArray<Instance*>()->getArrayElement(index);
+  auto elem = backtrace->toArray<Instance*>()->getArrayElement(index);
 
   assert(elem.has_value());
 

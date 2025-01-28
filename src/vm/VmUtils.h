@@ -7,9 +7,8 @@ namespace geevm
 {
 class Instance;
 class JavaThread;
-} // namespace geevm
 
-namespace geevm::utils
+namespace utils
 {
 
 /// Returns the value inside a java.lang.String instance as a JString.
@@ -20,6 +19,7 @@ types::JString getStringValue(Instance* stringInstance);
 /// Creates a new java.lang.String instance on the heap, with the given contents.
 Instance* createStringInstance(JavaThread& thread, const types::JString& value);
 
-} // namespace geevm::utils
+} // namespace utils
+} // namespace geevm
 
 #endif

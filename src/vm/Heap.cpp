@@ -31,9 +31,9 @@ ArrayInstance* JavaHeap::allocateArray(ArrayClass* klass, int32_t length)
   });
 }
 
-GcRootRef<> JavaHeap::intern(const types::JString& utf8)
+GcRootRef<> JavaHeap::intern(const types::JString& string)
 {
-  if (auto it = mInternedStrings.find(utf8); it != mInternedStrings.end()) {
+  if (auto it = mInternedStrings.find(string); it != mInternedStrings.end()) {
     return it->second;
   }
 
@@ -41,7 +41,7 @@ GcRootRef<> JavaHeap::intern(const types::JString& utf8)
   assert(mByteArrayClass != nullptr);
 
   std::vector<uint8_t> bytes;
-  for (char16_t c : utf8) {
+  for (char16_t c : string) {
     bytes.push_back(c & 0xff);
     bytes.push_back((c >> 8) & 0xff);
   }
@@ -53,6 +53,6 @@ GcRootRef<> JavaHeap::intern(const types::JString& utf8)
   }
   newInstance->setFieldValue<Instance*>(u"value", u"[B", stringContents);
 
-  auto [res, _] = mInternedStrings.try_emplace(utf8, newInstance);
+  auto [res, _] = mInternedStrings.try_emplace(string, newInstance);
   return res->second;
 }

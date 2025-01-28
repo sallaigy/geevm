@@ -23,12 +23,12 @@ GarbageCollector::GarbageCollector(Vm& vm)
 
 void GarbageCollector::lockGC()
 {
-  mIsGcRunning = true;
+  mIsGcLocked = true;
 }
 
 void GarbageCollector::unlockGC()
 {
-  mIsGcRunning = false;
+  mIsGcLocked = false;
 }
 
 void* GarbageCollector::allocate(size_t size)
@@ -74,12 +74,14 @@ Instance* GarbageCollector::copyObject(Instance* instance, std::unordered_map<In
   auto klass = instance->getClass();
   std::size_t objectSize = 0;
   if (auto arrayClass = klass->asArrayClass(); arrayClass) {
-    objectSize = arrayClass->allocationSize(instance->asArrayInstance()->length());
+    objectSize = arrayClass->allocationSize(instance->toArrayInstance()->length());
   } else {
     objectSize = klass->asInstanceClass()->allocationSize();
   }
 
   void* mem = this->allocateUnchecked(objectSize);
+  // Note that the copy here is safe only if the type copied is trivially copiable.
+  // This is the case for Instance and its subclasses (see the static asserts in Instance.h)
   std::memcpy(mem, instance, objectSize);
   auto* copy = static_cast<Instance*>(mem);
   map.insert({instance, copy});
@@ -89,7 +91,7 @@ Instance* GarbageCollector::copyObject(Instance* instance, std::unordered_map<In
 
 void GarbageCollector::performGarbageCollection()
 {
-  if (mIsGcRunning) {
+  if (mIsGcLocked) {
     return;
   }
   this->lockGC();
@@ -98,18 +100,26 @@ void GarbageCollector::performGarbageCollection()
   std::swap(mFromRegion, mToRegion);
   mBumpPtr = mFromRegion;
 
+  // The actual implementation here follows Cheney's algorithm (https://en.wikipedia.org/wiki/Cheney%27s_algorithm),
+  // The main steps are:
+  //  1. Collect and shallow copy all GC roots to the new region,
+  //  2. For each copied object on the new region, shallow copy their immediately reachable objects (i.e. object fields and
+  //     array elements) until there are no more new objects on the new region.
+  // Already copied objects are iterated using 'scanPtr': after processing an object, the pointer is advanced by
+  // its size.
   std::unordered_map<Instance*, Instance*> map;
   char* scanPtr = mFromRegion;
 
-  // Update manually pinned roots
+  // Process manually pinned roots.
+  // Note that this list already contains all Java class mirror instances, interned strings and
+  // JNI references.
   for (auto& root : mRootList) {
     Instance* copy = this->copyObject(root, map);
     root = copy;
   }
 
+  // Process static fields in classes
   for (const auto& [_, klass] : mVm.bootstrapClassLoader().loadedClasses()) {
-    // Copy and update the class instance
-    // The class instance can be null if GC was triggered during class initialization
     for (auto& [_, field] : klass->fields()) {
       if (field->isStatic() && field->fieldType().isReferenceOrArray()) {
         auto* instance = klass->getStaticFieldValue<Instance*>(field->offset());
@@ -158,7 +168,7 @@ size_t GarbageCollector::processReferences(Instance* instance, std::unordered_ma
   auto klass = instance->getClass();
   std::size_t objectSize = 0;
   if (auto arrayClass = klass->asArrayClass(); arrayClass) {
-    objectSize = arrayClass->allocationSize(instance->asArrayInstance()->length());
+    objectSize = arrayClass->allocationSize(instance->toArrayInstance()->length());
   } else {
     objectSize = klass->asInstanceClass()->allocationSize();
   }
@@ -175,7 +185,7 @@ size_t GarbageCollector::processReferences(Instance* instance, std::unordered_ma
     auto elementType = arrayClass->fieldType().asArrayType()->getElementType();
 
     if (arrayClass->fieldType().asArrayType()->getElementType().isReferenceOrArray()) {
-      JavaArray<Instance*>* arrayOfObjects = instance->asArray<Instance*>();
+      JavaArray<Instance*>* arrayOfObjects = instance->toArray<Instance*>();
       for (int32_t i = 0; i < arrayOfObjects->length(); i++) {
         Instance* elem = *arrayOfObjects->getArrayElement(i);
         Instance* copyOfElem = this->copyObject(elem, map);

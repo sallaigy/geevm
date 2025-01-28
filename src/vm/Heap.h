@@ -23,6 +23,8 @@ class JavaHeap
 public:
   explicit JavaHeap(Vm& vm);
 
+  /// Initializes the heap with the classes necessary to perform string interning.
+  /// All calls to 'intern' are invalid before the heap has been initialized.
   void initialize(InstanceClass* stringClass, ArrayClass* byteArrayClass);
 
   /// Allocates heap memory for and constructs an instance of `klass`.
@@ -51,7 +53,10 @@ public:
 
   ArrayInstance* allocateArray(ArrayClass* klass, int32_t length);
 
-  GcRootRef<> intern(const types::JString& utf8);
+  /// Interns the given string.
+  /// If this method constructs a new string object, it will be pinned by the garbage collector and kept alive
+  /// until the heap is destroyed.
+  GcRootRef<> intern(const types::JString& string);
 
   GarbageCollector& gc()
   {
