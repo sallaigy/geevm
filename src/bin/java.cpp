@@ -13,6 +13,8 @@ int main(int argc, char* argv[])
   program.add_argument("mainclass");
   // Heap behavior
   program.add_argument("-Xgc-after-every-alloc").hidden().flag();
+  // Initialization
+  program.add_argument("-Xno-system-init").hidden().flag();
 
   try {
     program.parse_args(argc, argv);
@@ -28,6 +30,9 @@ int main(int argc, char* argv[])
   geevm::VmSettings settings;
   if (program["-Xgc-after-every-alloc"] == true) {
     settings.runGcAfterEveryAllocation = true;
+  }
+  if (program["-Xno-system-init"] == true) {
+    settings.noSystemInit = true;
   }
 
 #ifndef NDEBUG
