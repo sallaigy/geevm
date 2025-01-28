@@ -74,7 +74,8 @@ if __name__ == "__main__":
         print(f'Current working directory {os.getcwd()}')
 
     execute_javac(java_files)
-    execute_jasmin(java_files)
+    if jasmin_files:
+        execute_jasmin(jasmin_files)
 
     # Execute the geevm binary
     java_tool_path = f'{os.environ['GEEVM_BINARY_DIR']}/java'

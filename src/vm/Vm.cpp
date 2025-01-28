@@ -28,8 +28,11 @@ void Vm::initialize()
   mMainThread->initialize(u"main", mainThreadGroup);
 
   JClass* systemCls = this->requireClass(u"java/lang/System");
-  auto initMethod = systemCls->getMethod(u"initPhase1", u"()V");
-  mMainThread->executeCall(*initMethod, {});
+
+  if (!settings().noSystemInit) {
+    auto initMethod = systemCls->getMethod(u"initPhase1", u"()V");
+    mMainThread->executeCall(*initMethod, {});
+  }
 
   mHeap.gc().unlockGC();
 }

@@ -1,5 +1,5 @@
 ; RUN: %compile -d %t "%s" | FileCheck "%s"
-.class org/geevm/tests/basic/Dup
+.class org/geevm/tests/basic/DupX1
 .super java/lang/Object
 
 .method public <init>()V
@@ -9,12 +9,15 @@
 .end method
 
 .method public static main([Ljava/lang/String;)V
-   .limit stack 3
+   .limit stack 4
 
    iconst_0
+   iconst_2
    iconst_1
-   dup
+   dup_x1
    ; CHECK: 1
+   invokestatic org/geevm/util/Printer/println(I)V
+   ; CHECK-NEXT: 2
    invokestatic org/geevm/util/Printer/println(I)V
    ; CHECK-NEXT: 1
    invokestatic org/geevm/util/Printer/println(I)V

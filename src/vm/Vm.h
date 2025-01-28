@@ -18,6 +18,7 @@ namespace geevm
 struct VmSettings
 {
   bool runGcAfterEveryAllocation = false;
+  bool noSystemInit = false;
   uint32_t maxHeapSize = 2048 * 1024;
 };
 
