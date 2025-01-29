@@ -1,5 +1,5 @@
 ; RUN: %compile -d %t "%s" | FileCheck "%s"
-.class org/geevm/tests/basic/DupX1
+.class org/geevm/tests/basic/Swap
 .super java/lang/Object
 
 .method public <init>()V
@@ -14,10 +14,8 @@
     iconst_0
     iconst_2
     iconst_1
-    dup_x1
-    ; CHECK: 1
-    invokestatic org/geevm/util/Printer/println(I)V
-    ; CHECK-NEXT: 2
+    swap
+    ; CHECK: 2
     invokestatic org/geevm/util/Printer/println(I)V
     ; CHECK-NEXT: 1
     invokestatic org/geevm/util/Printer/println(I)V

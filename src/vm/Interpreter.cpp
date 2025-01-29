@@ -6,6 +6,7 @@
 #include "vm/Vm.h"
 
 #include <cmath>
+#include <format>
 
 using namespace geevm;
 
@@ -88,8 +89,7 @@ private:
   void newReferenceArray(CodeCursor& cursor);
   void newMultiArray(CodeCursor& cursor);
 
-  template<class T, class F>
-    requires std::is_integral_v<T> && std::is_signed_v<T>
+  template<std::signed_integral T, class F>
   struct WrapSignedArithmetic
   {
     T operator()(T a, T b) const
@@ -101,10 +101,18 @@ private:
     }
   };
 
-  void ldc(types::u2 index);
+  void swap();
+  void dup();
+  void dupX1();
+  void dupX2();
+  void dup2();
+  void dup2X1();
+  void dup2X2();
 
+  void ldc(types::u2 index);
   void lookupSwitch(CodeCursor& cursor);
   void tableSwitch(CodeCursor& cursor);
+  void wide(Opcode modifiedOpcode, CodeCursor& cursor);
 
 private:
   JavaThread& mThread;
@@ -119,7 +127,7 @@ std::unique_ptr<Interpreter> geevm::createDefaultInterpreter(JavaThread& thread)
 
 static void notImplemented(Opcode opcode)
 {
-  throw std::runtime_error("Opcode not implemented: " + opcodeToString(opcode));
+  geevm_panic(std::format("using unsupported opcode '{}'", opcodeToString(opcode)));
 }
 
 std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t startPc)
@@ -266,43 +274,13 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
 
         break;
       }
-      case DUP: {
-        // TODO: Duplicate instead of pop / push
-        auto value = frame.popGenericOperand();
-        frame.pushGenericOperand(value);
-        frame.pushGenericOperand(value);
-        break;
-      }
-      case DUP_X1: {
-        Value value1 = frame.popGenericOperand();
-        Value value2 = frame.popGenericOperand();
-
-        frame.pushGenericOperand(value1);
-        frame.pushGenericOperand(value2);
-        frame.pushGenericOperand(value1);
-
-        break;
-      }
-      case DUP_X2: notImplemented(opcode); break;
-      case DUP2: {
-        // Category 1
-        Value value1 = frame.popGenericOperand();
-        if (value1.isCategoryTwo()) {
-          frame.pushGenericOperand(value1);
-          frame.pushGenericOperand(value1);
-        } else {
-          Value value2 = frame.popGenericOperand();
-          frame.pushGenericOperand(value2);
-          frame.pushGenericOperand(value1);
-          frame.pushGenericOperand(value2);
-          frame.pushGenericOperand(value1);
-        }
-
-        break;
-      }
-      case DUP2_X1: notImplemented(opcode); break;
-      case DUP2_X2: notImplemented(opcode); break;
-      case SWAP: notImplemented(opcode); break;
+      case DUP: dup(); break;
+      case DUP_X1: dupX1(); break;
+      case DUP_X2: dupX2(); break;
+      case DUP2: dup2(); break;
+      case DUP2_X1: dup2X1(); break;
+      case DUP2_X2: dup2X2(); break;
+      case SWAP: swap(); break;
       //==--------------------------------------------------------------------==
       // Arithmetic operators
       //==--------------------------------------------------------------------==
@@ -400,12 +378,13 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       case IF_ACMPEQ: binaryJumpIf<Instance*, std::equal_to<Instance*>>(cursor); break;
       case IF_ACMPNE: binaryJumpIf<Instance*, std::not_equal_to<Instance*>>(cursor); break;
       case GOTO: {
-        auto opcodePos = cursor.position() - 1;
+        int64_t opcodePos = cursor.position() - 1;
         auto offset = std::bit_cast<int16_t>(cursor.readU2());
 
         cursor.set(opcodePos + offset);
         break;
       }
+      // The `jsr` and `ret` instructions are deprecated, we're not going to support them
       case JSR: notImplemented(opcode); break;
       case RET: notImplemented(opcode); break;
       case TABLESWITCH: tableSwitch(cursor); break;
@@ -656,25 +635,21 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         frame.popOperand<Instance*>();
         break;
       }
-
-      case WIDE: {
-        Opcode modifiedOpcode = static_cast<Opcode>(cursor.readU1());
-        if (modifiedOpcode == IINC) {
-          types::u2 index = cursor.readU2();
-          int16_t constant = static_cast<int16_t>(cursor.readU2());
-
-          int32_t value = frame.loadValue<int32_t>(index);
-          frame.storeValue<int32_t>(index, value + constant);
-        } else {
-          notImplemented(opcode);
-        }
-        break;
-      }
+      case WIDE: wide(static_cast<Opcode>(cursor.readU1()), cursor); break;
       case MULTIANEWARRAY: newMultiArray(cursor); break;
       case IFNULL: unaryJumpIf<Instance*, nullptr, std::equal_to<Instance*>>(cursor); break;
       case IFNONNULL: unaryJumpIf<Instance*, nullptr, std::not_equal_to<Instance*>>(cursor); break;
-      case GOTO_W: notImplemented(opcode); break;
-      case JSR_W: notImplemented(opcode); break;
+      case GOTO_W: {
+        int64_t opcodePos = cursor.position() - 1;
+        auto offset = std::bit_cast<int32_t>(cursor.readU4());
+
+        cursor.set(opcodePos + offset);
+        break;
+      }
+      case JSR_W:
+        // `jsr_w` is deprecated, we're not going to support it
+        notImplemented(opcode);
+        break;
       case BREAKPOINT:
       case IMPDEP1:
       case IMPDEP2:
@@ -976,6 +951,125 @@ void DefaultInterpreter::compare()
   }
 }
 
+void DefaultInterpreter::dup()
+{
+  // TODO: Duplicate instead of pop / push
+  auto value = currentFrame().popGenericOperand();
+  currentFrame().pushGenericOperand(value);
+  currentFrame().pushGenericOperand(value);
+}
+
+void DefaultInterpreter::dupX1()
+{
+  Value value1 = currentFrame().popGenericOperand();
+  Value value2 = currentFrame().popGenericOperand();
+
+  currentFrame().pushGenericOperand(value1);
+  currentFrame().pushGenericOperand(value2);
+  currentFrame().pushGenericOperand(value1);
+}
+
+void DefaultInterpreter::dupX2()
+{
+  Value value1 = currentFrame().popGenericOperand();
+  Value value2 = currentFrame().popGenericOperand();
+  if (value2.isCategoryTwo()) {
+    currentFrame().pushGenericOperand(value1);
+    currentFrame().pushGenericOperand(value2);
+    currentFrame().pushGenericOperand(value1);
+  } else {
+    Value value3 = currentFrame().popGenericOperand();
+    currentFrame().pushGenericOperand(value1);
+    currentFrame().pushGenericOperand(value3);
+    currentFrame().pushGenericOperand(value2);
+    currentFrame().pushGenericOperand(value1);
+  }
+}
+
+void DefaultInterpreter::dup2()
+{
+  Value value1 = currentFrame().popGenericOperand();
+  if (value1.isCategoryTwo()) {
+    currentFrame().pushGenericOperand(value1);
+    currentFrame().pushGenericOperand(value1);
+  } else {
+    Value value2 = currentFrame().popGenericOperand();
+    currentFrame().pushGenericOperand(value2);
+    currentFrame().pushGenericOperand(value1);
+    currentFrame().pushGenericOperand(value2);
+    currentFrame().pushGenericOperand(value1);
+  }
+}
+
+void DefaultInterpreter::dup2X1()
+{
+  Value value1 = currentFrame().popGenericOperand();
+  Value value2 = currentFrame().popGenericOperand();
+  if (value1.isCategoryTwo()) {
+    currentFrame().pushGenericOperand(value1);
+    currentFrame().pushGenericOperand(value2);
+    currentFrame().pushGenericOperand(value1);
+  } else {
+    Value value3 = currentFrame().popGenericOperand();
+    currentFrame().pushGenericOperand(value2);
+    currentFrame().pushGenericOperand(value1);
+    currentFrame().pushGenericOperand(value3);
+    currentFrame().pushGenericOperand(value2);
+    currentFrame().pushGenericOperand(value1);
+  }
+}
+
+void DefaultInterpreter::dup2X2()
+{
+  Value value1 = currentFrame().popGenericOperand();
+  Value value2 = currentFrame().popGenericOperand();
+  if (value1.isCategoryTwo()) {
+    if (value2.isCategoryTwo()) {
+      // Form 4
+      currentFrame().pushGenericOperand(value1);
+      currentFrame().pushGenericOperand(value2);
+      currentFrame().pushGenericOperand(value1);
+    } else {
+      // Form 2
+      Value value3 = currentFrame().popGenericOperand();
+      currentFrame().pushGenericOperand(value1);
+      currentFrame().pushGenericOperand(value3);
+      currentFrame().pushGenericOperand(value2);
+      currentFrame().pushGenericOperand(value1);
+    }
+  } else {
+    Value value3 = currentFrame().popGenericOperand();
+    if (value3.isCategoryTwo()) {
+      // Form 3
+      currentFrame().pushGenericOperand(value2);
+      currentFrame().pushGenericOperand(value1);
+      currentFrame().pushGenericOperand(value3);
+      currentFrame().pushGenericOperand(value2);
+      currentFrame().pushGenericOperand(value1);
+    } else {
+      // Form 1
+      Value value4 = currentFrame().popGenericOperand();
+      currentFrame().pushGenericOperand(value2);
+      currentFrame().pushGenericOperand(value1);
+      currentFrame().pushGenericOperand(value4);
+      currentFrame().pushGenericOperand(value3);
+      currentFrame().pushGenericOperand(value2);
+      currentFrame().pushGenericOperand(value1);
+    }
+  }
+}
+
+void DefaultInterpreter::swap()
+{
+  Value value1 = currentFrame().popGenericOperand();
+  Value value2 = currentFrame().popGenericOperand();
+
+  assert(!value1.isCategoryTwo() && !value2.isCategoryTwo());
+
+  currentFrame().pushGenericOperand(value1);
+  currentFrame().pushGenericOperand(value2);
+}
+
 void DefaultInterpreter::newArray(CodeCursor& cursor)
 {
   enum class ArrayType
@@ -1161,5 +1255,30 @@ void DefaultInterpreter::tableSwitch(CodeCursor& cursor)
   } else {
     int32_t targetOffset = table.at(index - low);
     cursor.set(opcodePos + targetOffset);
+  }
+}
+
+void DefaultInterpreter::wide(Opcode modifiedOpcode, CodeCursor& cursor)
+{
+  types::u2 index = cursor.readU2();
+  switch (modifiedOpcode) {
+    using enum Opcode;
+    case IINC: {
+      int16_t constant = static_cast<int16_t>(cursor.readU2());
+      int32_t value = currentFrame().loadValue<int32_t>(index);
+      currentFrame().storeValue<int32_t>(index, value + constant);
+      break;
+    }
+    case ILOAD: loadAndPush<int32_t>(index); break;
+    case LLOAD: loadAndPush<int64_t>(index); break;
+    case FLOAD: loadAndPush<float>(index); break;
+    case DLOAD: loadAndPush<double>(index); break;
+    case ALOAD: loadAndPush<Instance*>(index); break;
+    case ISTORE: popAndStore<int32_t>(index); break;
+    case LSTORE: popAndStore<int64_t>(index); break;
+    case FSTORE: popAndStore<float>(index); break;
+    case DSTORE: popAndStore<double>(index); break;
+    case ASTORE: popAndStore<Instance*>(index); break;
+    default: GEEVM_UNREACHBLE("Unknown modified opcode for WIDE");
   }
 }
