@@ -27,8 +27,10 @@ def execute_jasmin(files: list[str]):
     for file in files:
         jasmin_command.append(file)
     result = subprocess.run(jasmin_command, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-    if result.returncode != 0:
-        raise RuntimeError("jasmin failed: " + result.stderr.decode())
+    stderr_output = result.stderr.decode()
+    # jasmin returns 0 even on parsing failure, so we are going to check whether stderr is empty
+    if result.returncode != 0 or len(stderr_output) != 0:
+        raise RuntimeError("jasmin failed: " + stderr_output)
 
 
 if __name__ == "__main__":
