@@ -177,7 +177,7 @@ static int32_t getFrameLineNumber(const CallFrame& callFrame)
         if (lineNumbers[i].startPc < pc) {
           lineNumber = lineNumbers[i].lineNumber;
         }
-      } else if (lineNumbers[i].startPc <= pc && pc < lineNumbers[i + 1].startPc) {
+      } else if (lineNumbers[i].startPc <= pc && pc <= lineNumbers[i + 1].startPc) {
         lineNumber = lineNumbers[i].lineNumber;
       }
     }
