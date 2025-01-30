@@ -165,4 +165,21 @@ void initializeFunctions(JNINativeInterface_& functions)
   functions.ReleaseStringUTFChars = [](JNIEnv*, jstring, const char* chars) -> void {
     delete[] chars;
   };
+
+  functions.ThrowNew = [](JNIEnv* env, jclass klass, const char* message) -> jint {
+    JavaThread& thread = jni::threadFromJniEnv(env);
+    auto clsInstance = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(klass);
+
+    thread.throwException(clsInstance->target()->className(), u"null");
+
+    return 0;
+  };
+
+  functions.IsInstanceOf = [](JNIEnv* env, jobject object, jclass klass) -> jboolean {
+    auto objectClass = env->GetObjectClass(object);
+    auto objectClassInstance = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(objectClass);
+    auto clsInstance = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(klass);
+    // TODO: Null check
+    return objectClassInstance->target()->isInstanceOf(clsInstance->target());
+  };
 }

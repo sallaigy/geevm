@@ -64,7 +64,7 @@ void JClass::prepare(BootstrapClassLoader& classLoader, JavaHeap& heap)
 
     FieldType elementType = arrayClass->fieldType().asArrayType()->getElementType();
     elementType.map([&]<PrimitiveType Type>() {
-      arrayClass->mElementClass = nullptr;
+      arrayClass->mElementClass = std::nullopt;
     }, [&](const types::JString& name) {
       arrayClass->mElementClass = *classLoader.loadClass(name);
     }, [&](const ArrayType& array) {
@@ -85,6 +85,14 @@ void JClass::prepare(BootstrapClassLoader& classLoader, JavaHeap& heap)
 
   auto classClass = classLoader.loadClass(u"java/lang/Class");
   mClassInstance = heap.gc().pin(heap.allocate<ClassInstance>((*classClass)->asInstanceClass(), this)).release();
+
+  if (auto arrayClass = this->asArrayClass(); arrayClass != nullptr) {
+    ClassInstance* elementClass = arrayClass->elementClass()
+                                      .transform([](JClass* clazz) {
+      return clazz->classInstance().get();
+    }).value_or(nullptr);
+    mClassInstance->setFieldValue<Instance*>(u"componentType", u"Ljava/lang/Class;", elementClass);
+  }
 
   mStatus = Status::Prepared;
 }

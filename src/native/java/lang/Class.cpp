@@ -1,8 +1,7 @@
-
-#include <vm/Heap.h>
-#include <vm/Instance.h>
-#include <vm/JniImplementation.h>
-#include <vm/VmUtils.h>
+#include "vm/Heap.h"
+#include "vm/Instance.h"
+#include "vm/JniImplementation.h"
+#include "vm/VmUtils.h"
 
 #include <algorithm>
 #include <cassert>
@@ -88,5 +87,11 @@ JNIEXPORT jobject JNICALL Java_java_lang_Class_initClassName(JNIEnv* env, jclass
 
   GcRootRef<> str = jni::threadFromJniEnv(env).heap().intern(name);
   return JniTranslate<GcRootRef<Instance>, jobject>{}(str);
+}
+
+JNIEXPORT jboolean JNICALL Java_java_lang_Class_isArray(JNIEnv* env, jclass klass)
+{
+  auto classInstance = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(klass);
+  return classInstance->target()->isArrayType() ? JNI_TRUE : JNI_FALSE;
 }
 }

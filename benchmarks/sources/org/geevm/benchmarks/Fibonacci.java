@@ -5,7 +5,7 @@ import java.math.BigInteger;
 public class Fibonacci {
 
     public static void main(String[] args) {
-        System.out.println(fibonacci(1000));
+        System.out.println(fibonacci(50000));
     }
 
     public static BigInteger fibonacci(long n) {

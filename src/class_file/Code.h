@@ -19,7 +19,10 @@ public:
   {
   }
 
-  bool hasNext();
+  bool hasNext()
+  {
+    return mPos < mCode.size();
+  }
 
   int64_t position() const
   {
@@ -32,9 +35,23 @@ public:
     mPos = target;
   }
 
-  Opcode next();
-  types::u1 readU1();
-  types::u2 readU2();
+  Opcode next()
+  {
+    return static_cast<Opcode>(mCode[mPos++]);
+  }
+
+  types::u1 readU1()
+  {
+    return mCode[mPos++];
+  }
+
+  types::u2 readU2()
+  {
+    types::u2 value = (mCode[mPos] << 8u) | mCode[mPos + 1];
+    mPos += 2;
+    return value;
+  }
+
   types::u4 readU4();
 
 private:

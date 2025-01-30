@@ -19,7 +19,7 @@ struct VmSettings
 {
   bool runGcAfterEveryAllocation = false;
   bool noSystemInit = false;
-  uint32_t maxHeapSize = 2048 * 1024;
+  size_t maxHeapSize = 2048l * 1024;
 };
 
 class Vm
