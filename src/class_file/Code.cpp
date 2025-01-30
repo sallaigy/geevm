@@ -2,28 +2,6 @@
 
 using namespace geevm;
 
-bool CodeCursor::hasNext()
-{
-  return mPos < mCode.size();
-}
-
-Opcode CodeCursor::next()
-{
-  return static_cast<Opcode>(mCode[mPos++]);
-}
-
-types::u1 CodeCursor::readU1()
-{
-  return mCode[mPos++];
-}
-
-types::u2 CodeCursor::readU2()
-{
-  types::u2 value = (mCode[mPos] << 8u) | mCode[mPos + 1];
-  mPos += 2;
-  return value;
-}
-
 types::u4 CodeCursor::readU4()
 {
   types::u4 value = (mCode[mPos] << 24u) | (mCode[mPos + 1] << 16u) | (mCode[mPos + 2] << 8u) | mCode[mPos + 3];
