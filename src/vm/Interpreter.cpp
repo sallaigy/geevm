@@ -1,5 +1,4 @@
 #include "vm/Interpreter.h"
-#include "class_file/Code.h"
 #include "class_file/Opcode.h"
 #include "vm/Frame.h"
 #include "vm/Instance.h"
@@ -80,14 +79,14 @@ private:
   void compare();
 
   template<JvmType T, class Func>
-  void binaryJumpIf(CodeCursor& cursor);
+  void binaryJumpIf();
 
   template<JvmType T, auto CheckedValue, class Func>
-  void unaryJumpIf(CodeCursor& cursor);
+  void unaryJumpIf();
 
-  void newArray(CodeCursor& cursor);
-  void newReferenceArray(CodeCursor& cursor);
-  void newMultiArray(CodeCursor& cursor);
+  void newArray();
+  void newReferenceArray();
+  void newMultiArray();
 
   template<std::signed_integral T, class F>
   struct WrapSignedArithmetic
@@ -110,9 +109,9 @@ private:
   void dup2X2();
 
   void ldc(types::u2 index);
-  void lookupSwitch(CodeCursor& cursor);
-  void tableSwitch(CodeCursor& cursor);
-  void wide(Opcode modifiedOpcode, CodeCursor& cursor);
+  void lookupSwitch();
+  void tableSwitch();
+  void wide(Opcode modifiedOpcode);
 
 private:
   JavaThread& mThread;
@@ -132,14 +131,12 @@ static void notImplemented(Opcode opcode)
 
 std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t startPc)
 {
-  CodeCursor cursor(code.bytes(), startPc);
-
-  while (cursor.hasNext()) {
-    Opcode opcode = cursor.next();
+  bool hasNext = true;
+  while (hasNext) {
     CallFrame& frame = mThread.currentFrame();
+    Opcode opcode = frame.next();
     RuntimeConstantPool& runtimeConstantPool = frame.currentClass()->runtimeConstantPool();
 
-    frame.setProgramCounter(cursor.position());
     switch (opcode) {
       using enum Opcode;
       case NOP:
@@ -163,12 +160,12 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       case FCONST_2: frame.pushOperand<float>(2.0f); break;
       case DCONST_0: frame.pushOperand<double>(0.0); break;
       case DCONST_1: frame.pushOperand<double>(1.0); break;
-      case BIPUSH: frame.pushOperand<int32_t>(std::bit_cast<int8_t>(cursor.readU1())); break;
-      case SIPUSH: frame.pushOperand<int32_t>(std::bit_cast<int16_t>(cursor.readU2())); break;
-      case LDC: ldc(cursor.readU1()); break;
-      case LDC_W: ldc(cursor.readU2()); break;
+      case BIPUSH: frame.pushOperand<int32_t>(std::bit_cast<int8_t>(frame.readU1())); break;
+      case SIPUSH: frame.pushOperand<int32_t>(std::bit_cast<int16_t>(frame.readU2())); break;
+      case LDC: ldc(frame.readU1()); break;
+      case LDC_W: ldc(frame.readU2()); break;
       case LDC2_W: {
-        types::u2 index = cursor.readU2();
+        types::u2 index = frame.readU2();
         auto& [tag, data] = frame.currentClass()->constantPool().getEntry(index);
 
         if (tag == ConstantPool::Tag::CONSTANT_Double) {
@@ -184,11 +181,11 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       //==--------------------------------------------------------------------==
       // Local variable load and push
       //==--------------------------------------------------------------------==
-      case ILOAD: loadAndPush<int32_t>(cursor.readU1()); break;
-      case LLOAD: loadAndPush<int64_t>(cursor.readU1()); break;
-      case FLOAD: loadAndPush<float>(cursor.readU1()); break;
-      case DLOAD: loadAndPush<double>(cursor.readU1()); break;
-      case ALOAD: loadAndPush<Instance*>(cursor.readU1()); break;
+      case ILOAD: loadAndPush<int32_t>(frame.readU1()); break;
+      case LLOAD: loadAndPush<int64_t>(frame.readU1()); break;
+      case FLOAD: loadAndPush<float>(frame.readU1()); break;
+      case DLOAD: loadAndPush<double>(frame.readU1()); break;
+      case ALOAD: loadAndPush<Instance*>(frame.readU1()); break;
       case ILOAD_0: loadAndPush<int32_t>(0); break;
       case ILOAD_1: loadAndPush<int32_t>(1); break;
       case ILOAD_2: loadAndPush<int32_t>(2); break;
@@ -223,11 +220,11 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       //==--------------------------------------------------------------------==
       // Local variable store
       //==--------------------------------------------------------------------==
-      case ISTORE: popAndStore<int32_t>(cursor.readU1()); break;
-      case LSTORE: popAndStore<int64_t>(cursor.readU1()); break;
-      case FSTORE: popAndStore<float>(cursor.readU1()); break;
-      case DSTORE: popAndStore<double>(cursor.readU1()); break;
-      case ASTORE: popAndStore<Instance*>(cursor.readU1()); break;
+      case ISTORE: popAndStore<int32_t>(frame.readU1()); break;
+      case LSTORE: popAndStore<int64_t>(frame.readU1()); break;
+      case FSTORE: popAndStore<float>(frame.readU1()); break;
+      case DSTORE: popAndStore<double>(frame.readU1()); break;
+      case ASTORE: popAndStore<Instance*>(frame.readU1()); break;
       case ISTORE_0: popAndStore<int32_t>(0); break;
       case ISTORE_1: popAndStore<int32_t>(1); break;
       case ISTORE_2: popAndStore<int32_t>(2); break;
@@ -327,8 +324,8 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       case IXOR: simpleOp<int32_t, std::bit_xor<int32_t>>(); break;
       case LXOR: simpleOp<int64_t, std::bit_xor<int64_t>>(); break;
       case IINC: {
-        types::u1 index = cursor.readU1();
-        auto constValue = static_cast<int32_t>(std::bit_cast<int8_t>(cursor.readU1()));
+        types::u1 index = frame.readU1();
+        auto constValue = static_cast<int32_t>(std::bit_cast<int8_t>(frame.readU1()));
 
         frame.storeValue<int32_t>(index, frame.loadValue<int32_t>(index) + constValue);
 
@@ -360,35 +357,35 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       case FCMPG: compare<float, 1>(); break;
       case DCMPL: compare<double, -1>(); break;
       case DCMPG: compare<double, 1>(); break;
-      case IFEQ: unaryJumpIf<int32_t, 0, std::equal_to<int32_t>>(cursor); break;
-      case IFNE: unaryJumpIf<int32_t, 0, std::not_equal_to<int32_t>>(cursor); break;
-      case IFLT: unaryJumpIf<int32_t, 0, std::less<int32_t>>(cursor); break;
-      case IFGE: unaryJumpIf<int32_t, 0, std::greater_equal<int32_t>>(cursor); break;
-      case IFGT: unaryJumpIf<int32_t, 0, std::greater<int32_t>>(cursor); break;
-      case IFLE: unaryJumpIf<int32_t, 0, std::less_equal<int32_t>>(cursor); break;
+      case IFEQ: unaryJumpIf<int32_t, 0, std::equal_to<int32_t>>(); break;
+      case IFNE: unaryJumpIf<int32_t, 0, std::not_equal_to<int32_t>>(); break;
+      case IFLT: unaryJumpIf<int32_t, 0, std::less<int32_t>>(); break;
+      case IFGE: unaryJumpIf<int32_t, 0, std::greater_equal<int32_t>>(); break;
+      case IFGT: unaryJumpIf<int32_t, 0, std::greater<int32_t>>(); break;
+      case IFLE: unaryJumpIf<int32_t, 0, std::less_equal<int32_t>>(); break;
       //==--------------------------------------------------------------------==
       // Jumps
       //==--------------------------------------------------------------------==
-      case IF_ICMPEQ: binaryJumpIf<int32_t, std::equal_to<int32_t>>(cursor); break;
-      case IF_ICMPNE: binaryJumpIf<int32_t, std::not_equal_to<int32_t>>(cursor); break;
-      case IF_ICMPLT: binaryJumpIf<int32_t, std::less<int32_t>>(cursor); break;
-      case IF_ICMPGE: binaryJumpIf<int32_t, std::greater_equal<int32_t>>(cursor); break;
-      case IF_ICMPGT: binaryJumpIf<int32_t, std::greater<int32_t>>(cursor); break;
-      case IF_ICMPLE: binaryJumpIf<int32_t, std::less_equal<int32_t>>(cursor); break;
-      case IF_ACMPEQ: binaryJumpIf<Instance*, std::equal_to<Instance*>>(cursor); break;
-      case IF_ACMPNE: binaryJumpIf<Instance*, std::not_equal_to<Instance*>>(cursor); break;
+      case IF_ICMPEQ: binaryJumpIf<int32_t, std::equal_to<int32_t>>(); break;
+      case IF_ICMPNE: binaryJumpIf<int32_t, std::not_equal_to<int32_t>>(); break;
+      case IF_ICMPLT: binaryJumpIf<int32_t, std::less<int32_t>>(); break;
+      case IF_ICMPGE: binaryJumpIf<int32_t, std::greater_equal<int32_t>>(); break;
+      case IF_ICMPGT: binaryJumpIf<int32_t, std::greater<int32_t>>(); break;
+      case IF_ICMPLE: binaryJumpIf<int32_t, std::less_equal<int32_t>>(); break;
+      case IF_ACMPEQ: binaryJumpIf<Instance*, std::equal_to<Instance*>>(); break;
+      case IF_ACMPNE: binaryJumpIf<Instance*, std::not_equal_to<Instance*>>(); break;
       case GOTO: {
-        int64_t opcodePos = cursor.position() - 1;
-        auto offset = std::bit_cast<int16_t>(cursor.readU2());
+        int64_t opcodePos = frame.programCounter() - 1;
+        auto offset = std::bit_cast<int16_t>(frame.readU2());
 
-        cursor.set(opcodePos + offset);
+        frame.set(opcodePos + offset);
         break;
       }
       // The `jsr` and `ret` instructions are deprecated, we're not going to support them
       case JSR: notImplemented(opcode); break;
       case RET: notImplemented(opcode); break;
-      case TABLESWITCH: tableSwitch(cursor); break;
-      case LOOKUPSWITCH: lookupSwitch(cursor); break;
+      case TABLESWITCH: tableSwitch(); break;
+      case LOOKUPSWITCH: lookupSwitch(); break;
       //==--------------------------------------------------------------------==
       // Returns
       //==--------------------------------------------------------------------==
@@ -402,7 +399,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       // Field manipulation
       //==--------------------------------------------------------------------==
       case GETSTATIC: {
-        auto index = cursor.readU2();
+        auto index = frame.readU2();
         const JField* field = runtimeConstantPool.getFieldRef(index);
 
         JClass* klass = field->getClass();
@@ -414,7 +411,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         break;
       }
       case PUTSTATIC: {
-        auto index = cursor.readU2();
+        auto index = frame.readU2();
         const JField* field = runtimeConstantPool.getFieldRef(index);
 
         JClass* klass = field->getClass();
@@ -425,7 +422,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         break;
       }
       case GETFIELD: {
-        types::u2 index = cursor.readU2();
+        types::u2 index = frame.readU2();
         const JField* field = runtimeConstantPool.getFieldRef(index);
         auto objectRef = frame.popOperand<Instance*>();
 
@@ -451,7 +448,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         break;
       }
       case PUTFIELD: {
-        auto index = cursor.readU2();
+        auto index = frame.readU2();
         auto field = runtimeConstantPool.getFieldRef(index);
 
         Value value = frame.popGenericOperand();
@@ -483,7 +480,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       // Invocations
       //==--------------------------------------------------------------------==
       case INVOKEVIRTUAL: {
-        auto index = cursor.readU2();
+        auto index = frame.readU2();
         const JMethod* baseMethod = runtimeConstantPool.getMethodRef(index);
 
         int numArgs = baseMethod->descriptor().parameters().size();
@@ -503,7 +500,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         break;
       }
       case INVOKESPECIAL: {
-        auto index = cursor.readU2();
+        auto index = frame.readU2();
         JMethod* method = runtimeConstantPool.getMethodRef(index);
 
         this->invoke(method);
@@ -511,7 +508,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         break;
       }
       case INVOKESTATIC: {
-        auto index = cursor.readU2();
+        auto index = frame.readU2();
         JMethod* method = runtimeConstantPool.getMethodRef(index);
         assert(method->isStatic());
 
@@ -526,13 +523,13 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         break;
       }
       case INVOKEINTERFACE: {
-        auto index = cursor.readU2();
+        auto index = frame.readU2();
         const JMethod* methodRef = runtimeConstantPool.getMethodRef(index);
 
         // Consume 'count'
-        cursor.readU1();
+        frame.readU1();
         // Consume '0'
-        cursor.readU1();
+        frame.readU1();
 
         int numArgs = methodRef->descriptor().parameters().size();
         Value objectRef = frame.peek(numArgs);
@@ -548,7 +545,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       // OOP
       //==--------------------------------------------------------------------==
       case NEW: {
-        auto index = cursor.readU2();
+        auto index = frame.readU2();
         auto className = frame.currentClass()->constantPool().getClassName(index);
 
         auto klass = mThread.resolveClass(types::JString{className});
@@ -569,8 +566,8 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
 
         break;
       }
-      case NEWARRAY: newArray(cursor); break;
-      case ANEWARRAY: newReferenceArray(cursor); break;
+      case NEWARRAY: newArray(); break;
+      case ANEWARRAY: newReferenceArray(); break;
       case ARRAYLENGTH: {
         ArrayInstance* arrayRef = frame.popOperand<Instance*>()->toArrayInstance();
         frame.pushOperand<int32_t>(arrayRef->length());
@@ -582,7 +579,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         break;
       }
       case CHECKCAST: {
-        types::u2 index = cursor.readU2();
+        types::u2 index = frame.readU2();
         auto objectRef = frame.popOperand<Instance*>();
         if (objectRef == nullptr) {
           frame.pushOperand<Instance*>(objectRef);
@@ -605,7 +602,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         break;
       }
       case INSTANCEOF: {
-        auto index = cursor.readU2();
+        auto index = frame.readU2();
         ScopedGcRootRef<> objectRef = mThread.heap().gc().pin(frame.popOperand<Instance*>());
         if (objectRef == nullptr) {
           frame.pushOperand<int32_t>(0);
@@ -635,15 +632,15 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         frame.popOperand<Instance*>();
         break;
       }
-      case WIDE: wide(static_cast<Opcode>(cursor.readU1()), cursor); break;
-      case MULTIANEWARRAY: newMultiArray(cursor); break;
-      case IFNULL: unaryJumpIf<Instance*, nullptr, std::equal_to<Instance*>>(cursor); break;
-      case IFNONNULL: unaryJumpIf<Instance*, nullptr, std::not_equal_to<Instance*>>(cursor); break;
+      case WIDE: wide(static_cast<Opcode>(frame.readU1())); break;
+      case MULTIANEWARRAY: newMultiArray(); break;
+      case IFNULL: unaryJumpIf<Instance*, nullptr, std::equal_to<Instance*>>(); break;
+      case IFNONNULL: unaryJumpIf<Instance*, nullptr, std::not_equal_to<Instance*>>(); break;
       case GOTO_W: {
-        int64_t opcodePos = cursor.position() - 1;
-        auto offset = std::bit_cast<int32_t>(cursor.readU4());
+        int64_t opcodePos = frame.programCounter() - 1;
+        auto offset = std::bit_cast<int32_t>(frame.readU4());
 
-        cursor.set(opcodePos + offset);
+        frame.set(opcodePos + offset);
         break;
       }
       case JSR_W:
@@ -660,12 +657,12 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
 
     // Handle exception
     if (auto exception = mThread.currentException(); exception != nullptr) {
-      size_t pc = cursor.position() - 1;
+      size_t pc = frame.programCounter() - 1;
 
       auto newPc = this->tryHandleException(exception, runtimeConstantPool, code, pc);
 
       if (newPc.has_value()) {
-        cursor.set(newPc.value());
+        frame.set(newPc.value());
         mThread.clearException();
       } else {
         return std::nullopt;
@@ -872,30 +869,30 @@ void DefaultInterpreter::shift()
 }
 
 template<JvmType T, class Func>
-void DefaultInterpreter::binaryJumpIf(CodeCursor& cursor)
+void DefaultInterpreter::binaryJumpIf()
 {
-  auto opcodePos = cursor.position() - 1;
+  auto opcodePos = currentFrame().programCounter() - 1;
 
   auto val2 = currentFrame().popOperand<T>();
   auto val1 = currentFrame().popOperand<T>();
 
-  auto offset = std::bit_cast<int16_t>(cursor.readU2());
+  auto offset = std::bit_cast<int16_t>(currentFrame().readU2());
 
   if (Func{}(val1, val2)) {
-    cursor.set(opcodePos + offset);
+    currentFrame().set(opcodePos + offset);
   }
 }
 
 template<JvmType T, auto CheckedValue, class Func>
-void DefaultInterpreter::unaryJumpIf(CodeCursor& cursor)
+void DefaultInterpreter::unaryJumpIf()
 {
-  auto opcodePos = cursor.position() - 1;
+  auto opcodePos = currentFrame().programCounter() - 1;
   auto value = currentFrame().popOperand<T>();
 
-  auto offset = std::bit_cast<int16_t>(cursor.readU2());
+  auto offset = std::bit_cast<int16_t>(currentFrame().readU2());
 
   if (Func{}(value, static_cast<T>(CheckedValue))) {
-    cursor.set(opcodePos + offset);
+    currentFrame().set(opcodePos + offset);
   }
 }
 
@@ -1070,7 +1067,7 @@ void DefaultInterpreter::swap()
   currentFrame().pushGenericOperand(value2);
 }
 
-void DefaultInterpreter::newArray(CodeCursor& cursor)
+void DefaultInterpreter::newArray()
 {
   enum class ArrayType
   {
@@ -1084,7 +1081,7 @@ void DefaultInterpreter::newArray(CodeCursor& cursor)
     T_LONG = 11,
   };
 
-  auto arrayType = static_cast<ArrayType>(cursor.readU1());
+  auto arrayType = static_cast<ArrayType>(currentFrame().readU1());
   auto count = currentFrame().popOperand<int32_t>();
 
   types::JString arrayClsName;
@@ -1116,9 +1113,9 @@ void DefaultInterpreter::newArray(CodeCursor& cursor)
   currentFrame().pushOperand<Instance*>(newInstance);
 }
 
-void DefaultInterpreter::newReferenceArray(CodeCursor& cursor)
+void DefaultInterpreter::newReferenceArray()
 {
-  auto index = cursor.readU2();
+  auto index = currentFrame().readU2();
   int32_t count = currentFrame().popOperand<int32_t>();
 
   auto klass = currentFrame().currentClass()->runtimeConstantPool().getClass(index);
@@ -1149,10 +1146,10 @@ void DefaultInterpreter::newReferenceArray(CodeCursor& cursor)
   currentFrame().pushOperand<Instance*>(array);
 }
 
-void DefaultInterpreter::newMultiArray(CodeCursor& cursor)
+void DefaultInterpreter::newMultiArray()
 {
-  uint16_t index = cursor.readU2();
-  uint8_t dimensions = cursor.readU1();
+  uint16_t index = currentFrame().readU2();
+  uint8_t dimensions = currentFrame().readU1();
 
   auto klass = currentFrame().currentClass()->runtimeConstantPool().getClass(index);
   if (!klass) {
@@ -1194,20 +1191,22 @@ void DefaultInterpreter::newMultiArray(CodeCursor& cursor)
   mThread.heap().gc().release(result);
 }
 
-void DefaultInterpreter::lookupSwitch(CodeCursor& cursor)
+void DefaultInterpreter::lookupSwitch()
 {
-  auto opcodePos = cursor.position() - 1;
-  while (cursor.position() % 4 != 0) {
-    cursor.next();
+  CallFrame& frame = currentFrame();
+
+  auto opcodePos = frame.programCounter() - 1;
+  while (frame.programCounter() % 4 != 0) {
+    frame.next();
   }
 
-  int32_t defaultOffset = std::bit_cast<int32_t>(cursor.readU4());
-  int32_t numPairs = std::bit_cast<int32_t>(cursor.readU4());
+  int32_t defaultOffset = std::bit_cast<int32_t>(frame.readU4());
+  int32_t numPairs = std::bit_cast<int32_t>(frame.readU4());
 
   std::vector<std::pair<int32_t, int32_t>> pairs;
   for (int32_t i = 0; i < numPairs; i++) {
-    auto matchValue = cursor.readU4();
-    auto offset = std::bit_cast<int32_t>(cursor.readU4());
+    auto matchValue = frame.readU4();
+    auto offset = std::bit_cast<int32_t>(frame.readU4());
     pairs.emplace_back(matchValue, offset);
   }
 
@@ -1216,27 +1215,28 @@ void DefaultInterpreter::lookupSwitch(CodeCursor& cursor)
 
   for (int32_t i = 0; i < numPairs; i++) {
     if (pairs[i].first == key) {
-      cursor.set(opcodePos + pairs[i].second);
+      frame.set(opcodePos + pairs[i].second);
       matched = true;
       break;
     }
   }
 
   if (!matched) {
-    cursor.set(opcodePos + defaultOffset);
+    frame.set(opcodePos + defaultOffset);
   }
 }
 
-void DefaultInterpreter::tableSwitch(CodeCursor& cursor)
+void DefaultInterpreter::tableSwitch()
 {
-  auto opcodePos = cursor.position() - 1;
-  while (cursor.position() % 4 != 0) {
-    cursor.next();
+  CallFrame& frame = currentFrame();
+  auto opcodePos = frame.programCounter() - 1;
+  while (frame.programCounter() % 4 != 0) {
+    frame.next();
   }
 
-  auto defaultOffset = std::bit_cast<int32_t>(cursor.readU4());
-  auto low = std::bit_cast<int32_t>(cursor.readU4());
-  auto high = std::bit_cast<int32_t>(cursor.readU4());
+  auto defaultOffset = std::bit_cast<int32_t>(frame.readU4());
+  auto low = std::bit_cast<int32_t>(frame.readU4());
+  auto high = std::bit_cast<int32_t>(frame.readU4());
   assert(low <= high);
 
   int32_t count = high - low + 1;
@@ -1245,26 +1245,26 @@ void DefaultInterpreter::tableSwitch(CodeCursor& cursor)
   table.reserve(count);
 
   for (int32_t i = 0; i < count; i++) {
-    int32_t offset = std::bit_cast<int32_t>(cursor.readU4());
+    int32_t offset = std::bit_cast<int32_t>(frame.readU4());
     table.push_back(offset);
   }
 
   auto index = currentFrame().popOperand<int32_t>();
   if (index < low || index > high) {
-    cursor.set(opcodePos + defaultOffset);
+    frame.set(opcodePos + defaultOffset);
   } else {
     int32_t targetOffset = table.at(index - low);
-    cursor.set(opcodePos + targetOffset);
+    frame.set(opcodePos + targetOffset);
   }
 }
 
-void DefaultInterpreter::wide(Opcode modifiedOpcode, CodeCursor& cursor)
+void DefaultInterpreter::wide(Opcode modifiedOpcode)
 {
-  types::u2 index = cursor.readU2();
+  types::u2 index = currentFrame().readU2();
   switch (modifiedOpcode) {
     using enum Opcode;
     case IINC: {
-      int16_t constant = static_cast<int16_t>(cursor.readU2());
+      int16_t constant = static_cast<int16_t>(currentFrame().readU2());
       int32_t value = currentFrame().loadValue<int32_t>(index);
       currentFrame().storeValue<int32_t>(index, value + constant);
       break;

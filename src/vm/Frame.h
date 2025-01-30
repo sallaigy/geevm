@@ -1,6 +1,7 @@
 #ifndef GEEVM_VM_FRAME_H
 #define GEEVM_VM_FRAME_H
 
+#include "class_file/Opcode.h"
 #include "vm/GarbageCollector.h"
 #include "vm/Method.h"
 #include "vm/Value.h"
@@ -18,6 +19,7 @@ public:
     : mMethod(method), mPrevious(previous)
   {
     if (!method->isNative()) {
+      mCode = &mMethod->getCode().bytes();
       mLocalVariables.assign(method->getCode().maxLocals(), Value::from<int32_t>(0));
       mOperandStack.reserve(method->getCode().maxStack());
     }
@@ -128,14 +130,44 @@ public:
     mOperandStack.clear();
   }
 
-  int64_t programCounter() const
+  bool hasNext()
   {
-    return mProgramCounter;
+    return mPos < mCode->size();
   }
 
-  void setProgramCounter(int64_t value)
+  int64_t programCounter() const
   {
-    mProgramCounter = value;
+    return mPos;
+  }
+
+  void set(int64_t target)
+  {
+    // TODO: Check bounds
+    mPos = target;
+  }
+
+  Opcode next()
+  {
+    return static_cast<Opcode>((*mCode)[mPos++]);
+  }
+
+  types::u1 readU1()
+  {
+    return (*mCode)[mPos++];
+  }
+
+  types::u2 readU2()
+  {
+    types::u2 value = ((*mCode)[mPos] << 8u) | (*mCode)[mPos + 1];
+    mPos += 2;
+    return value;
+  }
+
+  types::u4 readU4()
+  {
+    types::u4 value = ((*mCode)[mPos] << 24u) | ((*mCode)[mPos + 1] << 16u) | ((*mCode)[mPos + 2] << 8u) | (*mCode)[mPos + 3];
+    mPos += 4;
+    return value;
   }
 
 private:
@@ -143,7 +175,9 @@ private:
   std::vector<Value> mOperandStack;
   JMethod* mMethod;
   CallFrame* mPrevious;
-  int64_t mProgramCounter = 0;
+  int64_t mPos = 0;
+  int64_t mOpCodePos = 0;
+  const std::vector<types::u1>* mCode;
 };
 
 } // namespace geevm
