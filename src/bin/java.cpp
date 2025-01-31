@@ -1,5 +1,6 @@
 #include "common/DynamicLibrary.h"
 #include "vm/Thread.h"
+#include "vm/Value.h"
 #include "vm/Vm.h"
 
 #include <algorithm>
@@ -11,6 +12,7 @@ int main(int argc, char* argv[])
 {
   argparse::ArgumentParser program("java");
   program.add_argument("mainclass");
+  program.add_argument("args").remaining().default_value(std::vector<std::string>{});
   // Heap behavior
   program.add_argument("-Xgc-after-every-alloc").hidden().flag();
   // Initialization
@@ -63,7 +65,20 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  vm->mainThread().start(*mainMethod, {});
+  auto programArgs = program.get<std::vector<std::string>>("args");
+
+  // As the GC may run during string interning, we need to construct the array in two steps
+  auto strArrayCls = vm->resolveClass(u"[Ljava/lang/String;");
+  geevm::ScopedGcRootRef<geevm::JavaArray<geevm::Instance*>> argsArray =
+      vm->heap().gc().pin(vm->heap().allocateArray<geevm::Instance*>((*strArrayCls)->asArrayClass(), programArgs.size()));
+
+  for (int32_t i = 0; i < programArgs.size(); i++) {
+    auto utf16str = geevm::types::convertString(programArgs[i]);
+    geevm::GcRootRef<> handle = vm->heap().intern(utf16str);
+    argsArray->setArrayElement(i, handle.get());
+  }
+
+  vm->mainThread().start(*mainMethod, {geevm::Value::from<geevm::Instance*>(argsArray.get())});
 
   return 0;
 }
