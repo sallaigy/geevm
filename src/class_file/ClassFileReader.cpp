@@ -49,22 +49,31 @@ public:
   std::vector<types::u1> readVector(unsigned size)
   {
     std::vector<types::u1> result;
+    result.resize(size);
 
-    unsigned i = 0;
-    while (mStream && i < size) {
-      char byte;
-      mStream.read(&byte, 1);
-      result.push_back(static_cast<types::u1>(byte));
-      i += 1;
-    }
+    mStream.read(reinterpret_cast<char*>(result.data()), size);
 
-    if (i != size) {
-      throw ClassFileReadError("not enough bytes in the stream " + i);
+    if (mStream.fail()) {
+      throw ClassFileReadError("not enough bytes in the stream ");
     }
     // Check if stream has enough bytes
     // mStream.read(reinterpret_cast<char*>(result.data()), size);
 
     return result;
+  }
+
+  void skip(unsigned size)
+  {
+    unsigned i = 0;
+    while (mStream && i < size) {
+      char byte;
+      mStream.read(&byte, 1);
+      i += 1;
+    }
+
+    if (i != size) {
+      throw ClassFileReadError("not enough bytes in the stream ");
+    }
   }
 
 private:
@@ -115,7 +124,7 @@ public:
       if (attrName == u"SourceFile") {
         sourceFileIndex = mStream.readU2();
       } else {
-        mStream.readVector(attributeLength);
+        mStream.skip(attributeLength);
       }
     }
 
@@ -287,7 +296,7 @@ std::vector<FieldInfo> ClassFileReader::readFields(const ConstantPool& constantP
         constantValueIndex = mStream.readU2();
       } else {
         // Skip other attributes
-        mStream.readVector(attributeLength);
+        mStream.skip(attributeLength);
       }
     }
 
@@ -325,7 +334,7 @@ std::vector<MethodInfo> ClassFileReader::readMethods(const ConstantPool& constan
         }
       } else {
         // Skip unknown attributes
-        mStream.readVector(attributeLength);
+        mStream.skip(attributeLength);
       }
     }
 
@@ -368,7 +377,7 @@ Code ClassFileReader::readCode(const ConstantPool& constantPool)
         lineNumberTable.emplace_back(startPc, lineNumber);
       }
     } else {
-      mStream.readVector(codeAttrLength);
+      mStream.skip(codeAttrLength);
     }
   }
 
