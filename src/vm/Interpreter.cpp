@@ -30,8 +30,8 @@ private:
 
   CallFrame& currentFrame()
   {
-    assert(!mThread.callStack().empty());
-    return mThread.currentFrame();
+    assert(mCurrentFrame != nullptr);
+    return *mCurrentFrame;
   }
 
   template<JvmType T>
@@ -100,6 +100,11 @@ private:
     }
   };
 
+  void getStatic(RuntimeConstantPool& runtimeConstantPool);
+  void putStatic(RuntimeConstantPool& runtimeConstantPool);
+  void getField(RuntimeConstantPool& runtimeConstantPool);
+  void putField(RuntimeConstantPool& runtimeConstantPool);
+
   void swap();
   void dup();
   void dupX1();
@@ -113,8 +118,11 @@ private:
   void tableSwitch();
   void wide(Opcode modifiedOpcode);
 
+  bool checkException(RuntimeConstantPool& runtimeConstantPool);
+
 private:
   JavaThread& mThread;
+  CallFrame* mCurrentFrame = nullptr;
 };
 
 } // namespace
@@ -129,13 +137,42 @@ static void notImplemented(Opcode opcode)
   geevm_panic(std::format("using unsupported opcode '{}'", opcodeToString(opcode)));
 }
 
+bool DefaultInterpreter::checkException(RuntimeConstantPool& runtimeConstantPool)
+{
+  const Code& code = mCurrentFrame->currentMethod()->getCode();
+  // Handle exception
+  if (auto exception = mThread.currentException(); exception != nullptr) {
+    size_t pc = mCurrentFrame->programCounter() - 1;
+
+    auto newPc = this->tryHandleException(exception, runtimeConstantPool, code, pc);
+
+    if (newPc.has_value()) {
+      mCurrentFrame->set(newPc.value());
+      mThread.clearException();
+    } else {
+      return true;
+    }
+  }
+  return false;
+}
+
+#define WITH_EXCEPTION_CHECK(INSTRUCTION)                               \
+  {                                                                     \
+    INSTRUCTION;                                                        \
+    bool uncaughtException = this->checkException(runtimeConstantPool); \
+    if (uncaughtException) {                                            \
+      return std::nullopt;                                              \
+    }                                                                   \
+  }
+
 std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t startPc)
 {
   bool hasNext = true;
+  mCurrentFrame = &mThread.currentFrame();
+  RuntimeConstantPool& runtimeConstantPool = mCurrentFrame->currentClass()->runtimeConstantPool();
+
   while (hasNext) {
-    CallFrame& frame = mThread.currentFrame();
-    Opcode opcode = frame.next();
-    RuntimeConstantPool& runtimeConstantPool = frame.currentClass()->runtimeConstantPool();
+    Opcode opcode = mCurrentFrame->next();
 
     switch (opcode) {
       using enum Opcode;
@@ -145,47 +182,49 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       //==--------------------------------------------------------------------==
       // Constant push
       //==--------------------------------------------------------------------==
-      case ACONST_NULL: frame.pushOperand<Instance*>(nullptr); break;
-      case ICONST_M1: frame.pushOperand<int32_t>(-1); break;
-      case ICONST_0: frame.pushOperand<int32_t>(0); break;
-      case ICONST_1: frame.pushOperand<int32_t>(1); break;
-      case ICONST_2: frame.pushOperand<int32_t>(2); break;
-      case ICONST_3: frame.pushOperand<int32_t>(3); break;
-      case ICONST_4: frame.pushOperand<int32_t>(4); break;
-      case ICONST_5: frame.pushOperand<int32_t>(5); break;
-      case LCONST_0: frame.pushOperand<int64_t>(0); break;
-      case LCONST_1: frame.pushOperand<int64_t>(1); break;
-      case FCONST_0: frame.pushOperand<float>(0.0f); break;
-      case FCONST_1: frame.pushOperand<float>(1.0f); break;
-      case FCONST_2: frame.pushOperand<float>(2.0f); break;
-      case DCONST_0: frame.pushOperand<double>(0.0); break;
-      case DCONST_1: frame.pushOperand<double>(1.0); break;
-      case BIPUSH: frame.pushOperand<int32_t>(std::bit_cast<int8_t>(frame.readU1())); break;
-      case SIPUSH: frame.pushOperand<int32_t>(std::bit_cast<int16_t>(frame.readU2())); break;
-      case LDC: ldc(frame.readU1()); break;
-      case LDC_W: ldc(frame.readU2()); break;
-      case LDC2_W: {
-        types::u2 index = frame.readU2();
-        auto& [tag, data] = frame.currentClass()->constantPool().getEntry(index);
+      case ACONST_NULL: mCurrentFrame->pushOperand<Instance*>(nullptr); break;
+      case ICONST_M1: mCurrentFrame->pushOperand<int32_t>(-1); break;
+      case ICONST_0: mCurrentFrame->pushOperand<int32_t>(0); break;
+      case ICONST_1: mCurrentFrame->pushOperand<int32_t>(1); break;
+      case ICONST_2: mCurrentFrame->pushOperand<int32_t>(2); break;
+      case ICONST_3: mCurrentFrame->pushOperand<int32_t>(3); break;
+      case ICONST_4: mCurrentFrame->pushOperand<int32_t>(4); break;
+      case ICONST_5: mCurrentFrame->pushOperand<int32_t>(5); break;
+      case LCONST_0: mCurrentFrame->pushOperand<int64_t>(0); break;
+      case LCONST_1: mCurrentFrame->pushOperand<int64_t>(1); break;
+      case FCONST_0: mCurrentFrame->pushOperand<float>(0.0f); break;
+      case FCONST_1: mCurrentFrame->pushOperand<float>(1.0f); break;
+      case FCONST_2: mCurrentFrame->pushOperand<float>(2.0f); break;
+      case DCONST_0: mCurrentFrame->pushOperand<double>(0.0); break;
+      case DCONST_1: mCurrentFrame->pushOperand<double>(1.0); break;
+      case BIPUSH: mCurrentFrame->pushOperand<int32_t>(std::bit_cast<int8_t>(mCurrentFrame->readU1())); break;
+      case SIPUSH: mCurrentFrame->pushOperand<int32_t>(std::bit_cast<int16_t>(mCurrentFrame->readU2())); break;
+      case LDC: WITH_EXCEPTION_CHECK(ldc(mCurrentFrame->readU1())); break;
+      case LDC_W: WITH_EXCEPTION_CHECK(ldc(mCurrentFrame->readU2())); break;
+      case LDC2_W:
+        WITH_EXCEPTION_CHECK({
+          types::u2 index = mCurrentFrame->readU2();
+          auto& entry = mCurrentFrame->currentClass()->constantPool().getEntry(index);
+          auto tag = entry.tag;
+          auto data = entry.data;
 
-        if (tag == ConstantPool::Tag::CONSTANT_Double) {
-          frame.pushOperand<double>(data.doubleFloat);
-        } else if (tag == ConstantPool::Tag::CONSTANT_Long) {
-          frame.pushOperand<int64_t>(data.doubleInteger);
-        } else {
-          GEEVM_UNREACHBLE("ldc2_w target entry must be double or long");
-        }
-
+          if (tag == ConstantPool::Tag::CONSTANT_Double) {
+            mCurrentFrame->pushOperand<double>(data.doubleFloat);
+          } else if (tag == ConstantPool::Tag::CONSTANT_Long) {
+            mCurrentFrame->pushOperand<int64_t>(data.doubleInteger);
+          } else {
+            GEEVM_UNREACHBLE("ldc2_w target entry must be double or long");
+          }
+        })
         break;
-      }
       //==--------------------------------------------------------------------==
       // Local variable load and push
       //==--------------------------------------------------------------------==
-      case ILOAD: loadAndPush<int32_t>(frame.readU1()); break;
-      case LLOAD: loadAndPush<int64_t>(frame.readU1()); break;
-      case FLOAD: loadAndPush<float>(frame.readU1()); break;
-      case DLOAD: loadAndPush<double>(frame.readU1()); break;
-      case ALOAD: loadAndPush<Instance*>(frame.readU1()); break;
+      case ILOAD: loadAndPush<int32_t>(mCurrentFrame->readU1()); break;
+      case LLOAD: loadAndPush<int64_t>(mCurrentFrame->readU1()); break;
+      case FLOAD: loadAndPush<float>(mCurrentFrame->readU1()); break;
+      case DLOAD: loadAndPush<double>(mCurrentFrame->readU1()); break;
+      case ALOAD: loadAndPush<Instance*>(mCurrentFrame->readU1()); break;
       case ILOAD_0: loadAndPush<int32_t>(0); break;
       case ILOAD_1: loadAndPush<int32_t>(1); break;
       case ILOAD_2: loadAndPush<int32_t>(2); break;
@@ -209,22 +248,22 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       //==--------------------------------------------------------------------==
       // Array load
       //==--------------------------------------------------------------------==
-      case IALOAD: arrayLoad<int32_t>(); break;
-      case LALOAD: arrayLoad<int64_t>(); break;
-      case FALOAD: arrayLoad<float>(); break;
-      case DALOAD: arrayLoad<double>(); break;
-      case AALOAD: arrayLoad<Instance*>(); break;
-      case BALOAD: arrayLoad<int8_t>(); break;
-      case CALOAD: arrayLoad<char16_t>(); break;
-      case SALOAD: arrayLoad<int16_t>(); break;
+      case IALOAD: WITH_EXCEPTION_CHECK(arrayLoad<int32_t>()) break;
+      case LALOAD: WITH_EXCEPTION_CHECK(arrayLoad<int64_t>()) break;
+      case FALOAD: WITH_EXCEPTION_CHECK(arrayLoad<float>()); break;
+      case DALOAD: WITH_EXCEPTION_CHECK(arrayLoad<double>()); break;
+      case AALOAD: WITH_EXCEPTION_CHECK(arrayLoad<Instance*>()); break;
+      case BALOAD: WITH_EXCEPTION_CHECK(arrayLoad<int8_t>()); break;
+      case CALOAD: WITH_EXCEPTION_CHECK(arrayLoad<char16_t>()); break;
+      case SALOAD: WITH_EXCEPTION_CHECK(arrayLoad<int16_t>()); break;
       //==--------------------------------------------------------------------==
       // Local variable store
       //==--------------------------------------------------------------------==
-      case ISTORE: popAndStore<int32_t>(frame.readU1()); break;
-      case LSTORE: popAndStore<int64_t>(frame.readU1()); break;
-      case FSTORE: popAndStore<float>(frame.readU1()); break;
-      case DSTORE: popAndStore<double>(frame.readU1()); break;
-      case ASTORE: popAndStore<Instance*>(frame.readU1()); break;
+      case ISTORE: popAndStore<int32_t>(mCurrentFrame->readU1()); break;
+      case LSTORE: popAndStore<int64_t>(mCurrentFrame->readU1()); break;
+      case FSTORE: popAndStore<float>(mCurrentFrame->readU1()); break;
+      case DSTORE: popAndStore<double>(mCurrentFrame->readU1()); break;
+      case ASTORE: popAndStore<Instance*>(mCurrentFrame->readU1()); break;
       case ISTORE_0: popAndStore<int32_t>(0); break;
       case ISTORE_1: popAndStore<int32_t>(1); break;
       case ISTORE_2: popAndStore<int32_t>(2); break;
@@ -248,25 +287,25 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       //==--------------------------------------------------------------------==
       // Array store
       //==--------------------------------------------------------------------==
-      case IASTORE: arrayStore<int32_t>(); break;
-      case LASTORE: arrayStore<int64_t>(); break;
-      case FASTORE: arrayStore<float>(); break;
-      case DASTORE: arrayStore<double>(); break;
-      case AASTORE: arrayStore<Instance*>(); break;
-      case BASTORE: arrayStore<int8_t>(); break;
-      case CASTORE: arrayStore<char16_t>(); break;
-      case SASTORE: arrayStore<int16_t>(); break;
+      case IASTORE: WITH_EXCEPTION_CHECK(arrayStore<int32_t>()); break;
+      case LASTORE: WITH_EXCEPTION_CHECK(arrayStore<int64_t>()); break;
+      case FASTORE: WITH_EXCEPTION_CHECK(arrayStore<float>()); break;
+      case DASTORE: WITH_EXCEPTION_CHECK(arrayStore<double>()); break;
+      case AASTORE: WITH_EXCEPTION_CHECK(arrayStore<Instance*>()); break;
+      case BASTORE: WITH_EXCEPTION_CHECK(arrayStore<int8_t>()); break;
+      case CASTORE: WITH_EXCEPTION_CHECK(arrayStore<char16_t>()); break;
+      case SASTORE: WITH_EXCEPTION_CHECK(arrayStore<int16_t>()); break;
       //==--------------------------------------------------------------------==
       // Stack manipulation
       //==--------------------------------------------------------------------==
       case POP: {
-        frame.popGenericOperand();
+        mCurrentFrame->popGenericOperand();
         break;
       }
       case POP2: {
-        Value value = frame.popGenericOperand();
+        Value value = mCurrentFrame->popGenericOperand();
         if (!value.isCategoryTwo()) {
-          frame.popGenericOperand();
+          mCurrentFrame->popGenericOperand();
         }
 
         break;
@@ -293,14 +332,14 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       case LMUL: simpleOp<int64_t, WrapSignedArithmetic<int64_t, std::multiplies<>>>(); break;
       case FMUL: simpleOp<float, std::multiplies<float>>(); break;
       case DMUL: simpleOp<double, std::multiplies<double>>(); break;
-      case IDIV: div<int32_t>(); break;
-      case LDIV: div<int64_t>(); break;
-      case FDIV: div<float>(); break;
-      case DDIV: div<double>(); break;
-      case IREM: rem<int32_t>(); break;
-      case LREM: rem<int64_t>(); break;
-      case FREM: rem<float>(); break;
-      case DREM: rem<double>(); break;
+      case IDIV: WITH_EXCEPTION_CHECK(div<int32_t>()); break;
+      case LDIV: WITH_EXCEPTION_CHECK(div<int64_t>()); break;
+      case FDIV: WITH_EXCEPTION_CHECK(div<float>()); break;
+      case DDIV: WITH_EXCEPTION_CHECK(div<double>()); break;
+      case IREM: WITH_EXCEPTION_CHECK(rem<int32_t>()); break;
+      case LREM: WITH_EXCEPTION_CHECK(rem<int64_t>()); break;
+      case FREM: WITH_EXCEPTION_CHECK(rem<float>()); break;
+      case DREM: WITH_EXCEPTION_CHECK(rem<double>()); break;
       case INEG: neg<int32_t>(); break;
       case LNEG: neg<int64_t>(); break;
       case FNEG: neg<float>(); break;
@@ -324,10 +363,10 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       case IXOR: simpleOp<int32_t, std::bit_xor<int32_t>>(); break;
       case LXOR: simpleOp<int64_t, std::bit_xor<int64_t>>(); break;
       case IINC: {
-        types::u1 index = frame.readU1();
-        auto constValue = static_cast<int32_t>(std::bit_cast<int8_t>(frame.readU1()));
+        types::u1 index = mCurrentFrame->readU1();
+        auto constValue = static_cast<int32_t>(std::bit_cast<int8_t>(mCurrentFrame->readU1()));
 
-        frame.storeValue<int32_t>(index, frame.loadValue<int32_t>(index) + constValue);
+        mCurrentFrame->storeValue<int32_t>(index, mCurrentFrame->loadValue<int32_t>(index) + constValue);
 
         break;
       }
@@ -342,10 +381,10 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       case L2D: castInteger<int64_t, double>(); break;
       case F2I: castFloatToInt<float, int32_t>(); break;
       case F2L: castFloatToInt<float, int64_t>(); break;
-      case F2D: frame.pushOperand<double>(frame.popOperand<float>()); break;
+      case F2D: mCurrentFrame->pushOperand<double>(mCurrentFrame->popOperand<float>()); break;
       case D2I: castFloatToInt<double, int32_t>(); break;
       case D2L: castFloatToInt<double, int64_t>(); break;
-      case D2F: frame.pushOperand<float>(static_cast<float>(frame.popOperand<double>())); break;
+      case D2F: mCurrentFrame->pushOperand<float>(static_cast<float>(mCurrentFrame->popOperand<double>())); break;
       case I2B: castInteger<int32_t, int8_t>(); break;
       case I2C: castInteger<int32_t, char16_t>(); break;
       case I2S: castInteger<int32_t, int16_t>(); break;
@@ -375,10 +414,10 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       case IF_ACMPEQ: binaryJumpIf<Instance*, std::equal_to<Instance*>>(); break;
       case IF_ACMPNE: binaryJumpIf<Instance*, std::not_equal_to<Instance*>>(); break;
       case GOTO: {
-        int64_t opcodePos = frame.programCounter() - 1;
-        auto offset = std::bit_cast<int16_t>(frame.readU2());
+        int64_t opcodePos = mCurrentFrame->programCounter() - 1;
+        auto offset = std::bit_cast<int16_t>(mCurrentFrame->readU2());
 
-        frame.set(opcodePos + offset);
+        mCurrentFrame->set(opcodePos + offset);
         break;
       }
       // The `jsr` and `ret` instructions are deprecated, we're not going to support them
@@ -389,258 +428,186 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       //==--------------------------------------------------------------------==
       // Returns
       //==--------------------------------------------------------------------==
-      case IRETURN: return Value::from<int32_t>(frame.popOperand<int32_t>());
-      case LRETURN: return Value::from<int64_t>(frame.popOperand<int64_t>());
-      case FRETURN: return Value::from<float>(frame.popOperand<float>());
-      case DRETURN: return Value::from<double>(frame.popOperand<double>());
-      case ARETURN: return Value::from<Instance*>(frame.popOperand<Instance*>());
+      // TODO: This can throw IllegalMonitorStateException
+      case IRETURN: return Value::from<int32_t>(mCurrentFrame->popOperand<int32_t>());
+      case LRETURN: return Value::from<int64_t>(mCurrentFrame->popOperand<int64_t>());
+      case FRETURN: return Value::from<float>(mCurrentFrame->popOperand<float>());
+      case DRETURN: return Value::from<double>(mCurrentFrame->popOperand<double>());
+      case ARETURN: return Value::from<Instance*>(mCurrentFrame->popOperand<Instance*>());
       case RETURN: return std::nullopt;
       //==--------------------------------------------------------------------==
       // Field manipulation
       //==--------------------------------------------------------------------==
-      case GETSTATIC: {
-        auto index = frame.readU2();
-        const JField* field = runtimeConstantPool.getFieldRef(index);
-
-        JClass* klass = field->getClass();
-        klass->initialize(mThread);
-
-        Value value = klass->getStaticFieldValue(field->offset());
-        frame.pushGenericOperand(value);
-
-        break;
-      }
-      case PUTSTATIC: {
-        auto index = frame.readU2();
-        const JField* field = runtimeConstantPool.getFieldRef(index);
-
-        JClass* klass = field->getClass();
-        klass->initialize(mThread);
-
-        klass->setStaticFieldValue(field->offset(), frame.popGenericOperand());
-
-        break;
-      }
-      case GETFIELD: {
-        types::u2 index = frame.readU2();
-        const JField* field = runtimeConstantPool.getFieldRef(index);
-        auto objectRef = frame.popOperand<Instance*>();
-
-        if (objectRef == nullptr) {
-          mThread.throwException(u"java/lang/NullPointerException");
-          break;
-        }
-
-        assert(objectRef->getClass()->isInstanceOf(field->getClass()));
-
-        auto& fieldType = field->fieldType();
-        fieldType.map([&]<PrimitiveType Type>() {
-          using T = typename PrimitiveTypeTraits<Type>::Representation;
-          auto result = objectRef->getFieldValue<T>(field->name(), field->descriptor());
-          frame.pushOperand<T>(result);
-        }, [&](types::JStringRef) {
-          auto result = objectRef->getFieldValue<Instance*>(field->name(), field->descriptor());
-          frame.pushOperand(result);
-        }, [&](const ArrayType&) {
-          auto result = objectRef->getFieldValue<Instance*>(field->name(), field->descriptor());
-          frame.pushOperand(result);
-        });
-        break;
-      }
-      case PUTFIELD: {
-        auto index = frame.readU2();
-        auto field = runtimeConstantPool.getFieldRef(index);
-
-        Value value = frame.popGenericOperand();
-        auto objectRef = frame.popOperand<Instance*>();
-
-        if (objectRef == nullptr) {
-          mThread.throwException(u"java/lang/NullPointerException");
-          break;
-        }
-
-        assert(objectRef->getClass()->isInstanceOf(field->getClass()));
-
-        field->fieldType().map([&]<PrimitiveType Type>() {
-          using T = typename PrimitiveTypeTraits<Type>::Representation;
-          if constexpr (StoredAsInt<T>) {
-            objectRef->setFieldValue<T>(field->name(), field->descriptor(), static_cast<T>(value.get<int32_t>()));
-          } else {
-            objectRef->setFieldValue<T>(field->name(), field->descriptor(), value.get<T>());
-          }
-        }, [&](types::JStringRef) {
-          objectRef->setFieldValue<Instance*>(field->name(), field->descriptor(), value.get<Instance*>());
-        }, [&](const ArrayType&) {
-          objectRef->setFieldValue<Instance*>(field->name(), field->descriptor(), value.get<Instance*>());
-        });
-
-        break;
-      }
+      case GETSTATIC: WITH_EXCEPTION_CHECK(getStatic(runtimeConstantPool)) break;
+      case PUTSTATIC: WITH_EXCEPTION_CHECK(putStatic(runtimeConstantPool)) break;
+      case GETFIELD: WITH_EXCEPTION_CHECK(getField(runtimeConstantPool)) break;
+      case PUTFIELD: WITH_EXCEPTION_CHECK(putField(runtimeConstantPool)) break;
       //==--------------------------------------------------------------------==
       // Invocations
       //==--------------------------------------------------------------------==
-      case INVOKEVIRTUAL: {
-        auto index = frame.readU2();
-        const JMethod* baseMethod = runtimeConstantPool.getMethodRef(index);
+      case INVOKEVIRTUAL:
+        WITH_EXCEPTION_CHECK({
+          auto index = mCurrentFrame->readU2();
+          const JMethod* baseMethod = runtimeConstantPool.getMethodRef(index);
 
-        int numArgs = baseMethod->descriptor().parameters().size();
-        auto objectRef = frame.peek(numArgs).get<Instance*>();
-        if (objectRef == nullptr) {
-          mThread.throwException(u"java/lang/NullPointerException");
-          break;
-        }
+          int numArgs = baseMethod->descriptor().parameters().size();
+          auto objectRef = mCurrentFrame->peek(numArgs).get<Instance*>();
+          if (objectRef == nullptr) {
+            mThread.throwException(u"java/lang/NullPointerException");
+          } else {
+            JClass* target = objectRef->getClass();
+            auto targetMethod = target->getVirtualMethod(baseMethod->name(), baseMethod->rawDescriptor());
 
-        JClass* target = objectRef->getClass();
-        auto targetMethod = target->getVirtualMethod(baseMethod->name(), baseMethod->rawDescriptor());
+            assert(targetMethod.has_value());
 
-        assert(targetMethod.has_value());
-
-        this->invoke(*targetMethod);
-
+            this->invoke(*targetMethod);
+          }
+        })
         break;
-      }
-      case INVOKESPECIAL: {
-        auto index = frame.readU2();
-        JMethod* method = runtimeConstantPool.getMethodRef(index);
+      case INVOKESPECIAL:
+        WITH_EXCEPTION_CHECK({
+          auto index = mCurrentFrame->readU2();
+          JMethod* method = runtimeConstantPool.getMethodRef(index);
 
-        this->invoke(method);
-
+          this->invoke(method);
+        })
         break;
-      }
-      case INVOKESTATIC: {
-        auto index = frame.readU2();
-        JMethod* method = runtimeConstantPool.getMethodRef(index);
-        assert(method->isStatic());
+      case INVOKESTATIC:
+        WITH_EXCEPTION_CHECK({
+          auto index = mCurrentFrame->readU2();
+          JMethod* method = runtimeConstantPool.getMethodRef(index);
+          assert(method->isStatic());
 
-        method->getClass()->initialize(mThread);
-        if (mThread.currentException() != nullptr) {
-          break;
-        }
-
-        // TODO: Initialization can fail with an exception - check before performing the invocation.
-        this->invoke(method);
-
+          method->getClass()->initialize(mThread);
+          // Initialization can fail with an exception, so only proceed if an exception did not occur
+          if (mThread.currentException() == nullptr) {
+            this->invoke(method);
+          }
+        })
         break;
-      }
-      case INVOKEINTERFACE: {
-        auto index = frame.readU2();
-        const JMethod* methodRef = runtimeConstantPool.getMethodRef(index);
+      case INVOKEINTERFACE:
+        WITH_EXCEPTION_CHECK({
+          auto index = mCurrentFrame->readU2();
+          const JMethod* methodRef = runtimeConstantPool.getMethodRef(index);
 
-        // Consume 'count'
-        frame.readU1();
-        // Consume '0'
-        frame.readU1();
+          // Consume 'count'
+          mCurrentFrame->readU1();
+          // Consume '0'
+          mCurrentFrame->readU1();
 
-        int numArgs = methodRef->descriptor().parameters().size();
-        Value objectRef = frame.peek(numArgs);
+          int numArgs = methodRef->descriptor().parameters().size();
+          Value objectRef = mCurrentFrame->peek(numArgs);
 
-        JClass* target = objectRef.get<Instance*>()->getClass();
-        auto method = target->getVirtualMethod(methodRef->name(), methodRef->rawDescriptor());
+          JClass* target = objectRef.get<Instance*>()->getClass();
+          auto method = target->getVirtualMethod(methodRef->name(), methodRef->rawDescriptor());
 
-        this->invoke(*method);
+          this->invoke(*method);
+        })
         break;
-      }
       case INVOKEDYNAMIC: notImplemented(opcode); break;
       //==--------------------------------------------------------------------==
       // OOP
       //==--------------------------------------------------------------------==
-      case NEW: {
-        auto index = frame.readU2();
-        auto className = frame.currentClass()->constantPool().getClassName(index);
+      case NEW:
+        WITH_EXCEPTION_CHECK({
+          auto index = mCurrentFrame->readU2();
+          auto className = mCurrentFrame->currentClass()->constantPool().getClassName(index);
 
-        auto klass = mThread.resolveClass(types::JString{className});
-        if (!klass) {
-          this->handleErrorAsException(klass.error());
-          break;
-        }
-
-        (*klass)->initialize(mThread);
-
-        if (auto instanceClass = (*klass)->asInstanceClass(); instanceClass != nullptr) {
-          Instance* instance = mThread.heap().allocate(instanceClass);
-          frame.pushOperand<Instance*>(instance);
-        } else {
-          // TODO: New with array class
-          geevm_panic("new called with array class");
-        }
-
-        break;
-      }
-      case NEWARRAY: newArray(); break;
-      case ANEWARRAY: newReferenceArray(); break;
-      case ARRAYLENGTH: {
-        ArrayInstance* arrayRef = frame.popOperand<Instance*>()->toArrayInstance();
-        frame.pushOperand<int32_t>(arrayRef->length());
-        break;
-      }
-      case ATHROW: {
-        auto exception = frame.popOperand<Instance*>();
-        mThread.throwException(exception);
-        break;
-      }
-      case CHECKCAST: {
-        types::u2 index = frame.readU2();
-        auto objectRef = frame.popOperand<Instance*>();
-        if (objectRef == nullptr) {
-          frame.pushOperand<Instance*>(objectRef);
-        } else {
-          auto klass = runtimeConstantPool.getClass(index);
+          auto klass = mThread.resolveClass(types::JString{className});
           if (!klass) {
             this->handleErrorAsException(klass.error());
             break;
           }
 
-          JClass* classToCheck = objectRef->getClass();
-          if (!classToCheck->isInstanceOf(*klass)) {
-            types::JString message = u"class " + classToCheck->javaClassName() + u" cannot be cast to class " + (*klass)->javaClassName();
-            mThread.throwException(u"java/lang/ClassCastException", message);
-          } else {
-            frame.pushOperand<Instance*>(objectRef);
-          }
-        }
+          (*klass)->initialize(mThread);
 
-        break;
-      }
-      case INSTANCEOF: {
-        auto index = frame.readU2();
-        ScopedGcRootRef<> objectRef = mThread.heap().gc().pin(frame.popOperand<Instance*>());
-        if (objectRef == nullptr) {
-          frame.pushOperand<int32_t>(0);
-        } else {
-          auto klass = runtimeConstantPool.getClass(index);
-          if (!klass) {
-            this->handleErrorAsException(klass.error());
-            break;
-          }
-
-          JClass* classToCheck = objectRef->getClass();
-          if (classToCheck->isInstanceOf(*klass)) {
-            frame.pushOperand<int32_t>(1);
+          if (auto instanceClass = (*klass)->asInstanceClass(); instanceClass != nullptr) {
+            Instance* instance = mThread.heap().allocate(instanceClass);
+            mCurrentFrame->pushOperand<Instance*>(instance);
           } else {
-            frame.pushOperand<int32_t>(0);
+            // TODO: New with array class
+            geevm_panic("new called with array class");
           }
-        }
+        })
         break;
-      }
-      case MONITORENTER: {
-        // FIXME
-        frame.popOperand<Instance*>();
+      case NEWARRAY: WITH_EXCEPTION_CHECK(newArray()); break;
+      case ANEWARRAY: WITH_EXCEPTION_CHECK(newReferenceArray()); break;
+      case ARRAYLENGTH:
+        WITH_EXCEPTION_CHECK({
+          ArrayInstance* arrayRef = mCurrentFrame->popOperand<Instance*>()->toArrayInstance();
+          mCurrentFrame->pushOperand<int32_t>(arrayRef->length());
+        })
         break;
-      }
-      case MONITOREXIT: {
-        // FIXME
-        frame.popOperand<Instance*>();
+      case ATHROW:
+        WITH_EXCEPTION_CHECK({
+          auto exception = mCurrentFrame->popOperand<Instance*>();
+          mThread.throwException(exception);
+        })
         break;
-      }
-      case WIDE: wide(static_cast<Opcode>(frame.readU1())); break;
-      case MULTIANEWARRAY: newMultiArray(); break;
+      case CHECKCAST:
+        WITH_EXCEPTION_CHECK({
+          types::u2 index = mCurrentFrame->readU2();
+          auto objectRef = mCurrentFrame->popOperand<Instance*>();
+          if (objectRef == nullptr) {
+            mCurrentFrame->pushOperand<Instance*>(objectRef);
+          } else {
+            auto klass = runtimeConstantPool.getClass(index);
+            if (!klass) {
+              this->handleErrorAsException(klass.error());
+            } else {
+              JClass* classToCheck = objectRef->getClass();
+              if (!classToCheck->isInstanceOf(*klass)) {
+                types::JString message = u"class " + classToCheck->javaClassName() + u" cannot be cast to class " + (*klass)->javaClassName();
+                mThread.throwException(u"java/lang/ClassCastException", message);
+              } else {
+                mCurrentFrame->pushOperand<Instance*>(objectRef);
+              }
+            }
+          }
+        })
+        break;
+      case INSTANCEOF:
+        WITH_EXCEPTION_CHECK({
+          auto index = mCurrentFrame->readU2();
+          ScopedGcRootRef<> objectRef = mThread.heap().gc().pin(mCurrentFrame->popOperand<Instance*>());
+          if (objectRef == nullptr) {
+            mCurrentFrame->pushOperand<int32_t>(0);
+          } else {
+            auto klass = runtimeConstantPool.getClass(index);
+            if (!klass) {
+              this->handleErrorAsException(klass.error());
+            } else {
+              JClass* classToCheck = objectRef->getClass();
+              if (classToCheck->isInstanceOf(*klass)) {
+                mCurrentFrame->pushOperand<int32_t>(1);
+              } else {
+                mCurrentFrame->pushOperand<int32_t>(0);
+              }
+            }
+          }
+        })
+        break;
+      case MONITORENTER:
+        WITH_EXCEPTION_CHECK({
+          // FIXME
+          mCurrentFrame->popOperand<Instance*>();
+        })
+        break;
+      case MONITOREXIT:
+        WITH_EXCEPTION_CHECK({
+          // FIXME
+          mCurrentFrame->popOperand<Instance*>();
+        })
+        break;
+      case WIDE: wide(static_cast<Opcode>(mCurrentFrame->readU1())); break;
+      case MULTIANEWARRAY: WITH_EXCEPTION_CHECK(newMultiArray()); break;
       case IFNULL: unaryJumpIf<Instance*, nullptr, std::equal_to<Instance*>>(); break;
       case IFNONNULL: unaryJumpIf<Instance*, nullptr, std::not_equal_to<Instance*>>(); break;
       case GOTO_W: {
-        int64_t opcodePos = frame.programCounter() - 1;
-        auto offset = std::bit_cast<int32_t>(frame.readU4());
+        int64_t opcodePos = mCurrentFrame->programCounter() - 1;
+        auto offset = std::bit_cast<int32_t>(mCurrentFrame->readU4());
 
-        frame.set(opcodePos + offset);
+        mCurrentFrame->set(opcodePos + offset);
         break;
       }
       case JSR_W:
@@ -653,20 +620,6 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         // Reserved opcodes
         break;
       default: GEEVM_UNREACHBLE("Unknown opcode");
-    }
-
-    // Handle exception
-    if (auto exception = mThread.currentException(); exception != nullptr) {
-      size_t pc = frame.programCounter() - 1;
-
-      auto newPc = this->tryHandleException(exception, runtimeConstantPool, code, pc);
-
-      if (newPc.has_value()) {
-        frame.set(newPc.value());
-        mThread.clearException();
-      } else {
-        return std::nullopt;
-      }
     }
   }
 
@@ -948,6 +901,83 @@ void DefaultInterpreter::compare()
   }
 }
 
+void DefaultInterpreter::getStatic(RuntimeConstantPool& runtimeConstantPool)
+{
+  auto index = mCurrentFrame->readU2();
+  const JField* field = runtimeConstantPool.getFieldRef(index);
+
+  JClass* klass = field->getClass();
+  klass->initialize(mThread);
+
+  Value value = klass->getStaticFieldValue(field->offset());
+  mCurrentFrame->pushGenericOperand(value);
+}
+
+void DefaultInterpreter::putStatic(RuntimeConstantPool& runtimeConstantPool)
+{
+  auto index = mCurrentFrame->readU2();
+  const JField* field = runtimeConstantPool.getFieldRef(index);
+
+  JClass* klass = field->getClass();
+  klass->initialize(mThread);
+  klass->setStaticFieldValue(field->offset(), mCurrentFrame->popGenericOperand());
+}
+
+void DefaultInterpreter::getField(RuntimeConstantPool& runtimeConstantPool)
+{
+  types::u2 index = mCurrentFrame->readU2();
+  const JField* field = runtimeConstantPool.getFieldRef(index);
+  auto objectRef = mCurrentFrame->popOperand<Instance*>();
+
+  if (objectRef == nullptr) {
+    mThread.throwException(u"java/lang/NullPointerException");
+  } else {
+    assert(objectRef->getClass()->isInstanceOf(field->getClass()));
+
+    auto& fieldType = field->fieldType();
+    fieldType.map([&]<PrimitiveType Type>() {
+      using T = typename PrimitiveTypeTraits<Type>::Representation;
+      auto result = objectRef->getFieldValue<T>(field->name(), field->descriptor());
+      mCurrentFrame->pushOperand<T>(result);
+    }, [&](types::JStringRef) {
+      auto result = objectRef->getFieldValue<Instance*>(field->name(), field->descriptor());
+      mCurrentFrame->pushOperand(result);
+    }, [&](const ArrayType&) {
+      auto result = objectRef->getFieldValue<Instance*>(field->name(), field->descriptor());
+      mCurrentFrame->pushOperand(result);
+    });
+  }
+}
+
+void DefaultInterpreter::putField(RuntimeConstantPool& runtimeConstantPool)
+{
+  auto index = mCurrentFrame->readU2();
+  auto field = runtimeConstantPool.getFieldRef(index);
+
+  Value value = mCurrentFrame->popGenericOperand();
+  auto objectRef = mCurrentFrame->popOperand<Instance*>();
+
+  if (objectRef == nullptr) {
+    mThread.throwException(u"java/lang/NullPointerException");
+    return;
+  }
+
+  assert(objectRef->getClass()->isInstanceOf(field->getClass()));
+
+  field->fieldType().map([&]<PrimitiveType Type>() {
+    using T = typename PrimitiveTypeTraits<Type>::Representation;
+    if constexpr (StoredAsInt<T>) {
+      objectRef->setFieldValue<T>(field->name(), field->descriptor(), static_cast<T>(value.get<int32_t>()));
+    } else {
+      objectRef->setFieldValue<T>(field->name(), field->descriptor(), value.get<T>());
+    }
+  }, [&](types::JStringRef) {
+    objectRef->setFieldValue<Instance*>(field->name(), field->descriptor(), value.get<Instance*>());
+  }, [&](const ArrayType&) {
+    objectRef->setFieldValue<Instance*>(field->name(), field->descriptor(), value.get<Instance*>());
+  });
+}
+
 void DefaultInterpreter::dup()
 {
   // TODO: Duplicate instead of pop / push
@@ -1195,18 +1225,18 @@ void DefaultInterpreter::lookupSwitch()
 {
   CallFrame& frame = currentFrame();
 
-  auto opcodePos = frame.programCounter() - 1;
-  while (frame.programCounter() % 4 != 0) {
-    frame.next();
+  auto opcodePos = mCurrentFrame->programCounter() - 1;
+  while (mCurrentFrame->programCounter() % 4 != 0) {
+    mCurrentFrame->next();
   }
 
-  int32_t defaultOffset = std::bit_cast<int32_t>(frame.readU4());
-  int32_t numPairs = std::bit_cast<int32_t>(frame.readU4());
+  int32_t defaultOffset = std::bit_cast<int32_t>(mCurrentFrame->readU4());
+  int32_t numPairs = std::bit_cast<int32_t>(mCurrentFrame->readU4());
 
   std::vector<std::pair<int32_t, int32_t>> pairs;
   for (int32_t i = 0; i < numPairs; i++) {
-    auto matchValue = frame.readU4();
-    auto offset = std::bit_cast<int32_t>(frame.readU4());
+    auto matchValue = mCurrentFrame->readU4();
+    auto offset = std::bit_cast<int32_t>(mCurrentFrame->readU4());
     pairs.emplace_back(matchValue, offset);
   }
 
@@ -1215,28 +1245,28 @@ void DefaultInterpreter::lookupSwitch()
 
   for (int32_t i = 0; i < numPairs; i++) {
     if (pairs[i].first == key) {
-      frame.set(opcodePos + pairs[i].second);
+      mCurrentFrame->set(opcodePos + pairs[i].second);
       matched = true;
       break;
     }
   }
 
   if (!matched) {
-    frame.set(opcodePos + defaultOffset);
+    mCurrentFrame->set(opcodePos + defaultOffset);
   }
 }
 
 void DefaultInterpreter::tableSwitch()
 {
   CallFrame& frame = currentFrame();
-  auto opcodePos = frame.programCounter() - 1;
-  while (frame.programCounter() % 4 != 0) {
-    frame.next();
+  auto opcodePos = mCurrentFrame->programCounter() - 1;
+  while (mCurrentFrame->programCounter() % 4 != 0) {
+    mCurrentFrame->next();
   }
 
-  auto defaultOffset = std::bit_cast<int32_t>(frame.readU4());
-  auto low = std::bit_cast<int32_t>(frame.readU4());
-  auto high = std::bit_cast<int32_t>(frame.readU4());
+  auto defaultOffset = std::bit_cast<int32_t>(mCurrentFrame->readU4());
+  auto low = std::bit_cast<int32_t>(mCurrentFrame->readU4());
+  auto high = std::bit_cast<int32_t>(mCurrentFrame->readU4());
   assert(low <= high);
 
   int32_t count = high - low + 1;
@@ -1245,16 +1275,16 @@ void DefaultInterpreter::tableSwitch()
   table.reserve(count);
 
   for (int32_t i = 0; i < count; i++) {
-    int32_t offset = std::bit_cast<int32_t>(frame.readU4());
+    int32_t offset = std::bit_cast<int32_t>(mCurrentFrame->readU4());
     table.push_back(offset);
   }
 
   auto index = currentFrame().popOperand<int32_t>();
   if (index < low || index > high) {
-    frame.set(opcodePos + defaultOffset);
+    mCurrentFrame->set(opcodePos + defaultOffset);
   } else {
     int32_t targetOffset = table.at(index - low);
-    frame.set(opcodePos + targetOffset);
+    mCurrentFrame->set(opcodePos + targetOffset);
   }
 }
 
