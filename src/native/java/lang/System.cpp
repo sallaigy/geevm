@@ -92,8 +92,8 @@ JNIEXPORT void JNICALL Java_java_lang_System_arraycopy(JNIEnv* env, jclass klass
 
       size_t elemSize = sourceElementTy.sizeOf();
 
-      auto srcBegin = reinterpret_cast<char*>(sourceArray->fieldsStart()) + elemSize * srcPos;
-      auto dstBegin = reinterpret_cast<char*>(targetArray->fieldsStart()) + elemSize * destPos;
+      auto srcBegin = reinterpret_cast<char*>(sourceArray->elementsStart()) + elemSize * srcPos;
+      auto dstBegin = reinterpret_cast<char*>(targetArray->elementsStart()) + elemSize * destPos;
 
       std::memmove(dstBegin, srcBegin, elemSize * length);
     } else {
