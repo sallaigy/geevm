@@ -56,11 +56,3 @@ ClassInstance* Instance::toClassInstance()
   assert(getClass()->className() == u"java/lang/Class");
   return static_cast<ClassInstance*>(this);
 }
-void* Instance::fieldsStart()
-{
-  return reinterpret_cast<char*>(this) + this->getClass()->headerSize();
-}
-const void* Instance::fieldsStart() const
-{
-  return reinterpret_cast<const char*>(this) + this->getClass()->headerSize();
-}

@@ -69,9 +69,6 @@ public:
     return static_cast<JavaArray<T>*>(this);
   }
 
-  void* fieldsStart();
-  const void* fieldsStart() const;
-
   int32_t hashCode();
 
 private:
@@ -108,6 +105,17 @@ public:
   int32_t length() const
   {
     return mLength;
+  }
+
+  /// Returns a pointer to the address where array elements start.
+  constexpr void* elementsStart()
+  {
+    return reinterpret_cast<char*>(this) + sizeof(ArrayInstance);
+  }
+
+  constexpr const void* elementsStart() const
+  {
+    return reinterpret_cast<const char*>(this) + sizeof(ArrayInstance);
   }
 
 private:
@@ -151,17 +159,17 @@ public:
   using const_iterator = const T*;
   const_iterator begin() const
   {
-    return reinterpret_cast<const T*>(this->fieldsStart());
+    return reinterpret_cast<const T*>(this->elementsStart());
   }
   const_iterator end() const
   {
-    return reinterpret_cast<const T*>(this->fieldsStart()) + length();
+    return reinterpret_cast<const T*>(this->elementsStart()) + length();
   }
 
 private:
   T* atIndex(size_t i)
   {
-    return reinterpret_cast<T*>(this->fieldsStart()) + i;
+    return reinterpret_cast<T*>(this->elementsStart()) + i;
   }
 };
 
