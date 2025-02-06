@@ -31,7 +31,7 @@ void Vm::initialize()
 
   if (!settings().noSystemInit) {
     auto initMethod = systemCls->getMethod(u"initPhase1", u"()V");
-    mMainThread->executeCall(*initMethod, {});
+    mMainThread->invokeWithArgs(*initMethod, {});
   }
 
   mHeap.gc().unlockGC();

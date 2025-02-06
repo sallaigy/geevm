@@ -55,6 +55,8 @@ public:
     return std::holds_alternative<types::JString>(mVariant) || mDimensions != 0;
   }
 
+  bool isCategoryTwo() const;
+
   std::size_t sizeOf() const;
 
   /// Map the contents of this descriptor using one of the provided mapper functions.
@@ -149,6 +151,8 @@ public:
   }
 
   types::JString formatAsJavaSignature(const types::JString& name) const;
+
+  size_t numParameterSlots() const;
 
 private:
   ReturnType mReturnType;

@@ -64,10 +64,8 @@ public:
 
   void returnToCaller(Value returnValue);
 
-  std::optional<Value> executeCall(JMethod* method, const std::vector<Value>& args);
-  std::optional<Value> executeNative(JMethod* method, CallFrame& frame, const std::vector<Value>& args);
-
   std::optional<Value> invoke(JMethod* method);
+  std::optional<Value> invokeWithArgs(JMethod* method, std::vector<Value> arguments);
 
   // Exception handling
   //==------------------------------------------------------------------------==
@@ -92,6 +90,10 @@ public:
   GcRootRef<Instance> addJniHandle(Instance* instance);
 
 private:
+  std::optional<Value> executeCall(JMethod* method, CallFrame* current, CallFrame& newFrame);
+  std::optional<Value> executeNative(JMethod* method, CallFrame& frame, std::vector<Value> arguments);
+  void handleCalleeException(CallFrame* callerFrame);
+
   void run();
   void prepareNativeFrame();
   void releaseNativeFrame();
@@ -103,7 +105,11 @@ private:
   std::vector<Value> mArguments;
   GcRootRef<Instance> mThreadInstance;
   std::list<CallFrame> mCallStack;
+
+  // Exceptions
   GcRootRef<Instance> mCurrentException;
+  // True if the thread is executing an uncaught exception handler
+  bool mHasUncaughtException = false;
 
   // List of JNI references
   std::vector<std::vector<GcRootRef<>>> mJniHandles;

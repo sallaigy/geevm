@@ -11,4 +11,4 @@ configure_file(
   @ONLY
 )
 
-add_test(NAME check COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/run_lit.py "${CMAKE_CURRENT_BINARY_DIR}" -v)
+add_test(NAME check COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/run_lit.py "${CMAKE_CURRENT_BINARY_DIR}" -v --timeout 30)

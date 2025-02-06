@@ -4,70 +4,86 @@
 #include "class_file/Descriptor.h"
 #include "common/JvmTypes.h"
 
-#include <variant>
-
 namespace geevm
 {
 
+// Helper template
+template<std::size_t N>
+struct unsigned_type_of_length
+{
+};
+
+template<>
+struct unsigned_type_of_length<8>
+{
+  using type = std::uint8_t;
+};
+
+template<>
+struct unsigned_type_of_length<16>
+{
+  using type = std::uint16_t;
+};
+
+template<>
+struct unsigned_type_of_length<32>
+{
+  using type = std::uint32_t;
+};
+
+template<>
+struct unsigned_type_of_length<64>
+{
+  using type = std::uint64_t;
+};
+
 class Value
 {
-  using Storage = std::variant<std::int8_t, std::int16_t, std::int32_t, std::int64_t, char16_t, float, double, Instance*>;
+  struct Storage
+  {
+    std::uint64_t value;
+    bool isReference;
+  };
 
-  template<JvmType T>
-  explicit Value(T value)
-    : mStorage(value)
+public:
+  Value(std::uint64_t value, bool isReference)
+    : mStorage(value, isReference)
   {
   }
 
-public:
+  Value(const Value& other) = default;
+  Value& operator=(const Value& other) = default;
+
   template<JvmType T>
   static Value from(T value)
   {
-    return Value(value);
+    using U = typename unsigned_type_of_length<sizeof(T) * CHAR_BIT>::type;
+    U valueAsU = std::bit_cast<U>(value);
+
+    if constexpr (std::is_same_v<T, Instance*>) {
+      return Value(static_cast<uint64_t>(valueAsU), true);
+    } else {
+      return Value(static_cast<uint64_t>(valueAsU), false);
+    }
+  }
+
+  template<JvmType T>
+  static Value fromRaw(uint64_t rawValue)
+  {
+    if constexpr (std::is_same_v<T, Instance*>) {
+      return Value::from<Instance*>(std::bit_cast<Instance*>(rawValue));
+    } else {
+      using U = typename unsigned_type_of_length<sizeof(T) * CHAR_BIT>::type;
+      return Value::from<T>(std::bit_cast<T>(static_cast<U>(rawValue)));
+    }
   }
 
   template<JvmType T>
   T get() const
   {
-    if constexpr (StoredAsInt<T>) {
-      if (std::holds_alternative<int32_t>(mStorage)) {
-        return static_cast<T>(std::get<int32_t>(mStorage));
-      }
-    }
-    return std::get<T>(mStorage);
-  }
+    using U = typename unsigned_type_of_length<sizeof(T) * CHAR_BIT>::type;
 
-  bool operator==(const Value&) const = default;
-
-  Value widenToInt()
-  {
-    return std::visit([this](auto&& arg) -> Value {
-      using T = std::decay_t<decltype(arg)>;
-      if constexpr (StoredAsInt<T>) {
-        return Value::from(static_cast<int32_t>(arg));
-      } else {
-        return *this;
-      }
-    }, mStorage);
-  }
-
-public:
-  Value(const Value& other) = default;
-  Value& operator=(const Value& other) = default;
-
-  bool isCategoryTwo() const
-  {
-    return std::holds_alternative<int64_t>(mStorage) || std::holds_alternative<double>(mStorage);
-  }
-
-  template<JvmType T>
-  std::optional<T> tryGet() const
-  {
-    if (std::holds_alternative<T>(mStorage)) {
-      return std::get<T>(mStorage);
-    }
-
-    return std::nullopt;
+    return std::bit_cast<T>(static_cast<U>(mStorage.value));
   }
 
   static Value defaultValue(const FieldType& fieldType)
@@ -79,6 +95,11 @@ public:
     }, [](const ArrayType& array) {
       return Value::from<Instance*>(nullptr);
     });
+  }
+
+  std::pair<std::uint64_t, bool> toRaw() const
+  {
+    return std::make_pair(mStorage.value, mStorage.isReference);
   }
 
 private:
