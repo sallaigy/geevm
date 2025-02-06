@@ -225,14 +225,12 @@ std::optional<Value> NativeMethod::invoke(JavaThread& thread, const std::vector<
           argValues.push_back(jvalue{.d = current.get<double>()});
           argTypes.push_back(&ffi_type_double);
           actualArgs.push_back(&argValues.back().d);
-          argIdx++;
           break;
         }
         case PrimitiveType::Long: {
           argValues.push_back(jvalue{.j = current.get<int64_t>()});
           argTypes.push_back(&ffi_type_sint64);
           actualArgs.push_back(&argValues.back().j);
-          argIdx++;
           break;
         }
       }

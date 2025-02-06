@@ -145,7 +145,7 @@ void JClass::initialize(JavaThread& thread)
 
     auto clsInit = mMethods.find(NameAndDescriptor{u"<clinit>", u"()V"});
     if (clsInit != mMethods.end()) {
-      thread.executeCall(clsInit->second.get(), {});
+      thread.invokeWithArgs(clsInit->second.get(), {});
     }
   }
 

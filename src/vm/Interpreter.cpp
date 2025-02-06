@@ -100,6 +100,8 @@ private:
     }
   };
 
+  void invokeVirtual(RuntimeConstantPool& runtimeConstantPool);
+
   void getStatic(RuntimeConstantPool& runtimeConstantPool);
   void putStatic(RuntimeConstantPool& runtimeConstantPool);
   void getField(RuntimeConstantPool& runtimeConstantPool);
@@ -167,11 +169,10 @@ bool DefaultInterpreter::checkException(RuntimeConstantPool& runtimeConstantPool
 
 std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t startPc)
 {
-  bool hasNext = true;
   mCurrentFrame = &mThread.currentFrame();
   RuntimeConstantPool& runtimeConstantPool = mCurrentFrame->currentClass()->runtimeConstantPool();
 
-  while (hasNext) {
+  while (true) {
     Opcode opcode = mCurrentFrame->next();
 
     switch (opcode) {
@@ -303,11 +304,8 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
         break;
       }
       case POP2: {
-        Value value = mCurrentFrame->popGenericOperand();
-        if (!value.isCategoryTwo()) {
-          mCurrentFrame->popGenericOperand();
-        }
-
+        mCurrentFrame->popGenericOperand();
+        mCurrentFrame->popGenericOperand();
         break;
       }
       case DUP: dup(); break;
@@ -445,25 +443,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       //==--------------------------------------------------------------------==
       // Invocations
       //==--------------------------------------------------------------------==
-      case INVOKEVIRTUAL:
-        WITH_EXCEPTION_CHECK({
-          auto index = mCurrentFrame->readU2();
-          const JMethod* baseMethod = runtimeConstantPool.getMethodRef(index);
-
-          int numArgs = baseMethod->descriptor().parameters().size();
-          auto objectRef = mCurrentFrame->peek(numArgs).get<Instance*>();
-          if (objectRef == nullptr) {
-            mThread.throwException(u"java/lang/NullPointerException");
-          } else {
-            JClass* target = objectRef->getClass();
-            auto targetMethod = target->getVirtualMethod(baseMethod->name(), baseMethod->rawDescriptor());
-
-            assert(targetMethod.has_value());
-
-            this->invoke(*targetMethod);
-          }
-        })
-        break;
+      case INVOKEVIRTUAL: WITH_EXCEPTION_CHECK(invokeVirtual(runtimeConstantPool)) break;
       case INVOKESPECIAL:
         WITH_EXCEPTION_CHECK({
           auto index = mCurrentFrame->readU2();
@@ -496,9 +476,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
           mCurrentFrame->readU1();
 
           int numArgs = methodRef->descriptor().parameters().size();
-          Value objectRef = mCurrentFrame->peek(numArgs);
-
-          JClass* target = objectRef.get<Instance*>()->getClass();
+          JClass* target = mCurrentFrame->peek<Instance*>(numArgs)->getClass();
           auto method = target->getVirtualMethod(methodRef->name(), methodRef->rawDescriptor());
 
           this->invoke(*method);
@@ -680,7 +658,12 @@ void DefaultInterpreter::invoke(JMethod* method)
   assert((method->isVoid() || mThread.currentException() != nullptr) || returnValue.has_value());
 
   if (returnValue.has_value()) {
-    mThread.currentFrame().pushGenericOperand(*returnValue);
+    if (!method->isVoid()) {
+      mThread.currentFrame().pushGenericOperand(returnValue->toRaw().first, returnValue->toRaw().second);
+      if (method->descriptor().returnType().getType().isCategoryTwo()) {
+        mThread.currentFrame().pushGenericOperand(0, false);
+      }
+    }
   }
 }
 
@@ -901,6 +884,25 @@ void DefaultInterpreter::compare()
   }
 }
 
+void DefaultInterpreter::invokeVirtual(RuntimeConstantPool& runtimeConstantPool)
+{
+  auto index = mCurrentFrame->readU2();
+  const JMethod* baseMethod = runtimeConstantPool.getMethodRef(index);
+
+  int numArgs = baseMethod->descriptor().numParameterSlots();
+  auto objectRef = mCurrentFrame->peek<Instance*>(numArgs);
+  if (objectRef == nullptr) {
+    mThread.throwException(u"java/lang/NullPointerException");
+  } else {
+    JClass* target = objectRef->getClass();
+    auto targetMethod = target->getVirtualMethod(baseMethod->name(), baseMethod->rawDescriptor());
+
+    assert(targetMethod.has_value());
+
+    this->invoke(*targetMethod);
+  }
+}
+
 void DefaultInterpreter::getStatic(RuntimeConstantPool& runtimeConstantPool)
 {
   auto index = mCurrentFrame->readU2();
@@ -910,7 +912,10 @@ void DefaultInterpreter::getStatic(RuntimeConstantPool& runtimeConstantPool)
   klass->initialize(mThread);
 
   Value value = klass->getStaticFieldValue(field->offset());
-  mCurrentFrame->pushGenericOperand(value);
+  mCurrentFrame->pushGenericOperand(value.toRaw().first, value.toRaw().second);
+  if (field->fieldType().isCategoryTwo()) {
+    mCurrentFrame->pushGenericOperand(0, false);
+  }
 }
 
 void DefaultInterpreter::putStatic(RuntimeConstantPool& runtimeConstantPool)
@@ -920,7 +925,13 @@ void DefaultInterpreter::putStatic(RuntimeConstantPool& runtimeConstantPool)
 
   JClass* klass = field->getClass();
   klass->initialize(mThread);
-  klass->setStaticFieldValue(field->offset(), mCurrentFrame->popGenericOperand());
+
+  if (field->fieldType().isCategoryTwo()) {
+    mCurrentFrame->popGenericOperand();
+  }
+  auto value = mCurrentFrame->popGenericOperand();
+
+  klass->setStaticFieldValue(field->offset(), value);
 }
 
 void DefaultInterpreter::getField(RuntimeConstantPool& runtimeConstantPool)
@@ -954,6 +965,9 @@ void DefaultInterpreter::putField(RuntimeConstantPool& runtimeConstantPool)
   auto index = mCurrentFrame->readU2();
   auto field = runtimeConstantPool.getFieldRef(index);
 
+  if (field->fieldType().isCategoryTwo()) {
+    mCurrentFrame->popGenericOperand();
+  }
   Value value = mCurrentFrame->popGenericOperand();
   auto objectRef = mCurrentFrame->popOperand<Instance*>();
 
@@ -980,121 +994,75 @@ void DefaultInterpreter::putField(RuntimeConstantPool& runtimeConstantPool)
 
 void DefaultInterpreter::dup()
 {
-  // TODO: Duplicate instead of pop / push
   auto value = currentFrame().popGenericOperand();
-  currentFrame().pushGenericOperand(value);
-  currentFrame().pushGenericOperand(value);
+  currentFrame().pushGenericOperand(value.toRaw().first, value.toRaw().second);
+  currentFrame().pushGenericOperand(value.toRaw().first, value.toRaw().second);
 }
 
 void DefaultInterpreter::dupX1()
 {
-  Value value1 = currentFrame().popGenericOperand();
-  Value value2 = currentFrame().popGenericOperand();
+  auto value1 = currentFrame().popGenericOperand();
+  auto value2 = currentFrame().popGenericOperand();
 
-  currentFrame().pushGenericOperand(value1);
-  currentFrame().pushGenericOperand(value2);
-  currentFrame().pushGenericOperand(value1);
+  currentFrame().pushGenericOperand(value1.toRaw().first, value1.toRaw().second);
+  currentFrame().pushGenericOperand(value2.toRaw().first, value2.toRaw().second);
+  currentFrame().pushGenericOperand(value1.toRaw().first, value1.toRaw().second);
 }
 
 void DefaultInterpreter::dupX2()
 {
-  Value value1 = currentFrame().popGenericOperand();
-  Value value2 = currentFrame().popGenericOperand();
-  if (value2.isCategoryTwo()) {
-    currentFrame().pushGenericOperand(value1);
-    currentFrame().pushGenericOperand(value2);
-    currentFrame().pushGenericOperand(value1);
-  } else {
-    Value value3 = currentFrame().popGenericOperand();
-    currentFrame().pushGenericOperand(value1);
-    currentFrame().pushGenericOperand(value3);
-    currentFrame().pushGenericOperand(value2);
-    currentFrame().pushGenericOperand(value1);
-  }
+  auto value1 = currentFrame().popGenericOperand();
+  auto value2 = currentFrame().popGenericOperand();
+  auto value3 = currentFrame().popGenericOperand();
+  currentFrame().pushGenericOperand(value1.toRaw().first, value1.toRaw().second);
+  currentFrame().pushGenericOperand(value3.toRaw().first, value3.toRaw().second);
+  currentFrame().pushGenericOperand(value2.toRaw().first, value2.toRaw().second);
+  currentFrame().pushGenericOperand(value1.toRaw().first, value1.toRaw().second);
 }
 
 void DefaultInterpreter::dup2()
 {
-  Value value1 = currentFrame().popGenericOperand();
-  if (value1.isCategoryTwo()) {
-    currentFrame().pushGenericOperand(value1);
-    currentFrame().pushGenericOperand(value1);
-  } else {
-    Value value2 = currentFrame().popGenericOperand();
-    currentFrame().pushGenericOperand(value2);
-    currentFrame().pushGenericOperand(value1);
-    currentFrame().pushGenericOperand(value2);
-    currentFrame().pushGenericOperand(value1);
-  }
+  auto value1 = currentFrame().popGenericOperand();
+  auto value2 = currentFrame().popGenericOperand();
+  currentFrame().pushGenericOperand(value2.toRaw().first, value2.toRaw().second);
+  currentFrame().pushGenericOperand(value1.toRaw().first, value1.toRaw().second);
+  currentFrame().pushGenericOperand(value2.toRaw().first, value2.toRaw().second);
+  currentFrame().pushGenericOperand(value1.toRaw().first, value1.toRaw().second);
 }
 
 void DefaultInterpreter::dup2X1()
 {
-  Value value1 = currentFrame().popGenericOperand();
-  Value value2 = currentFrame().popGenericOperand();
-  if (value1.isCategoryTwo()) {
-    currentFrame().pushGenericOperand(value1);
-    currentFrame().pushGenericOperand(value2);
-    currentFrame().pushGenericOperand(value1);
-  } else {
-    Value value3 = currentFrame().popGenericOperand();
-    currentFrame().pushGenericOperand(value2);
-    currentFrame().pushGenericOperand(value1);
-    currentFrame().pushGenericOperand(value3);
-    currentFrame().pushGenericOperand(value2);
-    currentFrame().pushGenericOperand(value1);
-  }
+  auto value1 = currentFrame().popGenericOperand();
+  auto value2 = currentFrame().popGenericOperand();
+  auto value3 = currentFrame().popGenericOperand();
+  currentFrame().pushGenericOperand(value2.toRaw().first, value2.toRaw().second);
+  currentFrame().pushGenericOperand(value1.toRaw().first, value1.toRaw().second);
+  currentFrame().pushGenericOperand(value3.toRaw().first, value3.toRaw().second);
+  currentFrame().pushGenericOperand(value2.toRaw().first, value2.toRaw().second);
+  currentFrame().pushGenericOperand(value1.toRaw().first, value1.toRaw().second);
 }
 
 void DefaultInterpreter::dup2X2()
 {
-  Value value1 = currentFrame().popGenericOperand();
-  Value value2 = currentFrame().popGenericOperand();
-  if (value1.isCategoryTwo()) {
-    if (value2.isCategoryTwo()) {
-      // Form 4
-      currentFrame().pushGenericOperand(value1);
-      currentFrame().pushGenericOperand(value2);
-      currentFrame().pushGenericOperand(value1);
-    } else {
-      // Form 2
-      Value value3 = currentFrame().popGenericOperand();
-      currentFrame().pushGenericOperand(value1);
-      currentFrame().pushGenericOperand(value3);
-      currentFrame().pushGenericOperand(value2);
-      currentFrame().pushGenericOperand(value1);
-    }
-  } else {
-    Value value3 = currentFrame().popGenericOperand();
-    if (value3.isCategoryTwo()) {
-      // Form 3
-      currentFrame().pushGenericOperand(value2);
-      currentFrame().pushGenericOperand(value1);
-      currentFrame().pushGenericOperand(value3);
-      currentFrame().pushGenericOperand(value2);
-      currentFrame().pushGenericOperand(value1);
-    } else {
-      // Form 1
-      Value value4 = currentFrame().popGenericOperand();
-      currentFrame().pushGenericOperand(value2);
-      currentFrame().pushGenericOperand(value1);
-      currentFrame().pushGenericOperand(value4);
-      currentFrame().pushGenericOperand(value3);
-      currentFrame().pushGenericOperand(value2);
-      currentFrame().pushGenericOperand(value1);
-    }
-  }
+  auto value1 = currentFrame().popGenericOperand();
+  auto value2 = currentFrame().popGenericOperand();
+  auto value3 = currentFrame().popGenericOperand();
+  auto value4 = currentFrame().popGenericOperand();
+  currentFrame().pushGenericOperand(value2.toRaw().first, value2.toRaw().second);
+  currentFrame().pushGenericOperand(value1.toRaw().first, value1.toRaw().second);
+  currentFrame().pushGenericOperand(value4.toRaw().first, value4.toRaw().second);
+  currentFrame().pushGenericOperand(value3.toRaw().first, value3.toRaw().second);
+  currentFrame().pushGenericOperand(value2.toRaw().first, value2.toRaw().second);
+  currentFrame().pushGenericOperand(value1.toRaw().first, value1.toRaw().second);
 }
 
 void DefaultInterpreter::swap()
 {
-  Value value1 = currentFrame().popGenericOperand();
-  Value value2 = currentFrame().popGenericOperand();
+  auto value1 = currentFrame().popGenericOperand();
+  auto value2 = currentFrame().popGenericOperand();
 
-  assert(!value1.isCategoryTwo() && !value2.isCategoryTwo());
-
-  currentFrame().pushGenericOperand(value1);
-  currentFrame().pushGenericOperand(value2);
+  currentFrame().pushGenericOperand(value1.toRaw().first, value1.toRaw().second);
+  currentFrame().pushGenericOperand(value2.toRaw().first, value2.toRaw().second);
 }
 
 void DefaultInterpreter::newArray()

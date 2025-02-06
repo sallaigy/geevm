@@ -192,3 +192,32 @@ types::JString ArrayType::className() const
 
   return buff;
 }
+
+bool FieldType::isCategoryTwo() const
+{
+  return this->map([]<PrimitiveType Type>() {
+    using T = typename PrimitiveTypeTraits<Type>::Representation;
+    if constexpr (CategoryTwoJvmType<T>) {
+      return true;
+    } else {
+      return false;
+    }
+  }, [](types::JStringRef) {
+    return false;
+  }, [](const ArrayType&) {
+    return false;
+  });
+}
+
+size_t MethodDescriptor::numParameterSlots() const
+{
+  size_t count = 0;
+  for (const auto& param : this->parameters()) {
+    count++;
+    if (param.isCategoryTwo()) {
+      count++;
+    }
+  }
+
+  return count;
+}

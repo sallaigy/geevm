@@ -132,18 +132,18 @@ void GarbageCollector::performGarbageCollection()
   // Update local variables and the stack in threads
   for (JavaThread* thread : mVm.threads()) {
     for (CallFrame& frame : thread->callStack()) {
-      for (types::u2 i = 0; i < frame.locals().size(); i++) {
-        if (auto object = frame.locals()[i].tryGet<Instance*>(); object) {
-          Instance* copy = this->copyObject(*object, map);
-          frame.storeValue(i, copy);
-        }
+      if (frame.currentMethod()->isNative()) {
+        continue;
       }
 
-      for (types::u2 i = 0; i < frame.operandStack().size(); i++) {
-        if (auto object = frame.operandStack()[i].tryGet<Instance*>(); object) {
-          Instance* copy = this->copyObject(*object, map);
-          frame.replaceStackValue(i, Value::from(copy));
-        }
+      for (auto [i, object] : frame.referencesInLocals()) {
+        auto* copy = this->copyObject(object, map);
+        frame.storeValue(i, copy);
+      }
+
+      for (auto [i, object] : frame.referencesOnStack()) {
+        auto* copy = this->copyObject(object, map);
+        frame.replaceStackValue(i, copy);
       }
     }
   }

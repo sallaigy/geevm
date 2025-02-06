@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <ranges>
 
 using namespace geevm;
 
@@ -40,7 +41,7 @@ void JavaThread::start(JMethod* method, std::vector<Value> arguments)
 
 void JavaThread::run()
 {
-  this->executeCall(mMethod, mArguments);
+  this->invokeWithArgs(mMethod, mArguments);
 }
 
 JavaHeap& JavaThread::heap()
@@ -55,50 +56,99 @@ JvmExpected<JClass*> JavaThread::resolveClass(const types::JString& name)
 
 std::optional<Value> JavaThread::invoke(JMethod* method)
 {
-  CallFrame& current = currentFrame();
-  std::vector<Value> args;
-
-  for (int i = 0; i < method->descriptor().parameters().size(); i++) {
-    Value value = current.popGenericOperand();
-    args.push_back(value);
-    if (value.isCategoryTwo()) {
-      args.push_back(value);
-    }
-  }
-
-  if (!method->isStatic()) {
-    args.push_back(Value::from(current.popOperand<Instance*>()));
-  }
-
-  std::ranges::reverse(args);
-
-  return this->executeCall(method, args);
-}
-
-std::optional<Value> JavaThread::executeCall(JMethod* method, const std::vector<Value>& args)
-{
   CallFrame* current = mCallStack.empty() ? nullptr : &mCallStack.back();
-  CallFrame& frame = mCallStack.emplace_back(method, current);
+  CallFrame* newFrame = &mCallStack.emplace_back(method, current);
 
   std::optional<Value> returnValue;
-  if (method->isNative()) {
-    this->prepareNativeFrame();
-    returnValue = this->executeNative(method, frame, args);
-    this->releaseNativeFrame();
+
+  if (!method->isNative()) {
+    size_t numSlots = method->descriptor().numParameterSlots();
+    if (!method->isStatic()) {
+      numSlots += 1;
+    }
+    current->prepareCall(*newFrame, numSlots);
+
+    returnValue = this->executeCall(method, current, *newFrame);
   } else {
-    for (int i = 0; i < args.size(); ++i) {
-      frame.storeGenericValue(i, args[i]);
+    std::vector<Value> args;
+    for (const auto& param : std::ranges::reverse_view(method->descriptor().parameters())) {
+      if (param.isCategoryTwo()) {
+        current->popGenericOperand();
+      }
+      args.push_back(current->popGenericOperand());
     }
 
-    auto interpreter = createDefaultInterpreter(*this);
-    returnValue = interpreter->execute(method->getCode(), 0);
+    if (!method->isStatic()) {
+      args.push_back(current->popGenericOperand());
+    }
+
+    assert(method->isStatic() ? method->descriptor().parameters().size() == args.size() : method->descriptor().parameters().size() == args.size() - 1);
+    std::ranges::reverse(args);
+
+    returnValue = this->executeNative(method, *newFrame, args);
   }
 
   mCallStack.pop_back();
+  this->handleCalleeException(current);
+
+  return returnValue;
+}
+
+std::optional<Value> JavaThread::invokeWithArgs(JMethod* method, std::vector<Value> arguments)
+{
+  CallFrame* current = mCallStack.empty() ? nullptr : &mCallStack.back();
+  CallFrame* newFrame = &mCallStack.emplace_back(method, current);
+
+  std::optional<Value> returnValue;
+  if (method->isNative()) {
+    returnValue = this->executeNative(method, *newFrame, arguments);
+  } else {
+    uint16_t argIndex = 0;
+    uint16_t instanceCallOffset = 0;
+    if (!method->isStatic()) {
+      newFrame->storeValue<Instance*>(0, arguments[0].get<Instance*>());
+      argIndex += 1;
+      instanceCallOffset = 1;
+    }
+
+    for (size_t i = 0; i < method->descriptor().parameters().size(); ++i) {
+      auto& param = method->descriptor().parameters()[i];
+      newFrame->storeGenericValue(argIndex, arguments[i + instanceCallOffset].toRaw().first, arguments[i].toRaw().second);
+      argIndex += 1;
+      if (param.isCategoryTwo()) {
+        argIndex += 1;
+      }
+    }
+
+    returnValue = this->executeCall(method, current, *newFrame);
+  }
+
+  mCallStack.pop_back();
+  this->handleCalleeException(current);
+
+  return returnValue;
+}
+
+std::optional<Value> JavaThread::executeCall(JMethod* method, CallFrame* current, CallFrame& newFrame)
+{
+  std::optional<Value> returnValue;
+  auto interpreter = createDefaultInterpreter(*this);
+
+  return interpreter->execute(method->getCode(), 0);
+}
+
+void JavaThread::handleCalleeException(CallFrame* callerFrame)
+{
   if (mCurrentException != nullptr) {
-    if (current != nullptr) {
-      current->clearOperandStack();
-      current->pushOperand<Instance*>(mCurrentException.get());
+    if (callerFrame != nullptr) {
+      auto callerMethod = callerFrame->currentMethod();
+      if (callerMethod->isNative() || callerMethod->getCode().exceptionTable().empty()) {
+        // The caller frame won't be able to handle the exception and pushing the exception to the
+        // operand stack is not safe. Let the caller of the caller handle it.
+        return;
+      }
+      callerFrame->clearOperandStack();
+      callerFrame->pushOperand<Instance*>(mCurrentException.get());
     } else {
       auto handler = mThreadInstance->getFieldValue<Instance*>(u"uncaughtExceptionHandler", u"Ljava/lang/Thread$UncaughtExceptionHandler;");
       auto handlerMethod = handler->getClass()->getVirtualMethod(u"uncaughtException", u"(Ljava/lang/Thread;Ljava/lang/Throwable;)V");
@@ -106,20 +156,24 @@ std::optional<Value> JavaThread::executeCall(JMethod* method, const std::vector<
 
       Instance* currentException = mCurrentException.get();
       this->clearException();
-      this->executeCall((*handlerMethod), {Value::from(handler), Value::from(mThreadInstance.get()), Value::from(currentException)});
+
+      mHasUncaughtException = true;
+      this->invokeWithArgs(*handlerMethod, {Value::from(handler), Value::from(mThreadInstance.get()), Value::from(currentException)});
+
       // TODO: We should exit with exit code 1, but some of our current tests would break
       std::exit(0);
     }
   }
-
-  return returnValue;
 }
 
-std::optional<Value> JavaThread::executeNative(JMethod* method, CallFrame& frame, const std::vector<Value>& args)
+std::optional<Value> JavaThread::executeNative(JMethod* method, CallFrame& frame, std::vector<Value> arguments)
 {
   auto nativeHandle = mVm.nativeMethods().getNativeMethod(method);
   if (nativeHandle) {
-    return nativeHandle->invoke(*this, args);
+    this->prepareNativeFrame();
+    std::optional<Value> returnValue = nativeHandle->invoke(*this, arguments);
+    this->releaseNativeFrame();
+    return returnValue;
   }
 
   types::JString name;
@@ -133,10 +187,17 @@ std::optional<Value> JavaThread::executeNative(JMethod* method, CallFrame& frame
 
 void JavaThread::throwException(Instance* exceptionInstance)
 {
+  if (mHasUncaughtException) {
+    // Exception while executing an uncaught exception handler - abort immediately
+    geevm_panic("Exception thrown while executing uncaught exception handler");
+  }
+
   assert(mCurrentException == nullptr && "There is already an exception instance");
   mCurrentException = mVm.heap().gc().pin(exceptionInstance).release();
-  currentFrame().clearOperandStack();
-  currentFrame().pushOperand(exceptionInstance);
+  if (!currentFrame().currentMethod()->isNative()) {
+    currentFrame().clearOperandStack();
+    currentFrame().pushOperand(exceptionInstance);
+  }
 }
 
 void JavaThread::throwException(const types::JString& name, const types::JString& message)
@@ -147,8 +208,8 @@ void JavaThread::throwException(const types::JString& name, const types::JString
     geevm_panic("failure to resolve exception class");
   }
 
-  GcRootRef<Instance> exceptionInstance = heap().gc().pin(heap().allocate((*klass)->asInstanceClass())).release();
-  GcRootRef<Instance> messageInstance = heap().intern(message);
+  GcRootRef<> exceptionInstance = heap().gc().pin(heap().allocate((*klass)->asInstanceClass())).release();
+  GcRootRef<> messageInstance = heap().intern(message);
   exceptionInstance->setFieldValue(u"detailMessage", u"Ljava/lang/String;", messageInstance.get());
 
   auto stackTrace = createStackTrace();
