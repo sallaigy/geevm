@@ -142,29 +142,31 @@ static void notImplemented(Opcode opcode)
 bool DefaultInterpreter::checkException(RuntimeConstantPool& runtimeConstantPool)
 {
   const Code& code = mCurrentFrame->currentMethod()->getCode();
-  // Handle exception
-  if (auto exception = mThread.currentException(); exception != nullptr) {
-    size_t pc = mCurrentFrame->programCounter() - 1;
+  auto exception = mThread.currentException();
+  assert(exception != nullptr);
+  size_t pc = mCurrentFrame->programCounter() - 1;
 
-    auto newPc = this->tryHandleException(exception, runtimeConstantPool, code, pc);
+  auto newPc = this->tryHandleException(exception, runtimeConstantPool, code, pc);
 
-    if (newPc.has_value()) {
-      mCurrentFrame->set(newPc.value());
-      mThread.clearException();
-    } else {
-      return true;
-    }
+  if (newPc.has_value()) {
+    mCurrentFrame->set(newPc.value());
+    mThread.clearException();
+  } else {
+    return true;
   }
+
   return false;
 }
 
-#define WITH_EXCEPTION_CHECK(INSTRUCTION)                               \
-  {                                                                     \
-    INSTRUCTION;                                                        \
-    bool uncaughtException = this->checkException(runtimeConstantPool); \
-    if (uncaughtException) {                                            \
-      return std::nullopt;                                              \
-    }                                                                   \
+#define WITH_EXCEPTION_CHECK(INSTRUCTION)                                 \
+  {                                                                       \
+    INSTRUCTION;                                                          \
+    if (mThread.currentException() != nullptr) [[unlikely]] {             \
+      bool uncaughtException = this->checkException(runtimeConstantPool); \
+      if (uncaughtException) {                                            \
+        return std::nullopt;                                              \
+      }                                                                   \
+    }                                                                     \
   }
 
 std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t startPc)
