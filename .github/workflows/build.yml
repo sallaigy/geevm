@@ -14,7 +14,7 @@ jobs:
       matrix:
         os: [ ubuntu-24.04 ]
         build_type: [ Debug, Release ]
-        cxx_compiler: [ g++ ]
+        cxx_compiler: [ g++-14 ]
         include:
           - os: ubuntu-24.04
             build_type: Debug
@@ -36,7 +36,8 @@ jobs:
       - name: Setup build dependencies
         run: |
           sudo apt update
-          sudo apt install libzip-dev zipcmp zipmerge ziptool ninja-build llvm
+          sudo add-apt-repository universe
+          sudo apt install gcc-14 libzip-dev zipcmp zipmerge ziptool ninja-build llvm
           sudo ln -s /usr/lib/llvm-18/bin/FileCheck /usr/bin/FileCheck
           sudo ln -s /usr/lib/llvm-18/bin/split-file /usr/bin/split-file
 
