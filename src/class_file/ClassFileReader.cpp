@@ -1,4 +1,5 @@
-#include "ClassFile.h"
+#include "class_file/ClassFile.h"
+#include "common/Encoding.h"
 
 #include <format>
 #include <fstream>
@@ -237,9 +238,10 @@ std::unique_ptr<ConstantPool> ClassFileReader::readConstantPool()
       case CONSTANT_Utf8: {
         types::u2 length = mStream.readU2();
         auto bytes = mStream.readVector(length);
-        types::JString utf8String(bytes.begin(), bytes.end());
+        std::string utf8String = decodeJvmUtf8(bytes);
+        types::JString utf16String = utf8ToUtf16(utf8String);
 
-        strings.push_back(utf8String);
+        strings.push_back(utf16String);
         entry.data.utf8String = static_cast<types::u2>(strings.size() - 1);
 
         break;

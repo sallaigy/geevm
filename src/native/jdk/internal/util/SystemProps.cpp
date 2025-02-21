@@ -1,3 +1,4 @@
+#include "common/Encoding.h"
 #include "vm/Heap.h"
 #include "vm/JniImplementation.h"
 #include "vm/Thread.h"
@@ -58,7 +59,7 @@ JNIEXPORT jobjectArray JNICALL Java_jdk_internal_util_SystemProps_00024Raw_vmPro
   GcRootRef<JavaArray<Instance*>> propsArray =
       thread.heap().gc().pin(thread.heap().allocateArray<Instance*>(targetClass->asArrayClass(), arrayLength)).release();
   propsArray->setArrayElement(0, thread.heap().intern(u"java.home").get());
-  propsArray->setArrayElement(1, thread.heap().intern(types::convertString(std::getenv("JDK17_PATH"))).get());
+  propsArray->setArrayElement(1, thread.heap().intern(utf8ToUtf16(std::getenv("JDK17_PATH"))).get());
 
   return JniTranslate<GcRootRef<JavaArray<Instance*>>, jobjectArray>{}(propsArray);
 }

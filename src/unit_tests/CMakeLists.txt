@@ -9,7 +9,7 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(gtest)
 include(GoogleTest)
 
-set(TEST_SOURCES ClassFileReaderTest.cpp DescriptorTest.cpp GarbageCollectorTest.cpp)
+set(TEST_SOURCES ClassFileReaderTest.cpp DescriptorTest.cpp GarbageCollectorTest.cpp EncodingTest.cpp)
 add_executable(geevm_test ${TEST_SOURCES})
 
 set(GEEVM_UNIT_TEST_FIXTURES_DIR ${CMAKE_SOURCE_DIR}/tests)
