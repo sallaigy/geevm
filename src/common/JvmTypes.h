@@ -19,9 +19,6 @@ using jchar = char16_t;
 using JString = std::u16string;
 using JStringRef = std::u16string_view;
 
-std::string convertJString(const JString& str);
-JString convertString(const std::string& str);
-
 void replaceAll(JString& str, JStringRef oldValue, JStringRef newValue);
 
 } // namespace geevm::types

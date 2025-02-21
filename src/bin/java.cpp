@@ -1,4 +1,5 @@
 #include "common/DynamicLibrary.h"
+#include "common/Encoding.h"
 #include "vm/Thread.h"
 #include "vm/Value.h"
 #include "vm/Vm.h"
@@ -26,7 +27,7 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  auto mainClassName = geevm::types::convertString(program.get<std::string>("mainclass"));
+  auto mainClassName = geevm::utf8ToUtf16(program.get<std::string>("mainclass"));
   std::ranges::replace(mainClassName, u'.', u'/');
 
   geevm::VmSettings settings;
@@ -73,7 +74,7 @@ int main(int argc, char* argv[])
       vm->heap().gc().pin(vm->heap().allocateArray<geevm::Instance*>((*strArrayCls)->asArrayClass(), programArgs.size()));
 
   for (int32_t i = 0; i < programArgs.size(); i++) {
-    auto utf16str = geevm::types::convertString(programArgs[i]);
+    auto utf16str = geevm::utf8ToUtf16(programArgs[i]);
     geevm::GcRootRef<> handle = vm->heap().intern(utf16str);
     argsArray->setArrayElement(i, handle.get());
   }

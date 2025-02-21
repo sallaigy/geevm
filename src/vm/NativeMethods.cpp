@@ -1,8 +1,8 @@
 #include "vm/NativeMethods.h"
-
-#include "JniImplementation.h"
-#include "VmUtils.h"
+#include "vm/JniImplementation.h"
+#include "vm/VmUtils.h"
 #include "common/DynamicLibrary.h"
+#include "common/Encoding.h"
 #include "vm/Frame.h"
 #include "vm/Thread.h"
 #include "vm/Vm.h"
@@ -28,7 +28,7 @@ std::optional<NativeMethod> NativeMethodRegistry::getNativeMethod(const JMethod*
   name += className;
   name += u"_" + method->name();
 
-  auto nameStr = types::convertJString(name);
+  auto nameStr = utf16ToUtf8(name);
   void* symbol = dl->findSymbol(nameStr.c_str());
 
   if (symbol != nullptr) {
@@ -62,7 +62,7 @@ std::optional<NativeMethod> NativeMethodRegistry::getNativeMethod(const JMethod*
     overloadedMethodName += mapParameter(parameter);
   }
 
-  auto overloadedNameStr = types::convertJString(u"Java_" + className + u"_" + overloadedMethodName);
+  auto overloadedNameStr = utf16ToUtf8(u"Java_" + className + u"_" + overloadedMethodName);
   symbol = dl->findSymbol(overloadedNameStr.c_str());
 
   if (symbol != nullptr) {

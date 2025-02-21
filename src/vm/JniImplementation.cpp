@@ -1,4 +1,5 @@
 #include "vm/JniImplementation.h"
+#include "common/Encoding.h"
 #include "vm/Class.h"
 #include "vm/Field.h"
 #include "vm/Heap.h"
@@ -68,7 +69,7 @@ void initializeFunctions(JNINativeInterface_& functions)
   };
 
   functions.FindClass = [](JNIEnv* env, const char* name) -> jclass {
-    auto nameUtf16 = types::convertString(std::string{name});
+    auto nameUtf16 = utf8ToUtf16(std::string{name});
     auto klass = jni::threadFromJniEnv(env).resolveClass(nameUtf16);
     if (!klass) {
       jni::threadFromJniEnv(env).throwException(klass.error().exception(), klass.error().message());
@@ -83,7 +84,7 @@ void initializeFunctions(JNINativeInterface_& functions)
     auto clsInstance = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(klass);
 
     clsInstance->target()->initialize(thread);
-    auto field = clsInstance->target()->lookupField(types::convertString(name), types::convertString(sig));
+    auto field = clsInstance->target()->lookupField(utf8ToUtf16(name), utf8ToUtf16(sig));
     if (!field) {
       thread.throwException(u"java/lang/NoSuchFieldError");
       return nullptr;
@@ -97,7 +98,7 @@ void initializeFunctions(JNINativeInterface_& functions)
     auto clsInstance = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(klass);
     clsInstance->target()->initialize(thread);
 
-    auto method = clsInstance->target()->getVirtualMethod(types::convertString(name), types::convertString(sig));
+    auto method = clsInstance->target()->getVirtualMethod(utf8ToUtf16(name), utf8ToUtf16(sig));
     if (!method) {
       thread.throwException(u"java/lang/NoSuchMethodError");
       return nullptr;
@@ -150,7 +151,7 @@ void initializeFunctions(JNINativeInterface_& functions)
   functions.GetStringUTFChars = [](JNIEnv*, jstring string, jboolean* isCopy) -> const char* {
     auto stringInstance = JniTranslate<jstring, GcRootRef<>>{}(string);
     types::JString value = utils::getStringValue(stringInstance.get());
-    std::string utf8 = types::convertJString(value);
+    std::string utf8 = utf16ToUtf8(value);
 
     char* buffer = new char[value.size() + 1];
     std::memcpy(buffer, utf8.c_str(), value.size() + 1);
