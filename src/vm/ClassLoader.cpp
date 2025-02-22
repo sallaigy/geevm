@@ -20,6 +20,11 @@ JvmExpected<JClass*> BootstrapClassLoader::loadClass(const types::JString& name)
     return this->loadArrayClass(name);
   }
 
+  // The JvmExpected has some non-trivial semantics here:
+  //  - An error indicates that at least one class loader found the class but failed to load it for any reason.
+  //  - A null pointer result indicates that the class loader does not know how to load a class. As other class loaders might still qualify,
+  //  this is not an error.
+  //  - A non-null pointer result indicates that a class loader found and successfully loaded the class.
   JvmExpected<std::unique_ptr<InstanceClass>> loadResult;
   std::optional<ClassLocation> location = mClassPath.search(name);
 
@@ -28,7 +33,7 @@ JvmExpected<JClass*> BootstrapClassLoader::loadClass(const types::JString& name)
   } else {
     for (const auto& classLoader : mClassLoaders) {
       loadResult = classLoader->loadClass(name);
-      if (loadResult.has_value() && *loadResult != nullptr) {
+      if (!loadResult.has_value() || *loadResult != nullptr) {
         break;
       }
     }
@@ -36,6 +41,10 @@ JvmExpected<JClass*> BootstrapClassLoader::loadClass(const types::JString& name)
 
   if (!loadResult) {
     return makeError<InstanceClass*>(loadResult.error());
+  }
+
+  if (*loadResult == nullptr) {
+    return makeError<InstanceClass*>(u"java/lang/ClassNotFoundException", name);
   }
 
   auto [result, _] = mClasses.try_emplace(name, std::move(*loadResult));
