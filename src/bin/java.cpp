@@ -27,7 +27,9 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  auto mainClassName = geevm::utf8ToUtf16(program.get<std::string>("mainclass"));
+  auto mainClassArg = program.get<std::string>("mainclass");
+
+  auto mainClassName = geevm::utf8ToUtf16(mainClassArg);
   std::ranges::replace(mainClassName, u'.', u'/');
 
   geevm::VmSettings settings;
@@ -57,12 +59,14 @@ int main(int argc, char* argv[])
   auto mainClass = vm->resolveClass(mainClassName);
 
   if (!mainClass) {
+    std::cerr << "Error: Could not find or load main class " << mainClassArg << std::endl;
+    std::cerr << "Caused by: " << geevm::utf16ToUtf8(mainClass.error().exception()) << ": " << geevm::utf16ToUtf8(mainClass.error().message()) << std::endl;
     return 1;
   }
 
   auto mainMethod = (*mainClass)->getMethod(u"main", u"([Ljava/lang/String;)V");
   if (!mainMethod) {
-    // TODO: Raise error
+    std::cerr << "Error: Main method not found in class " << mainClassArg << std::endl;
     return 1;
   }
 
