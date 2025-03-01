@@ -39,7 +39,10 @@ set(GEEVM_SOURCES
   ${GEEVM_VM_SOURCES}
 )
 
+set(HARDENED_COMPILER_FLAGS "-D_GLIBCXX_ASSERTIONS -Wall -Wextra -Wconversion -Wimplicit-fallthrough")
+
 add_library(geevm ${GEEVM_SOURCES})
+target_compile_options(geevm PUBLIC ${HARDENED_COMPILER_FLAGS})
 
 file(GLOB_RECURSE
   GEEVM_NATIVE_SOURCES

@@ -21,6 +21,10 @@ static std::optional<std::pair<int, FieldType>> parseField(types::JStringRef inp
     pos += 1;
   }
 
+  if (pos >= input.size()) {
+    return std::nullopt;
+  }
+
   if (char16_t c = input[pos]; c == u'L') {
     // Find the position of the ';'
     auto endPos = input.find(u';', pos);
@@ -95,7 +99,7 @@ std::optional<MethodDescriptor> MethodDescriptor::parse(types::JStringRef input)
     pos += fieldData->first;
   }
 
-  if (!parametersFinished) {
+  if (!parametersFinished || pos >= input.size()) {
     return std::nullopt;
   }
 
