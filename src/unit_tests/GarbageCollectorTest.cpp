@@ -33,7 +33,7 @@ TEST_F(GarbageCollectorTest, allocate_and_pin_object)
 {
   // Prevent GC from running during test setup
   gc().lockGC();
-  auto object = mVm.heap().allocate(&mHelloWorldClass);
+  auto object = mVm.heap().allocate<ObjectInstance>(&mHelloWorldClass);
   gc().unlockGC();
 
   ASSERT_EQ(object->getClass()->className(), u"org/geevm/tests/classfile/HelloWorld");
@@ -62,7 +62,7 @@ TEST_F(GarbageCollectorTest, allocate_and_pin_array)
 
   std::vector<Instance*> createdObjects;
   for (size_t i = 0; i < 10; i++) {
-    auto object = mVm.heap().allocate(&mHelloWorldClass);
+    auto object = mVm.heap().allocate<ObjectInstance>(&mHelloWorldClass);
     array->setArrayElement(i, object);
     createdObjects.push_back(object);
   }
@@ -90,7 +90,7 @@ TEST_F(GarbageCollectorTest, allocate_and_pin_array)
 TEST_F(GarbageCollectorTest, compare_root_ref)
 {
   gc().lockGC();
-  auto object = mVm.heap().allocate(&mHelloWorldClass);
+  auto object = mVm.heap().allocate<ObjectInstance>(&mHelloWorldClass);
   gc().unlockGC();
 
   GcRootRef<> ref1 = gc().pin(object).release();
@@ -102,7 +102,7 @@ TEST_F(GarbageCollectorTest, compare_root_ref)
 
 TEST_F(GarbageCollectorTest, scoped_root_ref_move)
 {
-  auto object = mVm.heap().allocate(&mHelloWorldClass);
+  auto object = mVm.heap().allocate<ObjectInstance>(&mHelloWorldClass);
 
   ScopedGcRootRef<> ref1 = gc().pin(object);
   ASSERT_TRUE(ref1 == object);
@@ -110,7 +110,7 @@ TEST_F(GarbageCollectorTest, scoped_root_ref_move)
   ScopedGcRootRef<> moveConstructed = std::move(ref1);
   ASSERT_TRUE(moveConstructed == object);
 
-  auto anotherObject = mVm.heap().allocate(&mHelloWorldClass);
+  auto anotherObject = mVm.heap().allocate<ObjectInstance>(&mHelloWorldClass);
 
   ScopedGcRootRef<> moveAssigned = gc().pin(anotherObject);
   moveAssigned = std::move(moveConstructed);
@@ -120,7 +120,7 @@ TEST_F(GarbageCollectorTest, scoped_root_ref_move)
 
 TEST_F(GarbageCollectorTest, compare_root_ref_to_null)
 {
-  auto object = mVm.heap().allocate(&mHelloWorldClass);
+  auto object = mVm.heap().allocate<ObjectInstance>(&mHelloWorldClass);
 
   auto pinned = gc().pin(object).release();
 
@@ -135,7 +135,7 @@ TEST_F(GarbageCollectorTest, compare_root_ref_to_null)
 TEST_F(GarbageCollectorTest, compare_scoped_root_ref_to_null)
 {
   gc().lockGC();
-  auto object = mVm.heap().allocate(&mHelloWorldClass);
+  auto object = mVm.heap().allocate<ObjectInstance>(&mHelloWorldClass);
   gc().unlockGC();
 
   auto pinned = gc().pin(object);

@@ -5,8 +5,8 @@
 
 using namespace geevm;
 
-Instance::Instance(JClass* klass)
-  : mClass(klass)
+ObjectInstance::ObjectInstance(InstanceClass* klass)
+  : mHeader(klass, 0)
 {
   for (const auto& [key, field] : klass->fields()) {
     if (!field->isStatic()) {
@@ -25,29 +25,30 @@ Instance::Instance(JClass* klass)
 size_t Instance::getFieldOffset(types::JStringRef fieldName, types::JStringRef descriptor) const
 {
   NameAndDescriptor key{fieldName, descriptor};
-  assert(mClass->fields().contains(key));
-  auto& field = mClass->fields().at(key);
+  assert(getClass()->fields().contains(key));
+  auto& field = getClass()->fields().at(key);
 
   return field->offset();
 }
 
 int32_t Instance::hashCode()
 {
-  if (mHashCode == 0) {
-    mHashCode = static_cast<int32_t>(std::hash<const Instance*>{}(this));
+  InstanceHeader& header = getHeader();
+  if (header.mHashCode == 0) {
+    header.mHashCode = static_cast<int32_t>(std::hash<const Instance*>{}(this));
   }
 
-  return mHashCode;
+  return header.mHashCode;
 }
 
-ArrayInstance::ArrayInstance(ArrayClass* arrayClass, size_t length)
-  : Instance(arrayClass), mLength(length)
+ArrayInstance::ArrayInstance(ArrayClass* arrayClass, int32_t length)
+  : mHeader(arrayClass, 0), mLength(length)
 {
 }
 
 ArrayInstance* Instance::toArrayInstance()
 {
-  assert(mClass->isArrayType());
+  assert(getClass()->isArrayType());
   return static_cast<ArrayInstance*>(this);
 }
 
@@ -55,4 +56,21 @@ ClassInstance* Instance::toClassInstance()
 {
   assert(getClass()->className() == u"java/lang/Class");
   return static_cast<ClassInstance*>(this);
+}
+
+void JavaString::verify()
+{
+#ifndef NDEBUG
+  auto valueField = getClass()->lookupField(u"value", u"[B");
+  assert(offsetof(JavaString, mValue) == (*valueField)->offset());
+
+  auto coderField = getClass()->lookupField(u"coder", u"B");
+  assert(offsetof(JavaString, mCoder) == (*coderField)->offset());
+
+  auto hashField = getClass()->lookupField(u"hash", u"I");
+  assert(offsetof(JavaString, mHash) == (*hashField)->offset());
+
+  auto hashIsZeroField = getClass()->lookupField(u"hashIsZero", u"Z");
+  assert(offsetof(JavaString, mHashIsZero) == (*hashIsZeroField)->offset());
+#endif
 }

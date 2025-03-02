@@ -46,7 +46,7 @@ GcRootRef<> JavaHeap::intern(const types::JString& string)
     bytes.push_back((c >> 8) & 0xff);
   }
 
-  GcRootRef<> newInstance = mGC.pin(this->allocate<Instance>(mStringClass)).release();
+  GcRootRef<> newInstance = mGC.pin(this->allocate<ObjectInstance>(mStringClass)).release();
   auto* stringContents = this->allocateArray<int8_t>(mByteArrayClass, bytes.size());
   for (int32_t i = 0; i < bytes.size(); ++i) {
     stringContents->setArrayElement(i, std::bit_cast<int8_t>(bytes[i]));

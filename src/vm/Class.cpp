@@ -471,7 +471,7 @@ size_t JClass::headerSize() const
     if (instanceClass->className() == u"java/lang/Class") {
       return sizeof(ClassInstance);
     }
-    return sizeof(Instance);
+    return sizeof(ObjectInstance);
   }
 
   if (auto arrayClass = this->asArrayClass(); arrayClass) {

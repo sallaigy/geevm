@@ -1,8 +1,8 @@
 #ifndef GEEVM_RUNTIME_H
 #define GEEVM_RUNTIME_H
 
-#include "GarbageCollector.h"
 #include "class_file/ConstantPool.h"
+#include "vm/GarbageCollector.h"
 
 #include <common/JvmError.h>
 #include <unordered_map>

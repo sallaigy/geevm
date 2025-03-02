@@ -28,7 +28,7 @@ public:
   void initialize(InstanceClass* stringClass, ArrayClass* byteArrayClass);
 
   /// Allocates heap memory for and constructs an instance of `klass`.
-  template<std::derived_from<Instance> T = Instance, class... Args>
+  template<std::derived_from<Instance> T, class... Args>
   T* allocate(InstanceClass* klass, Args&&... args)
   {
     size_t size = klass->allocationSize();

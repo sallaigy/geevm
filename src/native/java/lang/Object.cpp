@@ -57,7 +57,7 @@ JNIEXPORT jobject JNICALL Java_java_lang_Object_clone(JNIEnv* env, jobject obj)
   GcRootRef<> result = nullptr;
   JClass* klass = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(env->GetObjectClass(obj))->target();
   if (auto instanceClass = klass->asInstanceClass(); instanceClass) {
-    Instance* newInstance = thread.heap().allocate(instanceClass);
+    auto* newInstance = thread.heap().allocate<ObjectInstance>(instanceClass);
     std::memcpy(newInstance, objectHandle.get(), instanceClass->allocationSize());
 
     result = thread.heap().gc().pin(newInstance).release();

@@ -20,7 +20,7 @@ void JavaThread::initialize(const types::JString& name, Instance* threadGroup)
   auto klass = mVm.resolveClass(u"java/lang/Thread");
   assert(klass.has_value());
 
-  mThreadInstance = heap().gc().pin(heap().allocate((*klass)->asInstanceClass())).release();
+  mThreadInstance = heap().gc().pin(heap().allocate<ObjectInstance>((*klass)->asInstanceClass())).release();
 
   auto nameInstance = heap().intern(name);
   mThreadInstance->setFieldValue<Instance*>(u"name", u"Ljava/lang/String;", nameInstance.get());
@@ -208,7 +208,7 @@ void JavaThread::throwException(const types::JString& name, const types::JString
     geevm_panic("failure to resolve exception class");
   }
 
-  GcRootRef<> exceptionInstance = heap().gc().pin(heap().allocate((*klass)->asInstanceClass())).release();
+  GcRootRef<> exceptionInstance = heap().gc().pin(heap().allocate<ObjectInstance>((*klass)->asInstanceClass())).release();
   GcRootRef<> messageInstance = heap().intern(message);
   exceptionInstance->setFieldValue(u"detailMessage", u"Ljava/lang/String;", messageInstance.get());
 
@@ -274,7 +274,7 @@ Instance* JavaThread::createStackTrace()
     }
 
     if (include) {
-      auto stackTraceElement = heap().gc().pin(heap().allocate((*stackTraceElementCls)->asInstanceClass()));
+      auto stackTraceElement = heap().gc().pin(heap().allocate<ObjectInstance>((*stackTraceElementCls)->asInstanceClass()));
       auto declaringClass = heap().intern(callFrame.currentClass()->javaClassName());
       auto declaringClassObject = callFrame.currentClass()->classInstance();
       auto methodName = heap().intern(callFrame.currentMethod()->name());
