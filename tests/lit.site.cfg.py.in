@@ -1,7 +1,6 @@
 config.binary_dir = r'@CMAKE_BINARY_DIR@'
 config.source_dir = r'@CMAKE_SOURCE_DIR@'
 config.java_home = r'@JAVA_HOME@'
-config.jdk17_dir = r'@CMAKE_BINARY_DIR@/jdk17/java.base'
 config.jasmin_jar = r'@jasmin_SOURCE_DIR@/jasmin.jar'
 
 lit_config.load_config(config, os.path.join(config.source_dir, "tests/lit.cfg.py"))

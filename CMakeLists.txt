@@ -14,8 +14,8 @@ get_filename_component(REAL_JAVAC ${Java_JAVAC_EXECUTABLE} REALPATH)
 cmake_path(GET REAL_JAVAC PARENT_PATH JAVA_BIN_DIR)
 cmake_path(GET JAVA_BIN_DIR PARENT_PATH JAVA_HOME)
 
-if (NOT EXISTS ${CMAKE_BINARY_DIR}/jdk17)
-  execute_process(COMMAND ${JAVA_BIN_DIR}/jimage extract --dir=${CMAKE_BINARY_DIR}/jdk17 ${JAVA_HOME}/lib/modules)
+if (NOT EXISTS ${CMAKE_BINARY_DIR}/lib/modules)
+  execute_process(COMMAND ${JAVA_BIN_DIR}/jimage extract --dir=${CMAKE_BINARY_DIR}/lib/modules ${JAVA_HOME}/lib/modules)
 endif ()
 
 file(GLOB_RECURSE

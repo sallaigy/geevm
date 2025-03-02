@@ -14,7 +14,6 @@ config.excludes = ['CMakeLists.txt', '*.class']
 config.environment["JAVA_HOME"] = config.java_home
 config.environment["GEEVM_BINARY_DIR"] = config.binary_dir
 config.environment["GEEVM_TEST_BASE_DIR"] = os.path.join(os.path.dirname(__file__), 'programs')
-config.environment["JDK17_PATH"] = config.jdk17_dir
 config.environment["JASMIN_JAR"] = config.jasmin_jar
 
 config.substitutions.append(('%java', os.path.abspath(os.path.join('../cmake-build-debug', 'java'))))
