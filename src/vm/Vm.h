@@ -20,6 +20,7 @@ struct VmSettings
   bool runGcAfterEveryAllocation = false;
   bool noSystemInit = false;
   size_t maxHeapSize = 2048l * 1024;
+  std::string javaHome = "";
 };
 
 class Vm

@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <argparse/argparse.hpp>
+#include <common/System.h>
 #include <filesystem>
 #include <iostream>
 
@@ -44,10 +45,22 @@ int main(int argc, char* argv[])
   settings.runGcAfterEveryAllocation = true;
 #endif
 
-  auto vm = std::make_unique<geevm::Vm>(settings);
-  assert(std::getenv("JDK17_PATH") != nullptr);
+  if (settings.javaHome.empty()) {
+    auto selfPath = geevm::findProgramLocation(argv[0]);
+    if (!selfPath.has_value()) {
+      geevm::geevm_panic("Could not find java program location");
+    }
+    settings.javaHome = std::filesystem::canonical(selfPath->parent_path() / "lib");
+  }
 
-  vm->bootstrapClassLoader().classPath().addDirectory(std::getenv("JDK17_PATH"));
+  auto vm = std::make_unique<geevm::Vm>(settings);
+
+  auto javaBasePath = std::filesystem::path(settings.javaHome) / "modules" / "java.base";
+  if (!std::filesystem::exists(javaBasePath)) {
+    geevm::geevm_panic(std::format("Could not find java.base module in path {}", javaBasePath.string()));
+  }
+
+  vm->bootstrapClassLoader().classPath().addDirectory(javaBasePath.string());
 
   auto baseClassLoader = std::make_unique<geevm::BaseClassLoader>();
   baseClassLoader->classPath().addDirectory(std::filesystem::current_path().string());

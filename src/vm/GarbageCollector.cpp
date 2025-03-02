@@ -105,8 +105,7 @@ void GarbageCollector::performGarbageCollection()
   //  1. Collect and shallow copy all GC roots to the new region,
   //  2. For each copied object on the new region, shallow copy their immediately reachable objects (i.e. object fields and
   //     array elements) until there are no more new objects on the new region.
-  // Already copied objects are iterated using 'scanPtr': after processing an object, the pointer is advanced by
-  // its size.
+  // Already copied objects are iterated using 'scanPtr': after processing an object, the pointer is advanced by the object's size.
   std::unordered_map<Instance*, Instance*> map;
   char* scanPtr = mFromRegion;
 
