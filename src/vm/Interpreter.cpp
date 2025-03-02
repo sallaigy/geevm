@@ -502,7 +502,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
           (*klass)->initialize(mThread);
 
           if (auto instanceClass = (*klass)->asInstanceClass(); instanceClass != nullptr) {
-            Instance* instance = mThread.heap().allocate(instanceClass);
+            Instance* instance = mThread.heap().allocate<ObjectInstance>(instanceClass);
             mCurrentFrame->pushOperand<Instance*>(instance);
           } else {
             // TODO: New with array class

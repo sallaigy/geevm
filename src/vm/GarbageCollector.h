@@ -177,6 +177,9 @@ class ScopedGcRootRef : private GcRootRef<T>
 {
   friend class GarbageCollector;
 
+  template<std::derived_from<Instance> U>
+  friend class ScopedGcRootRef;
+
   ScopedGcRootRef(RootList::Node* root, GarbageCollector* gc)
     : GcRootRef<T>(root), mGC(gc)
   {
@@ -191,6 +194,13 @@ public:
     : GcRootRef<T>(other.release()), mGC(other.mGC)
   {
   }
+
+  template<std::derived_from<T> U>
+  ScopedGcRootRef(ScopedGcRootRef<U>&& other) noexcept
+    : GcRootRef<T>(other.release()), mGC(other.mGC)
+  {
+  }
+
   ScopedGcRootRef& operator=(ScopedGcRootRef&& other) noexcept
   {
     this->~ScopedGcRootRef();

@@ -2,7 +2,6 @@
 #define GEEVM_VM_INSTANCE_H
 
 #include "common/JvmError.h"
-#include "vm/Value.h"
 
 #include <cstdint>
 
@@ -12,11 +11,23 @@ namespace geevm
 class ArrayClass;
 class AbstractClass;
 class JClass;
+class InstanceClass;
+class ArrayClass;
+
 class ArrayInstance;
 class ClassInstance;
 
 template<JvmType T>
 class JavaArray;
+
+/// Instance and its subclasses cannot use inheritance as they need to be standard layout types in order to make
+/// field offset calculations and assumptions about object layouts safe. This instance corresponds to the information 
+/// all instances of `java.lang.Object` needs.
+struct InstanceHeader
+{
+  JClass* mClass = nullptr;
+  int32_t mHashCode = 0;
+};
 
 /// Instance of a java object.
 ///
@@ -29,14 +40,25 @@ class Instance
   friend class GarbageCollector;
 
 protected:
-  explicit Instance(JClass* klass);
-  Instance(const Instance& other) = delete;
+  Instance() = default;
 
 public:
   JClass* getClass() const
   {
-    return mClass;
+    return reinterpret_cast<const InstanceHeader*>(this)->mClass;
   }
+
+  ArrayInstance* toArrayInstance();
+  ClassInstance* toClassInstance();
+
+  template<JvmType T>
+  JavaArray<T>* toArray()
+  {
+    // TODO: Assert class and type consistency
+    return static_cast<JavaArray<T>*>(this);
+  }
+
+  int32_t hashCode();
 
   template<JvmType T>
   void setFieldValue(types::JStringRef fieldName, types::JStringRef descriptor, const T& value)
@@ -59,19 +81,12 @@ public:
     return *ptr;
   }
 
-  ArrayInstance* toArrayInstance();
-  ClassInstance* toClassInstance();
-
-  template<JvmType T>
-  JavaArray<T>* toArray()
+protected:
+  InstanceHeader& getHeader()
   {
-    // TODO: Assert class and type consistency
-    return static_cast<JavaArray<T>*>(this);
+    return *reinterpret_cast<InstanceHeader*>(this);
   }
 
-  int32_t hashCode();
-
-private:
   size_t getFieldOffset(types::JStringRef fieldName, types::JStringRef descriptor) const;
 
   template<JvmType T>
@@ -80,14 +95,20 @@ private:
     auto* ptr = reinterpret_cast<T*>(reinterpret_cast<char*>(this) + offset);
     *ptr = value;
   }
+};
+
+
+/// Standard Java object instance (as opposed to an array instance).
+/// 
+/// Note that this class is for any non-array Java objects that do not have dedicated instance classes declared for them.
+/// Classes and strings have their own classes that do *not* inherit from this one.
+class ObjectInstance : public Instance
+{
+public:
+  explicit ObjectInstance(InstanceClass* klass);
 
 private:
-  JClass* mClass;
-
-  /// Object hash code. As the garbage collector may relocate the object, we cannot reliably
-  /// use the object address to produce the hash code. Instead, we use a lazily-calculated value
-  /// derived from the object address at the time of the first call.
-  int32_t mHashCode = 0;
+  InstanceHeader mHeader;
 };
 
 /// Interface of a Java array.
@@ -99,7 +120,7 @@ private:
 class ArrayInstance : public Instance
 {
 protected:
-  ArrayInstance(ArrayClass* arrayClass, size_t length);
+  ArrayInstance(ArrayClass* arrayClass, int32_t length);
 
 public:
   int32_t length() const
@@ -119,6 +140,7 @@ public:
   }
 
 private:
+  InstanceHeader mHeader;
   int32_t mLength;
 };
 
@@ -179,7 +201,7 @@ class ClassInstance : public Instance
   friend class JavaHeap;
 
   ClassInstance(JClass* javaLangClass, JClass* target)
-    : Instance(javaLangClass), mTarget(target)
+    : mHeader(javaLangClass), mTarget(target)
   {
   }
 
@@ -192,16 +214,55 @@ public:
   }
 
 private:
+  InstanceHeader mHeader;
   JClass* mTarget;
 };
 
-// As the garbage collector may relocate these types using memcpy, all object types _must_ be trivially copiable.
-static_assert(std::is_trivially_copyable_v<Instance>);
-static_assert(std::is_trivially_copyable_v<ArrayInstance>);
-static_assert(std::is_trivially_copyable_v<ClassInstance>);
-static_assert(std::is_trivially_destructible_v<Instance>);
-static_assert(std::is_trivially_destructible_v<ArrayInstance>);
-static_assert(std::is_trivially_destructible_v<ClassInstance>);
+/// Instance of `java.lang.String`
+class JavaString : public Instance
+{
+public:
+  JavaString(JClass* klass, JavaArray<int8_t>* value, int8_t coder)
+    : mHeader(klass, 0), mValue(value), mCoder(coder)
+  {
+    this->verify();
+  }
+
+  void verify();
+
+private:
+  InstanceHeader mHeader;
+  JavaArray<int8_t>* mValue;
+  int8_t mCoder;
+  int32_t mHash = 0;
+  bool mHashIsZero = true;
+};
+
+// Use static asserts to check that all object types are conforming to the assumptions we make about them.
+// All object types MUST be:
+//  - trivially copiable, as the garbage collector may relocate them using memcpy,
+//  - trivially destructible, as the garbage collector frees the memory region of unreachable objects without calling any destructors,
+//  - standard layout, as field accesses assume a certain class layout and some offsets are calculated using offsetof.
+#define GEEVM_STATIC_CHECK_CLASS_PROPERTIES(NAME)    \
+  static_assert(std::is_standard_layout_v<NAME>);    \
+  static_assert(std::is_trivially_copyable_v<NAME>); \
+  static_assert(std::is_trivially_destructible_v<NAME>);
+
+GEEVM_STATIC_CHECK_CLASS_PROPERTIES(Instance);
+GEEVM_STATIC_CHECK_CLASS_PROPERTIES(ArrayInstance);
+GEEVM_STATIC_CHECK_CLASS_PROPERTIES(ClassInstance);
+GEEVM_STATIC_CHECK_CLASS_PROPERTIES(JavaString);
+
+GEEVM_STATIC_CHECK_CLASS_PROPERTIES(JavaArray<int8_t>);
+GEEVM_STATIC_CHECK_CLASS_PROPERTIES(JavaArray<int16_t>);
+GEEVM_STATIC_CHECK_CLASS_PROPERTIES(JavaArray<int32_t>);
+GEEVM_STATIC_CHECK_CLASS_PROPERTIES(JavaArray<int64_t>);
+GEEVM_STATIC_CHECK_CLASS_PROPERTIES(JavaArray<float>);
+GEEVM_STATIC_CHECK_CLASS_PROPERTIES(JavaArray<double>);
+GEEVM_STATIC_CHECK_CLASS_PROPERTIES(JavaArray<Instance*>);
+GEEVM_STATIC_CHECK_CLASS_PROPERTIES(JavaArray<char16_t>);
+
+#undef GEEVM_STATIC_CHECK_CLASS_PROPERTIES
 
 } // namespace geevm
 
