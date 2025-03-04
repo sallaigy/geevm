@@ -56,7 +56,7 @@ public:
   /// Interns the given string.
   /// If this method constructs a new string object, it will be pinned by the garbage collector and kept alive
   /// until the heap is destroyed.
-  GcRootRef<> intern(const types::JString& string);
+  GcRootRef<JavaString> intern(const types::JString& string);
 
   GarbageCollector& gc()
   {
@@ -68,7 +68,7 @@ private:
   // Garbage-collected heap
   GarbageCollector mGC;
   // Interned strings, including classes that need to present for string interning
-  std::unordered_map<types::JString, GcRootRef<>> mInternedStrings;
+  std::unordered_map<types::JString, GcRootRef<JavaString>> mInternedStrings;
   InstanceClass* mStringClass = nullptr;
   ArrayClass* mByteArrayClass = nullptr;
 };

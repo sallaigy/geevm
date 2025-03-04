@@ -128,7 +128,7 @@ void initializeFunctions(JNINativeInterface_& functions)
   functions.GetStaticIntField = getStaticField<int32_t>;
 
   functions.GetStringChars = [](JNIEnv*, jstring string, jboolean* isCopy) -> const jchar* {
-    auto stringInstance = JniTranslate<jstring, GcRootRef<>>{}(string);
+    auto stringInstance = JniTranslate<jstring, GcRootRef<JavaString>>{}(string);
     types::JString value = utils::getStringValue(stringInstance.get());
 
     jchar* buffer = new jchar[value.size() + 1];
@@ -149,7 +149,7 @@ void initializeFunctions(JNINativeInterface_& functions)
   };
 
   functions.GetStringUTFChars = [](JNIEnv*, jstring string, jboolean* isCopy) -> const char* {
-    auto stringInstance = JniTranslate<jstring, GcRootRef<>>{}(string);
+    auto stringInstance = JniTranslate<jstring, GcRootRef<JavaString>>{}(string);
     types::JString value = utils::getStringValue(stringInstance.get());
     std::string utf8 = utf16ToUtf8(value);
 
