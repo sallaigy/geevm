@@ -22,7 +22,7 @@ JNIEXPORT jclass JNICALL Java_java_lang_Object_getClass(JNIEnv* env, jobject obj
 
 JNIEXPORT jint JNICALL Java_java_lang_Object_hashCode(JNIEnv* env, jobject obj)
 {
-  auto objectRef = JniTranslate<jobject, GcRootRef<Instance>>{}(obj);
+  auto objectRef = jni::translate(obj);
   return objectRef->hashCode();
 }
 
@@ -52,10 +52,10 @@ JNIEXPORT jobject JNICALL Java_java_lang_Object_clone(JNIEnv* env, jobject obj)
 
   JavaThread& thread = jni::threadFromJniEnv(env);
 
-  GcRootRef<> objectHandle = JniTranslate<jobject, GcRootRef<>>{}(obj);
+  GcRootRef<> objectHandle = jni::translate(obj);
 
   GcRootRef<> result = nullptr;
-  JClass* klass = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(env->GetObjectClass(obj))->target();
+  JClass* klass = jni::translate(env->GetObjectClass(obj))->target();
   if (auto instanceClass = klass->asInstanceClass(); instanceClass) {
     auto* newInstance = thread.heap().allocate<ObjectInstance>(instanceClass);
     std::memcpy(newInstance, objectHandle.get(), instanceClass->allocationSize());
@@ -71,6 +71,6 @@ JNIEXPORT jobject JNICALL Java_java_lang_Object_clone(JNIEnv* env, jobject obj)
     geevm_panic("Unknown class type");
   }
 
-  return JniTranslate<GcRootRef<>, jobject>{}(result);
+  return jni::translate(result);
 }
 }

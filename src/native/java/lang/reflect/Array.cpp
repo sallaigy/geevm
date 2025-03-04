@@ -10,7 +10,7 @@ extern "C"
 
 JNIEXPORT jobject JNICALL Java_java_lang_reflect_Array_newArray(JNIEnv* env, jclass klass, jclass componentType, jint length)
 {
-  auto classInstance = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(componentType);
+  auto classInstance = jni::translate(componentType);
 
   if (classInstance == nullptr) {
     auto npe = env->FindClass("java/lang/NullPointerException");
@@ -33,6 +33,6 @@ JNIEXPORT jobject JNICALL Java_java_lang_reflect_Array_newArray(JNIEnv* env, jcl
   auto arrayClass = thread.resolveClass(arrayClassName);
   auto newArray = thread.heap().gc().pin(thread.heap().allocateArray((*arrayClass)->asArrayClass(), length)).release();
 
-  return JniTranslate<GcRootRef<ArrayInstance>, jarray>{}(newArray);
+  return jni::translate(newArray);
 }
 }

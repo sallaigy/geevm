@@ -29,7 +29,7 @@ JNIEXPORT jobjectArray JNICALL Java_jdk_internal_util_SystemProps_00024Raw_platf
 
   JavaThread& thread = jni::threadFromJniEnv(env);
 
-  auto targetClass = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(strArrayClass)->target();
+  auto targetClass = jni::translate(strArrayClass)->target();
 
   auto* allocatedArray = thread.heap().allocateArray<Instance*>(targetClass->asArrayClass(), arrayLength);
   GcRootRef<JavaArray<Instance*>> propsArray = thread.heap().gc().pin(allocatedArray).release();
@@ -42,7 +42,7 @@ JNIEXPORT jobjectArray JNICALL Java_jdk_internal_util_SystemProps_00024Raw_platf
   propsArray->setArrayElement(5, thread.heap().intern(u"/").get());
   propsArray->setArrayElement(23, thread.heap().intern(u":").get());
 
-  return JniTranslate<GcRootRef<JavaArray<Instance*>>, jobjectArray>{}(propsArray);
+  return jni::translate(propsArray);
 }
 
 JNIEXPORT jobjectArray JNICALL Java_jdk_internal_util_SystemProps_00024Raw_vmProperties(JNIEnv* env, jclass klass)
@@ -55,13 +55,13 @@ JNIEXPORT jobjectArray JNICALL Java_jdk_internal_util_SystemProps_00024Raw_vmPro
 
   JavaThread& thread = jni::threadFromJniEnv(env);
 
-  auto targetClass = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(strArrayClass)->target();
+  auto targetClass = jni::translate(strArrayClass)->target();
 
   GcRootRef<JavaArray<Instance*>> propsArray =
       thread.heap().gc().pin(thread.heap().allocateArray<Instance*>(targetClass->asArrayClass(), arrayLength)).release();
   propsArray->setArrayElement(0, thread.heap().intern(u"java.home").get());
   propsArray->setArrayElement(1, thread.heap().intern(utf8ToUtf16(thread.vm().settings().javaHome)).get());
 
-  return JniTranslate<GcRootRef<JavaArray<Instance*>>, jobjectArray>{}(propsArray);
+  return jni::translate(propsArray);
 }
 }

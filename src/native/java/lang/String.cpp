@@ -21,7 +21,7 @@ JNIEXPORT jobject JNICALL Java_java_lang_String_intern(JNIEnv* env, jstring obj)
   GcRootRef<> interned = thread.heap().intern(str);
 
   env->ReleaseStringChars(obj, strValue);
-  return JniTranslate<GcRootRef<>, jobject>{}(interned);
+  return jni::translate(interned);
 }
 
 JNIEXPORT jobject JNICALL Java_java_lang_StringUTF16_isBigEndian(JNIEnv*, jstring)

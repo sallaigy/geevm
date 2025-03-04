@@ -93,7 +93,7 @@ std::optional<Value> NativeMethod::translateReturnValue(jvalue returnValue) cons
   }
 
   // Must be an instance or array
-  return Value::from<Instance*>(JniTranslate<jobject, GcRootRef<>>{}(returnValue.l).get());
+  return Value::from<Instance*>(jni::translate(returnValue.l).get());
 }
 
 void findReturnType(const MethodDescriptor& descriptor, ffi_type** returnType, jvalue* returnValue, void** result)
@@ -169,12 +169,12 @@ std::optional<Value> NativeMethod::invoke(JavaThread& thread, const std::vector<
   if (mMethod->isStatic()) {
     auto klass = mMethod->getClass()->classInstance();
     argTypes.push_back(&ffi_type_pointer);
-    argValues.push_back(jvalue{.l = JniTranslate<GcRootRef<ClassInstance>, jclass>{}(klass)});
+    argValues.push_back(jvalue{.l = jni::translate(klass)});
     actualArgs.push_back(&argValues.back().l);
   } else {
     auto javaThis = thread.addJniHandle(args.at(0).get<Instance*>());
     argTypes.push_back(&ffi_type_pointer);
-    argValues.push_back(jvalue{.l = JniTranslate<GcRootRef<Instance>, jobject>{}(javaThis)});
+    argValues.push_back(jvalue{.l = jni::translate(javaThis)});
     actualArgs.push_back(&argValues.back().l);
     argIdx = 1;
   }
@@ -237,7 +237,7 @@ std::optional<Value> NativeMethod::invoke(JavaThread& thread, const std::vector<
     } else {
       // Must object or array reference
       GcRootRef<> ref = thread.addJniHandle(current.get<Instance*>());
-      argValues.push_back(jvalue{.l = JniTranslate<GcRootRef<>, jobject>{}(ref)});
+      argValues.push_back(jvalue{.l = jni::translate(ref)});
       argTypes.push_back(&ffi_type_pointer);
       actualArgs.push_back(&argValues.back().l);
     }

@@ -44,7 +44,7 @@ JNIEXPORT jclass JNICALL Java_java_lang_Class_getPrimitiveClass(JNIEnv* env, jcl
 
 JNIEXPORT jboolean JNICALL Java_java_lang_Class_isPrimitive(JNIEnv* env, jclass klass)
 {
-  auto classObject = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(klass);
+  auto classObject = jni::translate(klass);
   const types::JString& className = classObject->target()->className();
 
   static std::unordered_set<types::JString> klassNames = {
@@ -57,14 +57,14 @@ JNIEXPORT jboolean JNICALL Java_java_lang_Class_isPrimitive(JNIEnv* env, jclass 
 
 JNIEXPORT jobject JNICALL Java_java_lang_Class_getName0(JNIEnv* env, jclass klass)
 {
-  GcRootRef<ClassInstance> cls = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(klass);
+  GcRootRef<ClassInstance> cls = jni::translate(klass);
   assert(cls != nullptr);
 
   auto name = cls->target()->className();
   std::ranges::replace(name, u'/', u'.');
 
   GcRootRef<> str = jni::threadFromJniEnv(env).heap().intern(name);
-  return JniTranslate<GcRootRef<Instance>, jobject>{}(str);
+  return jni::translate(str);
 }
 
 JNIEXPORT jclass JNICALL Java_java_lang_Class_forName0(JNIEnv* env, jclass klass, jstring name, jboolean initialize, jobject classLoader, jclass caller)
@@ -80,18 +80,18 @@ JNIEXPORT jclass JNICALL Java_java_lang_Class_forName0(JNIEnv* env, jclass klass
 
 JNIEXPORT jobject JNICALL Java_java_lang_Class_initClassName(JNIEnv* env, jclass klass)
 {
-  GcRootRef<ClassInstance> clsInstance = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(klass);
+  GcRootRef<ClassInstance> clsInstance = jni::translate(klass);
 
   auto name = clsInstance->target()->className();
   std::ranges::replace(name, u'/', u'.');
 
   GcRootRef<> str = jni::threadFromJniEnv(env).heap().intern(name);
-  return JniTranslate<GcRootRef<Instance>, jobject>{}(str);
+  return jni::translate(str);
 }
 
 JNIEXPORT jboolean JNICALL Java_java_lang_Class_isArray(JNIEnv* env, jclass klass)
 {
-  auto classInstance = JniTranslate<jclass, GcRootRef<ClassInstance>>{}(klass);
+  auto classInstance = jni::translate(klass);
   return classInstance->target()->isArrayType() ? JNI_TRUE : JNI_FALSE;
 }
 }
