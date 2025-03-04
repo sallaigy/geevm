@@ -31,7 +31,7 @@ ArrayInstance* JavaHeap::allocateArray(ArrayClass* klass, int32_t length)
   });
 }
 
-GcRootRef<> JavaHeap::intern(const types::JString& string)
+GcRootRef<JavaString> JavaHeap::intern(const types::JString& string)
 {
   if (auto it = mInternedStrings.find(string); it != mInternedStrings.end()) {
     return it->second;
@@ -40,16 +40,12 @@ GcRootRef<> JavaHeap::intern(const types::JString& string)
   assert(mStringClass != nullptr);
   assert(mByteArrayClass != nullptr);
 
-  std::vector<uint8_t> bytes;
-  for (char16_t c : string) {
-    bytes.push_back(c & 0xff);
-    bytes.push_back((c >> 8) & 0xff);
-  }
-
-  GcRootRef<> newInstance = mGC.pin(this->allocate<ObjectInstance>(mStringClass)).release();
-  auto* stringContents = this->allocateArray<int8_t>(mByteArrayClass, bytes.size());
-  for (int32_t i = 0; i < bytes.size(); ++i) {
-    stringContents->setArrayElement(i, std::bit_cast<int8_t>(bytes[i]));
+  GcRootRef<JavaString> newInstance = mGC.pin(this->allocate<JavaString>(mStringClass)).release();
+  auto* stringContents = this->allocateArray<int8_t>(mByteArrayClass, string.size() * 2);
+  for (int32_t i = 0; i < string.size(); ++i) {
+    char16_t c = string[i];
+    (*stringContents)[2 * i] = std::bit_cast<int8_t>(static_cast<uint8_t>(c & 0xff));
+    (*stringContents)[2 * i + 1] = std::bit_cast<int8_t>(static_cast<uint8_t>((c >> 8) & 0xff));
   }
   newInstance->setFieldValue<Instance*>(u"value", u"[B", stringContents);
 

@@ -3,6 +3,7 @@
 
 #include "common/JvmError.h"
 
+#include <cassert>
 #include <cstdint>
 
 namespace geevm
@@ -21,7 +22,7 @@ template<JvmType T>
 class JavaArray;
 
 /// Instance and its subclasses cannot use inheritance as they need to be standard layout types in order to make
-/// field offset calculations and assumptions about object layouts safe. This instance corresponds to the information 
+/// field offset calculations and assumptions about object layouts safe. This instance corresponds to the information
 /// all instances of `java.lang.Object` needs.
 struct InstanceHeader
 {
@@ -97,9 +98,8 @@ protected:
   }
 };
 
-
 /// Standard Java object instance (as opposed to an array instance).
-/// 
+///
 /// Note that this class is for any non-array Java objects that do not have dedicated instance classes declared for them.
 /// Classes and strings have their own classes that do *not* inherit from this one.
 class ObjectInstance : public Instance
@@ -178,6 +178,18 @@ public:
     return JvmExpected<void>{};
   }
 
+  T& operator[](int32_t index)
+  {
+    assert(index >= 0 && index < length());
+    return *this->atIndex(index);
+  }
+
+  const T& operator[](int32_t index) const
+  {
+    assert(index >= 0 && index < length());
+    return *this->atIndex(index);
+  }
+
   using const_iterator = const T*;
   const_iterator begin() const
   {
@@ -222,20 +234,24 @@ private:
 class JavaString : public Instance
 {
 public:
-  JavaString(JClass* klass, JavaArray<int8_t>* value, int8_t coder)
+  explicit JavaString(JClass* klass, JavaArray<int8_t>* value = nullptr, int8_t coder = 1)
     : mHeader(klass, 0), mValue(value), mCoder(coder)
   {
     this->verify();
   }
 
+private:
+  /// Verifies that the layout of this class definition is in sync with the memory layout expected from the JDK.
+  /// The implementation of this method is disabled in non-debug builds.
   void verify();
 
 private:
   InstanceHeader mHeader;
+  // java.lang.String layout as defined in the JDK
   JavaArray<int8_t>* mValue;
-  int8_t mCoder;
+  int8_t mCoder = 1;
   int32_t mHash = 0;
-  bool mHashIsZero = true;
+  bool mHashIsZero = false;
 };
 
 // Use static asserts to check that all object types are conforming to the assumptions we make about them.
