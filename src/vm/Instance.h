@@ -254,6 +254,29 @@ private:
   bool mHashIsZero = false;
 };
 
+/// An instance of `java.lang.Throwable`
+class JavaThrowable : public Instance
+{
+public:
+  explicit JavaThrowable(JClass* klass)
+    : mHeader(klass)
+  {
+    this->verify();
+  }
+
+private:
+  void verify();
+
+public:
+  InstanceHeader mHeader;
+  Instance* mBacktrace = nullptr;
+  JavaString* mDetailMessage = nullptr;
+  JavaThrowable* mCause = nullptr;
+  JavaArray<Instance*>* mStackTrace = nullptr;
+  int32_t mDepth = 0;
+  Instance* mSuppressedExceptions = nullptr;
+};
+
 // Use static asserts to check that all object types are conforming to the assumptions we make about them.
 // All object types MUST be:
 //  - trivially copiable, as the garbage collector may relocate them using memcpy,

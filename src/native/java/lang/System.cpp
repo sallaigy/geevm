@@ -39,8 +39,8 @@ JNIEXPORT void JNICALL Java_java_lang_System_arraycopy(JNIEnv* env, jclass klass
     return;
   }
 
-  auto sourceArray = JniTranslate<jobject, GcRootRef<Instance>>{}(src)->toArrayInstance();
-  auto targetArray = JniTranslate<jobject, GcRootRef<Instance>>{}(dest)->toArrayInstance();
+  auto sourceArray = jni::translate(src)->toArrayInstance();
+  auto targetArray = jni::translate(dest)->toArrayInstance();
 
   if (sourceArray == nullptr || targetArray == nullptr) {
     thread.throwException(u"java/lang/ArrayStoreException", u"not an array instance");
@@ -141,6 +141,6 @@ JNIEXPORT void JNICALL Java_java_lang_System_setErr0(JNIEnv* env, jclass klass, 
 
 JNIEXPORT jint JNICALL Java_java_lang_System_identityHashCode(JNIEnv*, jclass, jobject object)
 {
-  return JniTranslate<jobject, GcRootRef<Instance>>{}(object)->hashCode();
+  return jni::translate(object)->hashCode();
 }
 }

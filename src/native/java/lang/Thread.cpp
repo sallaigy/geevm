@@ -17,7 +17,7 @@ JNIEXPORT void JNICALL Java_java_lang_Thread_registerNatives(JNIEnv* env, jclass
 JNIEXPORT jobject JNICALL Java_java_lang_Thread_currentThread(JNIEnv* env, jclass klass)
 {
   JavaThread& thread = jni::threadFromJniEnv(env);
-  return JniTranslate<GcRootRef<Instance>, jobject>{}(thread.instance());
+  return jni::translate(thread.instance());
 }
 
 JNIEXPORT void JNICALL Java_java_lang_Thread_setPriority0(JNIEnv* env, jobject thread)

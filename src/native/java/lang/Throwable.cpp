@@ -11,7 +11,7 @@ extern "C"
 
 JNIEXPORT jobject JNICALL Java_java_lang_Throwable_fillInStackTrace(JNIEnv* env, jobject throwable, jint depth)
 {
-  auto exceptionInstance = JniTranslate<jobject, GcRootRef<Instance>>{}(throwable);
+  auto exceptionInstance = jni::translate(throwable);
   JavaThread& thread = jni::threadFromJniEnv(env);
   auto array = thread.createStackTrace();
 
@@ -24,7 +24,7 @@ JNIEXPORT jobject JNICALL Java_java_lang_Throwable_fillInStackTrace(JNIEnv* env,
 
 JNIEXPORT jint JNICALL Java_java_lang_Throwable_getStackTraceDepth(JNIEnv* env, jobject throwable)
 {
-  auto exceptionInstance = JniTranslate<jobject, GcRootRef<Instance>>{}(throwable);
+  auto exceptionInstance = jni::translate(throwable);
   auto backtrace = exceptionInstance->getFieldValue<Instance*>(u"backtrace", u"Ljava/lang/Object;");
 
   if (backtrace == nullptr) {
@@ -36,13 +36,13 @@ JNIEXPORT jint JNICALL Java_java_lang_Throwable_getStackTraceDepth(JNIEnv* env, 
 
 JNIEXPORT jobject JNICALL Java_java_lang_Throwable_getStackTraceElement(JNIEnv* env, jobject throwable, jint index)
 {
-  auto exceptionInstance = JniTranslate<jobject, GcRootRef<Instance>>{}(throwable);
+  auto exceptionInstance = jni::translate(throwable);
   auto backtrace = exceptionInstance->getFieldValue<Instance*>(u"backtrace", u"Ljava/lang/Object;");
   auto elem = backtrace->toArray<Instance*>()->getArrayElement(index);
 
   assert(elem.has_value());
 
   auto elemRef = jni::threadFromJniEnv(env).heap().gc().pin(*elem).release();
-  return JniTranslate<GcRootRef<Instance>, jobject>{}(elemRef);
+  return jni::translate(elemRef);
 }
 }

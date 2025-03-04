@@ -17,6 +17,9 @@ class JavaThread;
 class JField;
 class JMethod;
 
+namespace jni
+{
+
 template<class From, class To>
 struct JniTranslateImpl
 {
@@ -26,35 +29,45 @@ struct JniTranslateImpl
   }
 };
 
-template<class From, class To>
-struct JniTranslate;
+template<class From>
+struct JniMirror;
 
-#define GEEVM_JNI_TRANSLATE(TYPE1, TYPE2)                            \
-  template<>                                                         \
-  struct JniTranslate<TYPE1, TYPE2> : JniTranslateImpl<TYPE1, TYPE2> \
-  {                                                                  \
-  };                                                                 \
-  template<>                                                         \
-  struct JniTranslate<TYPE2, TYPE1> : JniTranslateImpl<TYPE2, TYPE1> \
-  {                                                                  \
+#define GEEVM_JNI_TRANSLATE(TYPE1, TYPE2) \
+  template<>                              \
+  struct JniMirror<TYPE1>                 \
+  {                                       \
+    using MirrorTy = TYPE2;               \
+  };                                      \
+  template<>                              \
+  struct JniMirror<TYPE2>                 \
+  {                                       \
+    using MirrorTy = TYPE1;               \
   };
 
 GEEVM_JNI_TRANSLATE(jobject, GcRootRef<Instance>)
 GEEVM_JNI_TRANSLATE(jclass, GcRootRef<ClassInstance>)
 GEEVM_JNI_TRANSLATE(jarray, GcRootRef<ArrayInstance>)
-GEEVM_JNI_TRANSLATE(jthrowable, GcRootRef<Instance>)
+GEEVM_JNI_TRANSLATE(jthrowable, GcRootRef<JavaThrowable>)
 GEEVM_JNI_TRANSLATE(jstring, GcRootRef<JavaString>)
 GEEVM_JNI_TRANSLATE(jfieldID, JField*)
 GEEVM_JNI_TRANSLATE(jmethodID, JMethod*)
 GEEVM_JNI_TRANSLATE(jbyteArray, GcRootRef<JavaArray<int8_t>>)
 GEEVM_JNI_TRANSLATE(jobjectArray, GcRootRef<JavaArray<Instance*>>)
 
-namespace jni
-{
-
+/// Retrieves the current Java thread from the env instance.
 JavaThread& threadFromJniEnv(JNIEnv* env);
 
+/// Translates between internal JVM types and JNI types.
+///
+/// For example, `translate(jclass)` returns `GcRootRef<ClassInstance>`,
+/// `translate(GcRootRef<ClassInstance>` a `jclass` object.
+template<class T, class R = typename JniMirror<std::remove_reference_t<T>>::MirrorTy>
+R translate(T from)
+{
+  return JniTranslateImpl<T, R>{}(from);
 }
+
+} // namespace jni
 
 class JniImplementation
 {

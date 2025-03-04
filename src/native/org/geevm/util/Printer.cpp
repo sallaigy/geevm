@@ -44,7 +44,7 @@ JNIEXPORT void JNICALL Java_org_geevm_util_Printer_println__Z(JNIEnv*, jclass, j
 
 JNIEXPORT void JNICALL Java_org_geevm_util_Printer_println__Ljava_lang_String_2(JNIEnv*, jclass, jstring value)
 {
-  auto ref = JniTranslate<jstring, GcRootRef<JavaString>>{}(value);
+  auto ref = jni::translate(value);
   if (ref->getClass()->className() == u"java/lang/String") {
     types::JString out = utils::getStringValue(ref.get());
     std::cout << utf16ToUtf8(out) << std::endl;
