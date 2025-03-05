@@ -231,21 +231,13 @@ private:
 };
 
 /// Instance of `java.lang.String`
-class JavaString : public Instance
+struct JavaString : Instance
 {
-public:
   explicit JavaString(JClass* klass, JavaArray<int8_t>* value = nullptr, int8_t coder = 1)
     : mHeader(klass, 0), mValue(value), mCoder(coder)
   {
-    this->verify();
   }
 
-private:
-  /// Verifies that the layout of this class definition is in sync with the memory layout expected from the JDK.
-  /// The implementation of this method is disabled in non-debug builds.
-  void verify();
-
-private:
   InstanceHeader mHeader;
   // java.lang.String layout as defined in the JDK
   JavaArray<int8_t>* mValue;
@@ -255,19 +247,13 @@ private:
 };
 
 /// An instance of `java.lang.Throwable`
-class JavaThrowable : public Instance
+struct JavaThrowable : Instance
 {
-public:
   explicit JavaThrowable(JClass* klass)
     : mHeader(klass)
   {
-    this->verify();
   }
 
-private:
-  void verify();
-
-public:
   InstanceHeader mHeader;
   Instance* mBacktrace = nullptr;
   JavaString* mDetailMessage = nullptr;

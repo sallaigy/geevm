@@ -15,9 +15,10 @@ namespace geevm::testing
 
 class BaseTest : public ::testing::Test
 {
-  static constexpr std::string_view FixturesPath = GEEVM_UNIT_TEST_FIXTURES_DIR;
-
 protected:
+  static constexpr std::string_view FixturesPath = GEEVM_UNIT_TEST_FIXTURES_DIR;
+  static constexpr std::string_view Jdk17Path = GEEVM_UNIT_TEST_JDK17_PATH;
+
   fs::path getResource(std::string_view path) const
   {
     return fs::path{FixturesPath}.append(path);
