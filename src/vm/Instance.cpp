@@ -57,20 +57,3 @@ ClassInstance* Instance::toClassInstance()
   assert(getClass()->className() == u"java/lang/Class");
   return static_cast<ClassInstance*>(this);
 }
-
-void JavaString::verify()
-{
-#ifndef NDEBUG
-  auto valueField = getClass()->lookupField(u"value", u"[B");
-  assert(offsetof(JavaString, mValue) == (*valueField)->offset());
-
-  auto coderField = getClass()->lookupField(u"coder", u"B");
-  assert(offsetof(JavaString, mCoder) == (*coderField)->offset());
-
-  auto hashField = getClass()->lookupField(u"hash", u"I");
-  assert(offsetof(JavaString, mHash) == (*hashField)->offset());
-
-  auto hashIsZeroField = getClass()->lookupField(u"hashIsZero", u"Z");
-  assert(offsetof(JavaString, mHashIsZero) == (*hashIsZeroField)->offset());
-#endif
-}
