@@ -11,7 +11,7 @@ extern "C"
 JNIEXPORT jclass JNICALL Java_jdk_internal_reflect_Reflection_getCallerClass(JNIEnv* env, jclass)
 {
   JavaThread& thread = jni::threadFromJniEnv(env);
-  const CallFrame& frame = thread.callStack().back();
+  const CallFrame& frame = thread.currentFrame();
 
   // Returns the class of the caller of the method calling this method ignoring frames associated with java.lang.reflect.Method.invoke() and its implementation.
   CallFrame* previous = frame.previous()->previous();

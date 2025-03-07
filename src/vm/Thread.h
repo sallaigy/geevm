@@ -17,9 +17,10 @@ class Vm;
 class JavaThread
 {
 public:
-  // Constructor
+  // Constructors and destructor
   //==------------------------------------------------------------------------==
   explicit JavaThread(Vm& vm);
+  JavaThread(const JavaThread&) = delete;
 
   void initialize(const types::JString& name, Instance* threadGroup);
 
@@ -54,12 +55,14 @@ public:
   //==------------------------------------------------------------------------==
   CallFrame& currentFrame()
   {
-    return mCallStack.back();
+    assert(mCurrentFrame != nullptr);
+    return *mCurrentFrame;
   }
 
-  std::list<CallFrame>& callStack()
+  std::generator<CallFrame&> callStack();
+  bool isCallStackEmpty()
   {
-    return mCallStack;
+    return mCurrentFrame == nullptr;
   }
 
   void returnToCaller(Value returnValue);
@@ -98,13 +101,21 @@ private:
   void prepareNativeFrame();
   void releaseNativeFrame();
 
+  CallFrame* newFrame(JMethod* method);
+  void popFrame();
+  void* allocateCallFrameSpace(size_t size);
+
 private:
   Vm& mVm;
   // Method to run and arguments
   JMethod* mMethod = nullptr;
   std::vector<Value> mArguments;
   GcRootRef<Instance> mThreadInstance;
-  std::list<CallFrame> mCallStack;
+
+  std::unique_ptr<char[]> mCallStackSpace = nullptr;
+  char* mCallStackTop = nullptr;
+
+  CallFrame* mCurrentFrame = nullptr;
 
   // Exceptions
   GcRootRef<Instance> mCurrentException;

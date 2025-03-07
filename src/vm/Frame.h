@@ -17,7 +17,8 @@ class InstanceClass;
 class CallFrame
 {
 public:
-  CallFrame(JMethod* method, CallFrame* previous);
+  CallFrame(JMethod* method, CallFrame* previous, std::uint64_t* localVariables = nullptr, bool* localVariableReferences = nullptr,
+            std::uint64_t* operandStack = nullptr, bool* operandStackReferences = nullptr);
 
   CallFrame(const CallFrame&) = delete;
   CallFrame& operator=(const CallFrame&) = delete;
@@ -233,10 +234,10 @@ private:
   bool* mOperandStackReferences = nullptr;
   std::uint16_t mOperandStackPointer = 0;
 
-  JMethod* mMethod;
-  CallFrame* mPrevious;
   int64_t mPos = 0;
   const types::u1* mCode;
+  JMethod* mMethod;
+  CallFrame* mPrevious;
 };
 
 } // namespace geevm

@@ -20,6 +20,7 @@ struct VmSettings
   bool runGcAfterEveryAllocation = false;
   bool noSystemInit = false;
   size_t maxHeapSize = 2048l * 1024;
+  size_t maxStackSize = 1024l * 1024;
   std::string javaHome = "";
 };
 
@@ -27,7 +28,7 @@ class Vm
 {
 public:
   explicit Vm(VmSettings settings)
-    : mSettings(settings), mBootstrapClassLoader(*this), mHeap(*this)
+    : mSettings(std::move(settings)), mBootstrapClassLoader(*this), mHeap(*this)
   {
     mMainThread = mThreads.emplace_back(std::make_unique<JavaThread>(*this)).get();
   }
