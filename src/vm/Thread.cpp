@@ -1,4 +1,5 @@
 #include "vm/Thread.h"
+#include "common/Memory.h"
 #include "vm/Instance.h"
 #include "vm/Interpreter.h"
 #include "vm/Vm.h"
@@ -13,6 +14,8 @@ using namespace geevm;
 JavaThread::JavaThread(Vm& vm)
   : mVm(vm), mCurrentException(nullptr), mThreadInstance(nullptr)
 {
+  mCallStackSpace = std::unique_ptr<char[]>(new char[vm.settings().maxStackSize]);
+  mCallStackTop = mCallStackSpace.get();
 }
 
 void JavaThread::initialize(const types::JString& name, Instance* threadGroup)
@@ -54,10 +57,19 @@ JvmExpected<JClass*> JavaThread::resolveClass(const types::JString& name)
   return mVm.resolveClass(name);
 }
 
+std::generator<CallFrame&> JavaThread::callStack()
+{
+  CallFrame* current = mCurrentFrame;
+  while (current != nullptr) {
+    co_yield *current;
+    current = current->previous();
+  }
+}
+
 std::optional<Value> JavaThread::invoke(JMethod* method)
 {
-  CallFrame* current = mCallStack.empty() ? nullptr : &mCallStack.back();
-  CallFrame* newFrame = &mCallStack.emplace_back(method, current);
+  CallFrame* current = mCurrentFrame;
+  CallFrame* newFrame = this->newFrame(method);
 
   std::optional<Value> returnValue;
 
@@ -88,7 +100,7 @@ std::optional<Value> JavaThread::invoke(JMethod* method)
     returnValue = this->executeNative(method, *newFrame, args);
   }
 
-  mCallStack.pop_back();
+  this->popFrame();
   this->handleCalleeException(current);
 
   return returnValue;
@@ -96,8 +108,8 @@ std::optional<Value> JavaThread::invoke(JMethod* method)
 
 std::optional<Value> JavaThread::invokeWithArgs(JMethod* method, std::vector<Value> arguments)
 {
-  CallFrame* current = mCallStack.empty() ? nullptr : &mCallStack.back();
-  CallFrame* newFrame = &mCallStack.emplace_back(method, current);
+  CallFrame* current = mCurrentFrame;
+  CallFrame* newFrame = this->newFrame(method);
 
   std::optional<Value> returnValue;
   if (method->isNative()) {
@@ -123,7 +135,7 @@ std::optional<Value> JavaThread::invokeWithArgs(JMethod* method, std::vector<Val
     returnValue = this->executeCall(method, current, *newFrame);
   }
 
-  mCallStack.pop_back();
+  this->popFrame();
   this->handleCalleeException(current);
 
   return returnValue;
@@ -267,8 +279,14 @@ Instance* JavaThread::createStackTrace()
   std::vector<ScopedGcRootRef<>> stackTrace;
 
   bool include = false;
-  for (auto it = callStack().rbegin(); it != callStack().rend(); ++it) {
-    const CallFrame& callFrame = *it;
+
+  std::vector<CallFrame*> callStackVector;
+  for (CallFrame& frame : this->callStack()) {
+    callStackVector.push_back(&frame);
+  }
+
+  for (const CallFrame* framePtr : callStackVector) {
+    const CallFrame& callFrame = *framePtr;
     if (!callFrame.currentClass()->isInstanceOf(*throwable)) {
       include = true;
     }
@@ -329,4 +347,66 @@ void JavaThread::releaseNativeFrame()
   }
 
   mJniHandles.pop_back();
+}
+
+CallFrame* JavaThread::newFrame(JMethod* method)
+{
+  size_t allocationSize = sizeof(CallFrame);
+
+  CallFrame* callFrame = nullptr;
+  if (method->isNative()) {
+    void* mem = this->allocateCallFrameSpace(allocationSize);
+    callFrame = new (mem) CallFrame(method, mCurrentFrame);
+  } else {
+    size_t localsOffset = alignTo(allocationSize, alignof(uint64_t));
+    allocationSize = localsOffset;
+    allocationSize += method->getCode().maxLocals() * sizeof(uint64_t);
+
+    size_t localRefsOffset = alignTo(allocationSize, alignof(bool));
+    allocationSize = localRefsOffset;
+    allocationSize += method->getCode().maxLocals() * sizeof(bool);
+
+    size_t stackOffset = alignTo(allocationSize, alignof(uint64_t));
+    allocationSize = stackOffset;
+    allocationSize += method->getCode().maxStack() * sizeof(uint64_t);
+
+    size_t stackRefsOffset = alignTo(allocationSize, alignof(uint64_t));
+    allocationSize = stackRefsOffset;
+    allocationSize += method->getCode().maxStack() * sizeof(bool);
+
+    allocationSize = alignTo(allocationSize, alignof(CallFrame));
+
+    char* mem = static_cast<char*>(this->allocateCallFrameSpace(allocationSize));
+
+    uint64_t* localVariables = reinterpret_cast<uint64_t*>(mem + localsOffset);
+    bool* localRefs = reinterpret_cast<bool*>(mem + localRefsOffset);
+    uint64_t* stack = reinterpret_cast<uint64_t*>(mem + stackOffset);
+    bool* stackRefs = reinterpret_cast<bool*>(mem + stackRefsOffset);
+
+    callFrame = new (mem) CallFrame(method, mCurrentFrame, localVariables, localRefs, stack, stackRefs);
+  }
+
+  mCurrentFrame = callFrame;
+
+  return callFrame;
+}
+
+void* JavaThread::allocateCallFrameSpace(size_t allocationSize)
+{
+  if (mCallStackTop + allocationSize >= mCallStackSpace.get() + mVm.settings().maxStackSize) {
+    // TODO: Throw StackOverflowError
+    geevm_panic("Out of stack memory");
+  }
+
+  void* ptr = mCallStackTop;
+  mCallStackTop += allocationSize;
+
+  return ptr;
+}
+
+void JavaThread::popFrame()
+{
+  assert(mCurrentFrame != nullptr);
+  mCallStackTop = reinterpret_cast<char*>(mCurrentFrame);
+  mCurrentFrame = mCurrentFrame->previous();
 }

@@ -2,20 +2,20 @@
 
 using namespace geevm;
 
-CallFrame::CallFrame(JMethod* method, CallFrame* previous)
-  : mMethod(method), mPrevious(previous)
+CallFrame::CallFrame(JMethod* method, CallFrame* previous, std::uint64_t* localVariables, bool* localVariableReferences, std::uint64_t* operandStack,
+                     bool* operandStackReferences)
+  : mMethod(method),
+    mPrevious(previous),
+    mLocalVariables(localVariables),
+    mLocalVariableReferences(localVariableReferences),
+    mOperandStack(operandStack),
+    mOperandStackReferences(operandStackReferences)
 {
   if (!method->isNative()) {
     mCode = mMethod->getCode().bytes().data();
 
     uint16_t maxLocals = method->getCode().maxLocals();
     uint16_t maxStack = mMethod->getCode().maxStack();
-
-    mLocalVariables = new uint64_t[maxLocals];
-    mLocalVariableReferences = new bool[maxLocals];
-    mOperandStack = new uint64_t[maxStack];
-    mOperandStackReferences = new bool[maxStack];
-    mOperandStackPointer = 0;
 
     std::memset(mLocalVariables, 0, sizeof(uint64_t) * maxLocals);
     std::memset(mLocalVariableReferences, 0, sizeof(bool) * maxLocals);
@@ -26,11 +26,6 @@ CallFrame::CallFrame(JMethod* method, CallFrame* previous)
 
 CallFrame::~CallFrame()
 {
-  // Even if the frame was native, deleting nullptr is still valid
-  delete[] mLocalVariables;
-  delete[] mLocalVariableReferences;
-  delete[] mOperandStack;
-  delete[] mOperandStackReferences;
 }
 
 void CallFrame::prepareCall(CallFrame& other, uint16_t numArgs)
