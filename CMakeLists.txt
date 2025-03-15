@@ -39,7 +39,11 @@ set(GEEVM_SOURCES
   ${GEEVM_VM_SOURCES}
 )
 
-set(HARDENED_COMPILER_FLAGS "-D_GLIBCXX_ASSERTIONS -Wall -Wextra -Wconversion -Wimplicit-fallthrough")
+if (CMAKE_BUILD_TYPE STREQUAL "Debug")
+  set(HARDENED_COMPILER_FLAGS "-D_GLIBCXX_ASSERTIONS -Wall -Wextra -Wconversion -Wimplicit-fallthrough")
+else ()
+  set(HARDENED_COMPILER_FLAGS "")
+endif ()
 
 add_library(geevm ${GEEVM_SOURCES})
 target_compile_options(geevm PUBLIC ${HARDENED_COMPILER_FLAGS})

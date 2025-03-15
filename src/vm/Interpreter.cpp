@@ -661,9 +661,9 @@ void DefaultInterpreter::invoke(JMethod* method)
 
   if (returnValue.has_value()) {
     if (!method->isVoid()) {
-      mThread.currentFrame().pushGenericOperand(returnValue->toRaw().first, returnValue->toRaw().second);
+      mThread.currentFrame().pushGenericOperand(returnValue->toRaw().first);
       if (method->descriptor().returnType().getType().isCategoryTwo()) {
-        mThread.currentFrame().pushGenericOperand(0, false);
+        mThread.currentFrame().pushGenericOperand(0);
       }
     }
   }
@@ -914,9 +914,9 @@ void DefaultInterpreter::getStatic(RuntimeConstantPool& runtimeConstantPool)
   klass->initialize(mThread);
 
   Value value = klass->getStaticFieldValue(field->offset());
-  mCurrentFrame->pushGenericOperand(value.toRaw().first, value.toRaw().second);
+  mCurrentFrame->pushGenericOperand(value.toRaw().first);
   if (field->fieldType().isCategoryTwo()) {
-    mCurrentFrame->pushGenericOperand(0, false);
+    mCurrentFrame->pushGenericOperand(0);
   }
 }
 
@@ -997,8 +997,8 @@ void DefaultInterpreter::putField(RuntimeConstantPool& runtimeConstantPool)
 void DefaultInterpreter::dup()
 {
   auto value = currentFrame().popGenericOperand();
-  currentFrame().pushGenericOperand(value.toRaw().first, value.toRaw().second);
-  currentFrame().pushGenericOperand(value.toRaw().first, value.toRaw().second);
+  currentFrame().pushGenericOperand(value.toRaw().first);
+  currentFrame().pushGenericOperand(value.toRaw().first);
 }
 
 void DefaultInterpreter::dupX1()
@@ -1006,9 +1006,9 @@ void DefaultInterpreter::dupX1()
   auto value1 = currentFrame().popGenericOperand();
   auto value2 = currentFrame().popGenericOperand();
 
-  currentFrame().pushGenericOperand(value1.toRaw().first, value1.toRaw().second);
-  currentFrame().pushGenericOperand(value2.toRaw().first, value2.toRaw().second);
-  currentFrame().pushGenericOperand(value1.toRaw().first, value1.toRaw().second);
+  currentFrame().pushGenericOperand(value1.toRaw().first);
+  currentFrame().pushGenericOperand(value2.toRaw().first);
+  currentFrame().pushGenericOperand(value1.toRaw().first);
 }
 
 void DefaultInterpreter::dupX2()
@@ -1016,20 +1016,20 @@ void DefaultInterpreter::dupX2()
   auto value1 = currentFrame().popGenericOperand();
   auto value2 = currentFrame().popGenericOperand();
   auto value3 = currentFrame().popGenericOperand();
-  currentFrame().pushGenericOperand(value1.toRaw().first, value1.toRaw().second);
-  currentFrame().pushGenericOperand(value3.toRaw().first, value3.toRaw().second);
-  currentFrame().pushGenericOperand(value2.toRaw().first, value2.toRaw().second);
-  currentFrame().pushGenericOperand(value1.toRaw().first, value1.toRaw().second);
+  currentFrame().pushGenericOperand(value1.toRaw().first);
+  currentFrame().pushGenericOperand(value3.toRaw().first);
+  currentFrame().pushGenericOperand(value2.toRaw().first);
+  currentFrame().pushGenericOperand(value1.toRaw().first);
 }
 
 void DefaultInterpreter::dup2()
 {
   auto value1 = currentFrame().popGenericOperand();
   auto value2 = currentFrame().popGenericOperand();
-  currentFrame().pushGenericOperand(value2.toRaw().first, value2.toRaw().second);
-  currentFrame().pushGenericOperand(value1.toRaw().first, value1.toRaw().second);
-  currentFrame().pushGenericOperand(value2.toRaw().first, value2.toRaw().second);
-  currentFrame().pushGenericOperand(value1.toRaw().first, value1.toRaw().second);
+  currentFrame().pushGenericOperand(value2.toRaw().first);
+  currentFrame().pushGenericOperand(value1.toRaw().first);
+  currentFrame().pushGenericOperand(value2.toRaw().first);
+  currentFrame().pushGenericOperand(value1.toRaw().first);
 }
 
 void DefaultInterpreter::dup2X1()
@@ -1037,11 +1037,11 @@ void DefaultInterpreter::dup2X1()
   auto value1 = currentFrame().popGenericOperand();
   auto value2 = currentFrame().popGenericOperand();
   auto value3 = currentFrame().popGenericOperand();
-  currentFrame().pushGenericOperand(value2.toRaw().first, value2.toRaw().second);
-  currentFrame().pushGenericOperand(value1.toRaw().first, value1.toRaw().second);
-  currentFrame().pushGenericOperand(value3.toRaw().first, value3.toRaw().second);
-  currentFrame().pushGenericOperand(value2.toRaw().first, value2.toRaw().second);
-  currentFrame().pushGenericOperand(value1.toRaw().first, value1.toRaw().second);
+  currentFrame().pushGenericOperand(value2.toRaw().first);
+  currentFrame().pushGenericOperand(value1.toRaw().first);
+  currentFrame().pushGenericOperand(value3.toRaw().first);
+  currentFrame().pushGenericOperand(value2.toRaw().first);
+  currentFrame().pushGenericOperand(value1.toRaw().first);
 }
 
 void DefaultInterpreter::dup2X2()
@@ -1050,12 +1050,12 @@ void DefaultInterpreter::dup2X2()
   auto value2 = currentFrame().popGenericOperand();
   auto value3 = currentFrame().popGenericOperand();
   auto value4 = currentFrame().popGenericOperand();
-  currentFrame().pushGenericOperand(value2.toRaw().first, value2.toRaw().second);
-  currentFrame().pushGenericOperand(value1.toRaw().first, value1.toRaw().second);
-  currentFrame().pushGenericOperand(value4.toRaw().first, value4.toRaw().second);
-  currentFrame().pushGenericOperand(value3.toRaw().first, value3.toRaw().second);
-  currentFrame().pushGenericOperand(value2.toRaw().first, value2.toRaw().second);
-  currentFrame().pushGenericOperand(value1.toRaw().first, value1.toRaw().second);
+  currentFrame().pushGenericOperand(value2.toRaw().first);
+  currentFrame().pushGenericOperand(value1.toRaw().first);
+  currentFrame().pushGenericOperand(value4.toRaw().first);
+  currentFrame().pushGenericOperand(value3.toRaw().first);
+  currentFrame().pushGenericOperand(value2.toRaw().first);
+  currentFrame().pushGenericOperand(value1.toRaw().first);
 }
 
 void DefaultInterpreter::swap()
@@ -1063,8 +1063,8 @@ void DefaultInterpreter::swap()
   auto value1 = currentFrame().popGenericOperand();
   auto value2 = currentFrame().popGenericOperand();
 
-  currentFrame().pushGenericOperand(value1.toRaw().first, value1.toRaw().second);
-  currentFrame().pushGenericOperand(value2.toRaw().first, value2.toRaw().second);
+  currentFrame().pushGenericOperand(value1.toRaw().first);
+  currentFrame().pushGenericOperand(value2.toRaw().first);
 }
 
 void DefaultInterpreter::newArray()

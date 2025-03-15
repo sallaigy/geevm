@@ -54,7 +54,7 @@ public:
     mLocalVariables[index + 1] = 0;
   }
 
-  void storeGenericValue(types::u2 index, std::uint64_t rawValue, bool isReference)
+  void storeGenericValue(types::u2 index, std::uint64_t rawValue)
   {
     assert(index < mMethod->getCode().maxLocals());
     mLocalVariables[index] = rawValue;
@@ -106,7 +106,7 @@ public:
     return result;
   }
 
-  void pushGenericOperand(uint64_t rawValue, bool isReference)
+  void pushGenericOperand(uint64_t rawValue)
   {
     assert(mOperandStackPointer < mMethod->getCode().maxStack());
     mOperandStack[mOperandStackPointer] = rawValue;

@@ -128,7 +128,7 @@ std::optional<Value> JavaThread::invokeWithArgs(JMethod* method, std::vector<Val
 
     for (size_t i = 0; i < method->descriptor().parameters().size(); ++i) {
       auto& param = method->descriptor().parameters()[i];
-      newFrame->storeGenericValue(argIndex, arguments[i + instanceCallOffset].toRaw().first, arguments[i].toRaw().second);
+      newFrame->storeGenericValue(argIndex, arguments[i + instanceCallOffset].toRaw().first);
       argIndex += 1;
       if (param.isCategoryTwo()) {
         argIndex += 1;
