@@ -1,11 +1,11 @@
 #ifndef GEEVM_VM_METHOD_H
 #define GEEVM_VM_METHOD_H
 
-#include <class_file/Descriptor.h>
+#include "class_file/ClassFile.h"
+#include "class_file/Descriptor.h"
+#include "vm/StackMap.h"
 
 #include <utility>
-
-#include "class_file/ClassFile.h"
 
 namespace geevm
 {
@@ -15,10 +15,7 @@ class JClass;
 class JMethod
 {
 public:
-  explicit JMethod(const MethodInfo& methodInfo, InstanceClass* klass, types::JString name, types::JString rawDescriptor, MethodDescriptor descriptor)
-    : mClass(klass), mMethodInfo(methodInfo), mName(std::move(name)), mRawDescriptor(std::move(rawDescriptor)), mDescriptor(std::move(descriptor))
-  {
-  }
+  JMethod(const MethodInfo& methodInfo, InstanceClass* klass, types::JString name, types::JString rawDescriptor, MethodDescriptor descriptor);
 
   MethodAccessFlags accessFlags() const
   {
@@ -40,12 +37,17 @@ public:
     return mDescriptor.returnType().isVoid();
   }
 
+  bool isAbstract() const
+  {
+    return hasAccessFlag(mMethodInfo.accessFlags(), MethodAccessFlags::ACC_ABSTRACT);
+  }
+
   const MethodInfo& getMethodInfo() const
   {
     return mMethodInfo;
   }
 
-  const Code& getCode()
+  const Code& getCode() const
   {
     return mMethodInfo.code();
   }

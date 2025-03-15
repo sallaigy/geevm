@@ -2,6 +2,8 @@
 #define GEEVM_CLASS_FILE_ATTRIBUTES_H
 
 #include "common/JvmTypes.h"
+#include <span>
+#include <unordered_map>
 #include <vector>
 
 namespace geevm
@@ -37,14 +39,15 @@ public:
   //==--------------------------------------------------------------------==//
   Code(types::u2 maxStack, types::u2 maxLocals, std::vector<types::u1> bytes, std::vector<ExceptionTableEntry> exceptionTable,
        std::vector<LocalVariableTableEntry> localVariableTable, std::vector<LocalVariableTableEntry> localVariableTypeTable,
-       std::vector<LineNumberTableEntry> lineNumberTable)
+       std::vector<LineNumberTableEntry> lineNumberTable, std::unordered_map<types::JString, std::vector<types::u1>> attributes)
     : mMaxStack{maxStack},
       mMaxLocals{maxLocals},
       mBytes{std::move(bytes)},
       mExceptionTable{std::move(exceptionTable)},
       mLocalVariableTable{std::move(localVariableTable)},
       mLocalVariableTypeTable{std::move(localVariableTypeTable)},
-      mLineNumberTable{std::move(lineNumberTable)}
+      mLineNumberTable{std::move(lineNumberTable)},
+      mAttributes(std::move(attributes))
   {
   }
 
@@ -86,6 +89,14 @@ public:
     return mLineNumberTable;
   }
 
+  const std::vector<types::u1>* getAttribute(const types::JString& name) const
+  {
+    if (auto it = mAttributes.find(name); it != mAttributes.end()) {
+      return &it->second;
+    }
+    return nullptr;
+  }
+
 private:
   types::u2 mMaxStack;
   types::u2 mMaxLocals;
@@ -94,6 +105,7 @@ private:
   std::vector<LocalVariableTableEntry> mLocalVariableTable;
   std::vector<LocalVariableTableEntry> mLocalVariableTypeTable;
   std::vector<LineNumberTableEntry> mLineNumberTable;
+  std::unordered_map<types::JString, std::vector<types::u1>> mAttributes;
 };
 
 } // namespace geevm

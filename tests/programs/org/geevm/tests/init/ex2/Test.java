@@ -30,6 +30,7 @@ import org.geevm.util.Printer;
 
 public class Test {
     public static void main(String[] args) {
+        // CHECK-NOT: Sub
         // CHECK: 1729
         Printer.println(Sub.taxi);
     }

@@ -1,4 +1,5 @@
 ; RUN: %compile -d %t "%s" | FileCheck "%s"
+.bytecode 61.0
 .class org/geevm/tests/basic/Dup
 .super java/lang/Object
 
