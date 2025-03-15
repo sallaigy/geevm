@@ -365,28 +365,18 @@ CallFrame* JavaThread::newFrame(JMethod* method)
     allocationSize = localsOffset;
     allocationSize += method->getCode().maxLocals() * sizeof(uint64_t);
 
-    size_t localRefsOffset = alignTo(allocationSize, alignof(bool));
-    allocationSize = localRefsOffset;
-    allocationSize += method->getCode().maxLocals() * sizeof(bool);
-
     size_t stackOffset = alignTo(allocationSize, alignof(uint64_t));
     allocationSize = stackOffset;
     allocationSize += method->getCode().maxStack() * sizeof(uint64_t);
-
-    size_t stackRefsOffset = alignTo(allocationSize, alignof(uint64_t));
-    allocationSize = stackRefsOffset;
-    allocationSize += method->getCode().maxStack() * sizeof(bool);
 
     allocationSize = alignTo(allocationSize, alignof(CallFrame));
 
     char* mem = static_cast<char*>(this->allocateCallFrameSpace(allocationSize));
 
     uint64_t* localVariables = reinterpret_cast<uint64_t*>(mem + localsOffset);
-    bool* localRefs = reinterpret_cast<bool*>(mem + localRefsOffset);
     uint64_t* stack = reinterpret_cast<uint64_t*>(mem + stackOffset);
-    bool* stackRefs = reinterpret_cast<bool*>(mem + stackRefsOffset);
 
-    callFrame = new (mem) CallFrame(method, mCurrentFrame, localVariables, localRefs, stack, stackRefs);
+    callFrame = new (mem) CallFrame(method, mCurrentFrame, localVariables, stack);
   }
 
   mCurrentFrame = callFrame;
