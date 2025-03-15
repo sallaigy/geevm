@@ -138,6 +138,22 @@ public:
     return value;
   }
 
+  uint16_t stackPointer()
+  {
+    return mOperandStackPointer;
+  }
+
+  void popMultiple(uint16_t count)
+  {
+    mOperandStackPointer = mOperandStackPointer - count;
+  }
+
+  uint64_t stackElementAt(uint16_t index)
+  {
+    assert(index < mOperandStackPointer);
+    return mOperandStack[index];
+  }
+
   template<JvmType T>
   T peek(int32_t entry = 0)
   {

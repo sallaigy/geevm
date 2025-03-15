@@ -365,6 +365,8 @@ Code ClassFileReader::readCode(const ConstantPool& constantPool)
   }
 
   std::vector<Code::LineNumberTableEntry> lineNumberTable;
+  std::unordered_map<types::JString, std::vector<types::u1>> attributes;
+
   // Code attributes
   types::u2 codeAttributesCount = mStream.readU2();
   for (types::u2 i = 0; i < codeAttributesCount; ++i) {
@@ -379,10 +381,10 @@ Code ClassFileReader::readCode(const ConstantPool& constantPool)
         lineNumberTable.emplace_back(startPc, lineNumber);
       }
     } else {
-      mStream.skip(codeAttrLength);
+      attributes[types::JString{attrName}] = mStream.readVector(codeAttrLength);
     }
   }
 
-  return Code{maxStack,       maxLocals, bytes, exceptionTable, std::vector<Code::LocalVariableTableEntry>{}, std::vector<Code::LocalVariableTableEntry>{},
-              lineNumberTable};
+  return Code{maxStack,        maxLocals, bytes, exceptionTable, std::vector<Code::LocalVariableTableEntry>{}, std::vector<Code::LocalVariableTableEntry>{},
+              lineNumberTable, attributes};
 }

@@ -34,5 +34,5 @@ void CallFrame::prepareCall(CallFrame& other, uint16_t numArgs)
   assert(startIndex >= 0);
   std::memcpy(other.mLocalVariables, mOperandStack + startIndex, numArgs * sizeof(uint64_t));
   std::memcpy(other.mLocalVariableReferences, mOperandStackReferences + startIndex, numArgs * sizeof(bool));
-  mOperandStackPointer = startIndex;
+  // The operand stack is not popped until the call is actually finished
 }

@@ -81,9 +81,12 @@ std::optional<Value> JavaThread::invoke(JMethod* method)
     current->prepareCall(*newFrame, numSlots);
 
     returnValue = this->executeCall(method, current, *newFrame);
+
+    current->popMultiple(numSlots);
   } else {
     std::vector<Value> args;
     for (const auto& param : std::ranges::reverse_view(method->descriptor().parameters())) {
+      // FIXME: Operands should actually be popped after executing the call, not before
       if (param.isCategoryTwo()) {
         current->popGenericOperand();
       }

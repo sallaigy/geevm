@@ -224,6 +224,7 @@ private:
   void initializeRuntimeConstantPool(JavaHeap& heap, BootstrapClassLoader& classLoader);
   Value getInitialFieldValue(const FieldType& fieldType, types::u2 cvIndex);
   void prepareMethods();
+  void prepareStaticFields();
 
 protected:
   void linkFields();

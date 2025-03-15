@@ -71,6 +71,8 @@ void JClass::prepare(BootstrapClassLoader& classLoader, JavaHeap& heap)
       arrayClass->mElementClass = *classLoader.loadClass(array.className());
     });
   } else if (auto instanceClass = this->asInstanceClass(); instanceClass != nullptr) {
+    instanceClass->prepareMethods();
+    instanceClass->prepareStaticFields();
     if (auto superClass = instanceClass->constantPool().getOptionalClassName(instanceClass->mClassFile->superClass())) {
       this->linkSuperClass(*superClass, classLoader);
     }
@@ -80,7 +82,6 @@ void JClass::prepare(BootstrapClassLoader& classLoader, JavaHeap& heap)
     }
     this->linkSuperInterfaces(interfaces, classLoader);
     instanceClass->linkFields();
-    instanceClass->prepareMethods();
   }
 
   auto classClass = classLoader.loadClass(u"java/lang/Class");
@@ -154,12 +155,6 @@ void JClass::initialize(JavaThread& thread)
 
 void InstanceClass::linkFields()
 {
-  if (!mFields.empty()) {
-    return;
-  }
-
-  size_t staticFieldOffset = 0;
-
   size_t currentOffset = this->headerSize();
   if (this->superClass() != nullptr) {
     for (auto& [name, field] : this->superClass()->fields()) {
@@ -173,28 +168,46 @@ void InstanceClass::linkFields()
   }
 
   for (const FieldInfo& field : mClassFile->fields()) {
+    if (hasAccessFlag(field.accessFlags(), FieldAccessFlags::ACC_STATIC)) {
+      continue;
+    }
+
     auto fieldName = mClassFile->constantPool().getString(field.nameIndex());
     auto descriptor = mClassFile->constantPool().getString(field.descriptorIndex());
     auto fieldType = FieldType::parse(descriptor);
     assert(fieldType.has_value());
 
-    std::unique_ptr<JField> jfield = nullptr;
-    if (hasAccessFlag(field.accessFlags(), FieldAccessFlags::ACC_STATIC)) {
-      assert(mStaticFieldValues.size() == staticFieldOffset);
-      jfield = std::make_unique<JField>(field, this, types::JString{fieldName}, types::JString{descriptor}, *fieldType, staticFieldOffset++);
-      mStaticFieldValues.emplace_back(Value::defaultValue(*fieldType));
-    } else {
-      size_t fieldSize = fieldType->sizeOf();
-      currentOffset = alignTo(currentOffset, fieldSize);
-      jfield = std::make_unique<JField>(field, this, types::JString{fieldName}, types::JString{descriptor}, *fieldType, currentOffset);
-      currentOffset += fieldSize;
-    }
+    size_t fieldSize = fieldType->sizeOf();
+    currentOffset = alignTo(currentOffset, fieldSize);
+    auto jfield = std::make_unique<JField>(field, this, types::JString{fieldName}, types::JString{descriptor}, *fieldType, currentOffset);
+    currentOffset += fieldSize;
 
     NameAndDescriptor key{fieldName, descriptor};
     mFields.try_emplace(key, std::move(jfield));
   }
 
   mAllocationSize = currentOffset;
+}
+
+void InstanceClass::prepareStaticFields()
+{
+  size_t staticFieldOffset = 0;
+
+  for (const FieldInfo& field : mClassFile->fields()) {
+    if (hasAccessFlag(field.accessFlags(), FieldAccessFlags::ACC_STATIC)) {
+      assert(mStaticFieldValues.size() == staticFieldOffset);
+
+      auto fieldName = mClassFile->constantPool().getString(field.nameIndex());
+      auto descriptor = mClassFile->constantPool().getString(field.descriptorIndex());
+      auto fieldType = FieldType::parse(descriptor);
+
+      auto jfield = std::make_unique<JField>(field, this, types::JString{fieldName}, types::JString{descriptor}, *fieldType, staticFieldOffset++);
+      mStaticFieldValues.emplace_back(Value::defaultValue(*fieldType));
+
+      NameAndDescriptor key{fieldName, descriptor};
+      mFields.try_emplace(key, std::move(jfield));
+    }
+  }
 }
 
 void InstanceClass::initializeFields()

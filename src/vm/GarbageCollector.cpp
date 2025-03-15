@@ -1,8 +1,10 @@
 #include "vm/GarbageCollector.h"
+
 #include "common/Debug.h"
 #include "common/JvmError.h"
 #include "common/Memory.h"
 #include "vm/Class.h"
+#include "vm/GcRoots.h"
 #include "vm/Vm.h"
 
 #include <cstdlib>
@@ -135,12 +137,15 @@ void GarbageCollector::performGarbageCollection()
         continue;
       }
 
-      for (auto [i, object] : frame.referencesInLocals()) {
+      uint64_t pos = frame.programCounter();
+      FrameRoots roots = FrameRoots::compute(frame.currentMethod(), pos);
+
+      for (auto [i, object] : roots.referencesInLocals(frame)) {
         auto* copy = this->copyObject(object, map);
         frame.storeValue(i, copy);
       }
 
-      for (auto [i, object] : frame.referencesOnStack()) {
+      for (auto [i, object] : roots.referencesInOperandStack(frame)) {
         auto* copy = this->copyObject(object, map);
         frame.replaceStackValue(i, copy);
       }

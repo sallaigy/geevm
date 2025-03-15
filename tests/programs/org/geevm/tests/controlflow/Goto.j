@@ -1,4 +1,5 @@
 ; RUN: %compile -d %t "%s" 2>&1 | FileCheck "%s"
+.bytecode 61.0
 .class org/geevm/tests/controlflow/Goto
 .super java/lang/Object
 
@@ -15,10 +16,11 @@
     ldc "fail"
     invokestatic org/geevm/util/Printer/println(Ljava/lang/String;)V
 Label:
+    .stack
+    .end stack
     ; CHECK: success
     ldc "success"
     invokestatic org/geevm/util/Printer/println(Ljava/lang/String;)V
-
     return
 
 .end method
