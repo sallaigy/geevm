@@ -17,8 +17,7 @@ class InstanceClass;
 class CallFrame
 {
 public:
-  CallFrame(JMethod* method, CallFrame* previous, std::uint64_t* localVariables = nullptr, bool* localVariableReferences = nullptr,
-            std::uint64_t* operandStack = nullptr, bool* operandStackReferences = nullptr);
+  CallFrame(JMethod* method, CallFrame* previous, std::uint64_t* localVariables = nullptr, std::uint64_t* operandStack = nullptr);
 
   CallFrame(const CallFrame&) = delete;
   CallFrame& operator=(const CallFrame&) = delete;
@@ -44,11 +43,6 @@ public:
     using U = typename unsigned_type_of_length<sizeof(T) * CHAR_BIT>::type;
     assert(index < mMethod->getCode().maxLocals());
     mLocalVariables[index] = static_cast<uint64_t>(std::bit_cast<U>(value));
-    if constexpr (std::is_same_v<T, Instance*>) {
-      mLocalVariableReferences[index] = true;
-    } else {
-      mLocalVariableReferences[index] = false;
-    }
   }
 
   template<CategoryTwoJvmType T>
@@ -58,21 +52,18 @@ public:
     assert(index + 1 < mMethod->getCode().maxLocals());
     mLocalVariables[index] = std::bit_cast<uint64_t>(value);
     mLocalVariables[index + 1] = 0;
-    mLocalVariableReferences[index] = false;
-    mLocalVariableReferences[index + 1] = false;
   }
 
   void storeGenericValue(types::u2 index, std::uint64_t rawValue, bool isReference)
   {
     assert(index < mMethod->getCode().maxLocals());
     mLocalVariables[index] = rawValue;
-    mLocalVariableReferences[index] = isReference;
   }
 
   std::pair<uint64_t, bool> loadGenericValue(types::u2 index)
   {
     assert(index < mMethod->getCode().maxLocals());
-    return std::make_pair(mLocalVariables[index], mLocalVariableReferences[index]);
+    return std::make_pair(mLocalVariables[index], false);
   }
 
   template<JvmType T>
@@ -90,17 +81,11 @@ public:
     assert(mOperandStackPointer < mMethod->getCode().maxStack());
     using U = typename unsigned_type_of_length<sizeof(T) * CHAR_BIT>::type;
     mOperandStack[mOperandStackPointer] = static_cast<uint64_t>(std::bit_cast<U>(value));
-    if constexpr (std::is_same_v<T, Instance*>) {
-      mOperandStackReferences[mOperandStackPointer] = true;
-    } else {
-      mOperandStackReferences[mOperandStackPointer] = false;
-    }
     mOperandStackPointer++;
 
     if constexpr (CategoryTwoJvmType<T>) {
       assert(mOperandStackPointer < mMethod->getCode().maxStack());
       mOperandStack[mOperandStackPointer] = 0;
-      mOperandStackReferences[mOperandStackPointer] = false;
       mOperandStackPointer++;
     }
   }
@@ -125,14 +110,13 @@ public:
   {
     assert(mOperandStackPointer < mMethod->getCode().maxStack());
     mOperandStack[mOperandStackPointer] = rawValue;
-    mOperandStackReferences[mOperandStackPointer] = isReference;
     mOperandStackPointer++;
   }
 
   Value popGenericOperand()
   {
     assert(mOperandStackPointer > 0 && "Cannot pop from an empty operand stack!");
-    Value value(mOperandStack[mOperandStackPointer - 1], mOperandStackReferences[mOperandStackPointer - 1]);
+    Value value(mOperandStack[mOperandStackPointer - 1], false);
     mOperandStackPointer--;
 
     return value;
@@ -167,11 +151,6 @@ public:
   {
     assert(mOperandStackPointer > index);
     mOperandStack[index] = std::bit_cast<uint64_t>(value);
-    if constexpr (std::is_same_v<T, Instance*>) {
-      mOperandStackReferences[index] = true;
-    } else {
-      mOperandStackReferences[index] = false;
-    }
   }
 
   /// Prepares another call frame for a function call, passing `numArgs` values from
@@ -180,23 +159,6 @@ public:
 
   // Iterators
   //==--------------------------------------------------------------------==//
-  std::generator<std::pair<uint16_t, Instance*>> referencesOnStack()
-  {
-    for (uint16_t i = 0; i < mOperandStackPointer; i++) {
-      if (mOperandStackReferences[i]) {
-        co_yield std::make_pair(i, std::bit_cast<Instance*>(mOperandStack[i]));
-      }
-    }
-  }
-
-  std::generator<std::pair<uint16_t, Instance*>> referencesInLocals()
-  {
-    for (uint16_t i = 0; i < mMethod->getCode().maxLocals(); i++) {
-      if (mLocalVariableReferences[i]) {
-        co_yield std::make_pair(i, std::bit_cast<Instance*>(mLocalVariables[i]));
-      }
-    }
-  }
 
   CallFrame* previous() const
   {
@@ -245,9 +207,7 @@ public:
 
 private:
   std::uint64_t* mLocalVariables = nullptr;
-  bool* mLocalVariableReferences = nullptr;
   std::uint64_t* mOperandStack = nullptr;
-  bool* mOperandStackReferences = nullptr;
   std::uint16_t mOperandStackPointer = 0;
 
   int64_t mPos = 0;
