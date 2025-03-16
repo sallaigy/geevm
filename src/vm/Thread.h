@@ -93,7 +93,8 @@ public:
   GcRootRef<Instance> addJniHandle(Instance* instance);
 
 private:
-  std::optional<Value> executeCall(JMethod* method, CallFrame* current, CallFrame& newFrame);
+  /// Executes the topmost frame of the call stack
+  std::optional<Value> executeTopFrame();
   std::optional<Value> executeNative(JMethod* method, CallFrame& frame, std::vector<Value> arguments);
   void handleCalleeException(CallFrame* callerFrame);
 

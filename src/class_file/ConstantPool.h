@@ -35,7 +35,7 @@ public:
   struct Entry
   {
     Tag tag;
-    union
+    union DataUnion
     {
       // Classes and interfaces (CONSTANT_Class_info) [4.4.1.]
       struct
@@ -89,7 +89,12 @@ public:
       struct
       {
       } empty;
-    } data;
+    };
+
+    static_assert(sizeof(DataUnion) == sizeof(uint64_t));
+    static_assert(alignof(DataUnion) == alignof(uint64_t));
+
+    DataUnion data;
   };
 
   // Constructors
@@ -102,7 +107,7 @@ public:
   const Entry& getEntry(types::u2 index) const
   {
     assert(index > 0 && "Invalid constant pool index!");
-    return mEntries.at(index - 1);
+    return mEntries[index - 1];
   }
 
   const Entry& operator[](types::u2 index) const

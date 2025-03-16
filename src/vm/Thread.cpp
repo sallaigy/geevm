@@ -81,7 +81,7 @@ std::optional<Value> JavaThread::invoke(JMethod* method)
     }
     current->prepareCall(*newFrame, numSlots);
 
-    returnValue = this->executeCall(method, current, *newFrame);
+    returnValue = this->executeTopFrame();
 
     current->popMultiple(numSlots);
   } else {
@@ -136,7 +136,7 @@ std::optional<Value> JavaThread::invokeWithArgs(JMethod* method, std::vector<Val
       }
     }
 
-    returnValue = this->executeCall(method, current, *newFrame);
+    returnValue = this->executeTopFrame();
   }
 
   this->popFrame();
@@ -145,12 +145,10 @@ std::optional<Value> JavaThread::invokeWithArgs(JMethod* method, std::vector<Val
   return returnValue;
 }
 
-std::optional<Value> JavaThread::executeCall(JMethod* method, CallFrame* current, CallFrame& newFrame)
+std::optional<Value> JavaThread::executeTopFrame()
 {
-  std::optional<Value> returnValue;
   auto interpreter = createDefaultInterpreter(*this);
-
-  return interpreter->execute(method->getCode(), 0);
+  return interpreter->execute();
 }
 
 void JavaThread::handleCalleeException(CallFrame* callerFrame)

@@ -20,7 +20,7 @@ public:
   {
   }
 
-  std::optional<Value> execute(const Code& code, std::size_t startPc) override;
+  std::optional<Value> execute() override;
 
 private:
   void invoke(JMethod* method);
@@ -35,14 +35,14 @@ private:
   }
 
   template<JvmType T>
-  void loadAndPush(types::u2 index)
+  void loadAndPush(size_t index)
   {
     T val = currentFrame().loadValue<T>(index);
     currentFrame().pushOperand<T>(val);
   }
 
   template<JvmType T>
-  void popAndStore(types::u2 index)
+  void popAndStore(size_t index)
   {
     T val = currentFrame().popOperand<T>();
     currentFrame().storeValue<T>(index, val);
@@ -119,6 +119,7 @@ private:
   void dup2X2();
 
   void ldc(types::u2 index);
+  void ldc2_w(types::u2 index);
   void lookupSwitch();
   void tableSwitch();
   void wide(Opcode modifiedOpcode);
@@ -172,7 +173,7 @@ bool DefaultInterpreter::checkException(RuntimeConstantPool& runtimeConstantPool
     }                                                                     \
   }
 
-std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t startPc)
+std::optional<Value> DefaultInterpreter::execute()
 {
   mCurrentFrame = &mThread.currentFrame();
   RuntimeConstantPool& runtimeConstantPool = mCurrentFrame->currentClass()->runtimeConstantPool();
@@ -207,22 +208,7 @@ std::optional<Value> DefaultInterpreter::execute(const Code& code, std::size_t s
       case SIPUSH: mCurrentFrame->pushOperand<int32_t>(std::bit_cast<int16_t>(mCurrentFrame->readU2())); break;
       case LDC: WITH_EXCEPTION_CHECK(ldc(mCurrentFrame->readU1())); break;
       case LDC_W: WITH_EXCEPTION_CHECK(ldc(mCurrentFrame->readU2())); break;
-      case LDC2_W:
-        WITH_EXCEPTION_CHECK({
-          types::u2 index = mCurrentFrame->readU2();
-          auto& entry = mCurrentFrame->currentClass()->constantPool().getEntry(index);
-          auto tag = entry.tag;
-          auto data = entry.data;
-
-          if (tag == ConstantPool::Tag::CONSTANT_Double) {
-            mCurrentFrame->pushOperand<double>(data.doubleFloat);
-          } else if (tag == ConstantPool::Tag::CONSTANT_Long) {
-            mCurrentFrame->pushOperand<int64_t>(data.doubleInteger);
-          } else {
-            GEEVM_UNREACHBLE("ldc2_w target entry must be double or long");
-          }
-        })
-        break;
+      case LDC2_W: WITH_EXCEPTION_CHECK(ldc2_w(mCurrentFrame->readU2())); break;
       //==--------------------------------------------------------------------==
       // Local variable load and push
       //==--------------------------------------------------------------------==
@@ -657,6 +643,18 @@ void DefaultInterpreter::ldc(types::u2 index)
   }
 }
 
+void DefaultInterpreter::ldc2_w(types::u2 index)
+{
+  auto& entry = mCurrentFrame->currentClass()->constantPool().getEntry(index);
+  [[maybe_unused]] auto tag = entry.tag;
+
+  assert(tag == ConstantPool::Tag::CONSTANT_Double || tag == ConstantPool::Tag::CONSTANT_Long);
+  uint64_t* target = mCurrentFrame->topOfStack();
+
+  *target = std::bit_cast<uint64_t>(entry.data);
+  mCurrentFrame->advanceStackPointer(2);
+}
+
 void DefaultInterpreter::invoke(JMethod* method)
 {
   auto returnValue = mThread.invoke(method);
@@ -681,8 +679,11 @@ template<JvmType T>
 void DefaultInterpreter::arrayLoad()
 {
   auto index = currentFrame().popOperand<int32_t>();
-  auto arrayRef = currentFrame().popOperand<Instance*>();
 
+  uint64_t* target = mCurrentFrame->topOfStack() - 1;
+  // auto arrayRef = currentFrame().popOperand<Instance*>();
+
+  auto arrayRef = *reinterpret_cast<Instance**>(target);
   if (arrayRef == nullptr) [[unlikely]] {
     mThread.throwException(u"java/lang/NullPointerException");
     return;
@@ -697,9 +698,16 @@ void DefaultInterpreter::arrayLoad()
   auto element = (*array)[index];
 
   if constexpr (StoredAsInt<T>) {
-    currentFrame().pushOperand<int32_t>(static_cast<int32_t>(element));
+    *target = static_cast<uint64_t>(std::bit_cast<uint32_t>(static_cast<int32_t>(element)));
+    // currentFrame().pushOperand<int32_t>(static_cast<int32_t>(element));
   } else {
-    currentFrame().pushOperand<T>(element);
+    using U = typename unsigned_type_of_length<sizeof(T) * CHAR_BIT>::type;
+    *target = static_cast<uint64_t>(std::bit_cast<U>(element));
+    // currentFrame().pushOperand<T>(element);
+  }
+
+  if constexpr (CategoryTwoJvmType<T>) {
+    currentFrame().advanceStackPointer(1);
   }
 }
 

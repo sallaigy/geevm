@@ -19,7 +19,7 @@ class Vm;
 class Interpreter
 {
 public:
-  virtual std::optional<Value> execute(const Code& code, std::size_t pc) = 0;
+  virtual std::optional<Value> execute() = 0;
   virtual ~Interpreter() = default;
 };
 
