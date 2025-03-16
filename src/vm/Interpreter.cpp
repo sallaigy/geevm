@@ -63,7 +63,10 @@ private:
   template<JvmType T>
   void neg();
 
-  template<JvmType T, class F>
+  template<CategoryOneJvmType T, class F>
+  void simpleOp();
+
+  template<CategoryTwoJvmType T, class F>
   void simpleOp();
 
   template<JavaIntegerType T, class ShiftType, uint32_t OffsetMask, bool IsLeft>
@@ -680,22 +683,23 @@ void DefaultInterpreter::arrayLoad()
   auto index = currentFrame().popOperand<int32_t>();
   auto arrayRef = currentFrame().popOperand<Instance*>();
 
-  if (arrayRef == nullptr) {
+  if (arrayRef == nullptr) [[unlikely]] {
     mThread.throwException(u"java/lang/NullPointerException");
     return;
   }
 
   JavaArray<T>* array = arrayRef->toArray<T>();
-  auto element = array->getArrayElement(index);
-  if (!element) {
-    this->handleErrorAsException(element.error());
+  if (index < 0 || index >= array->length()) [[unlikely]] {
+    mThread.throwException(u"java/lang/ArrayIndexOutOfBoundsException");
     return;
   }
 
+  auto element = (*array)[index];
+
   if constexpr (StoredAsInt<T>) {
-    currentFrame().pushOperand<int32_t>(static_cast<int32_t>(*element));
+    currentFrame().pushOperand<int32_t>(static_cast<int32_t>(element));
   } else {
-    currentFrame().pushOperand<T>(*element);
+    currentFrame().pushOperand<T>(element);
   }
 }
 
@@ -777,14 +781,27 @@ void DefaultInterpreter::neg()
   currentFrame().pushOperand<T>(result);
 }
 
-template<JvmType T, class F>
+template<CategoryOneJvmType T, class F>
 void DefaultInterpreter::simpleOp()
 {
   T value2 = currentFrame().popOperand<T>();
-  T value1 = currentFrame().popOperand<T>();
+  uint64_t* target = currentFrame().topOfStack() - 1;
+
+  using U = typename unsigned_type_of_length<sizeof(T) * CHAR_BIT>::type;
+  T value1 = std::bit_cast<T>(static_cast<U>(*target));
 
   T result = F{}(value1, value2);
-  currentFrame().pushOperand<T>(result);
+  *target = static_cast<uint64_t>(std::bit_cast<U>(result));
+}
+
+template<CategoryTwoJvmType T, class F>
+void DefaultInterpreter::simpleOp()
+{
+  T value2 = currentFrame().popOperand<T>();
+  uint64_t* target = currentFrame().topOfStack() - 2;
+
+  T result = F{}(std::bit_cast<T>(*target), value2);
+  *target = std::bit_cast<uint64_t>(result);
 }
 
 template<JavaIntegerType T, class ShiftType, uint32_t OffsetMask, bool IsLeft>

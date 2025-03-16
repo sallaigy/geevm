@@ -119,7 +119,7 @@ std::generator<std::pair<uint16_t, Instance*>> FrameRoots::referencesInOperandSt
 {
   for (uint16_t i = 0; i < frame.stackPointer(); i++) {
     if (mOperandStackReferences[i]) {
-      co_yield std::make_pair(i, std::bit_cast<Instance*>(frame.stackElementAt(i)));
+      co_yield std::make_pair(i, std::bit_cast<Instance*>(*frame.stackElementAt(i)));
     }
   }
 }

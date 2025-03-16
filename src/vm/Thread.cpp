@@ -40,6 +40,7 @@ void JavaThread::start(JMethod* method, std::vector<Value> arguments)
     this->run();
   });
   mThreadInstance->setFieldValue<int64_t>(u"eetop", u"J", (long)mNativeThread.native_handle());
+  mNativeThread.join();
 }
 
 void JavaThread::run()
