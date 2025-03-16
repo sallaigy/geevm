@@ -51,7 +51,6 @@ public:
     assert(index < mMethod->getCode().maxLocals());
     assert(index + 1 < mMethod->getCode().maxLocals());
     mLocalVariables[index] = std::bit_cast<uint64_t>(value);
-    mLocalVariables[index + 1] = 0;
   }
 
   void storeGenericValue(types::u2 index, std::uint64_t rawValue)
@@ -73,6 +72,12 @@ public:
     return std::bit_cast<T>(static_cast<U>(mLocalVariables[index]));
   }
 
+  uint64_t* localVariableAt(types::u2 index)
+  {
+    assert(index < mMethod->getCode().maxLocals());
+    return &mLocalVariables[index];
+  }
+
   // Operand stack
   //==--------------------------------------------------------------------==//
   template<JvmType T>
@@ -85,7 +90,6 @@ public:
 
     if constexpr (CategoryTwoJvmType<T>) {
       assert(mOperandStackPointer < mMethod->getCode().maxStack());
-      mOperandStack[mOperandStackPointer] = 0;
       mOperandStackPointer++;
     }
   }
@@ -132,10 +136,22 @@ public:
     mOperandStackPointer = mOperandStackPointer - count;
   }
 
-  uint64_t stackElementAt(uint16_t index)
+  uint64_t* stackElementAt(uint16_t index)
   {
     assert(index < mOperandStackPointer);
-    return mOperandStack[index];
+    return &mOperandStack[index];
+  }
+
+  uint64_t* topOfStack()
+  {
+    assert(mOperandStackPointer < mMethod->getCode().maxStack());
+    return &mOperandStack[mOperandStackPointer];
+  }
+
+  void advanceStackPointer(types::u2 count)
+  {
+    assert(mOperandStackPointer + count <= mMethod->getCode().maxStack());
+    mOperandStackPointer += count;
   }
 
   template<JvmType T>
@@ -208,7 +224,7 @@ public:
 private:
   std::uint64_t* mLocalVariables = nullptr;
   std::uint64_t* mOperandStack = nullptr;
-  std::uint16_t mOperandStackPointer = 0;
+  std::size_t mOperandStackPointer = 0;
 
   int64_t mPos = 0;
   const types::u1* mCode;
