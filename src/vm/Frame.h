@@ -38,7 +38,7 @@ public:
   //==--------------------------------------------------------------------==//
 
   template<CategoryOneJvmType T>
-  void storeValue(types::u2 index, T value)
+  void storeValue(size_t index, T value)
   {
     using U = typename unsigned_type_of_length<sizeof(T) * CHAR_BIT>::type;
     assert(index < mMethod->getCode().maxLocals());
@@ -46,33 +46,33 @@ public:
   }
 
   template<CategoryTwoJvmType T>
-  void storeValue(types::u2 index, T value)
+  void storeValue(size_t index, T value)
   {
     assert(index < mMethod->getCode().maxLocals());
     assert(index + 1 < mMethod->getCode().maxLocals());
     mLocalVariables[index] = std::bit_cast<uint64_t>(value);
   }
 
-  void storeGenericValue(types::u2 index, std::uint64_t rawValue)
+  void storeGenericValue(size_t index, std::uint64_t rawValue)
   {
     assert(index < mMethod->getCode().maxLocals());
     mLocalVariables[index] = rawValue;
   }
 
-  std::pair<uint64_t, bool> loadGenericValue(types::u2 index)
+  std::pair<uint64_t, bool> loadGenericValue(size_t index)
   {
     assert(index < mMethod->getCode().maxLocals());
     return std::make_pair(mLocalVariables[index], false);
   }
 
   template<JvmType T>
-  T loadValue(types::u2 index)
+  T loadValue(size_t index)
   {
     using U = typename unsigned_type_of_length<sizeof(T) * CHAR_BIT>::type;
     return std::bit_cast<T>(static_cast<U>(mLocalVariables[index]));
   }
 
-  uint64_t* localVariableAt(types::u2 index)
+  uint64_t* localVariableAt(size_t index)
   {
     assert(index < mMethod->getCode().maxLocals());
     return &mLocalVariables[index];
