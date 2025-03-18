@@ -120,13 +120,13 @@ public:
   Value popGenericOperand()
   {
     assert(mOperandStackPointer > 0 && "Cannot pop from an empty operand stack!");
-    Value value(mOperandStack[mOperandStackPointer - 1], false);
+    Value value{mOperandStack[mOperandStackPointer - 1]};
     mOperandStackPointer--;
 
     return value;
   }
 
-  uint16_t stackPointer()
+  uint16_t stackPointer() const
   {
     return mOperandStackPointer;
   }
