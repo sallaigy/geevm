@@ -5,7 +5,6 @@
 #include "common/Hash.h"
 #include "common/JvmTypes.h"
 #include "vm/Field.h"
-#include "vm/Frame.h"
 #include "vm/Instance.h"
 #include "vm/Method.h"
 #include "vm/Runtime.h"

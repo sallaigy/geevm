@@ -7,7 +7,6 @@
 #include "vm/Value.h"
 
 #include <cassert>
-#include <generator>
 
 namespace geevm
 {

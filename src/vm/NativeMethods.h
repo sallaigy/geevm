@@ -1,9 +1,10 @@
 #ifndef GEEVM_NATIVEMETHODS_H
 #define GEEVM_NATIVEMETHODS_H
 
-#include "vm/Frame.h"
+#include "vm/Value.h"
 
 #include <jni.h>
+#include <optional>
 
 namespace geevm
 {
@@ -11,6 +12,7 @@ namespace geevm
 class JavaThread;
 class Vm;
 class CallFrame;
+class JMethod;
 
 class NativeMethod
 {

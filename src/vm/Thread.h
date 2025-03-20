@@ -2,10 +2,10 @@
 #define GEEVM_THREAD_H
 
 #include "common/JvmError.h"
-#include "vm/Frame.h"
 #include "vm/GarbageCollector.h"
+#include "vm/Value.h"
 
-#include <list>
+#include <generator>
 #include <thread>
 
 namespace geevm
@@ -13,6 +13,8 @@ namespace geevm
 
 class JavaHeap;
 class Vm;
+class CallFrame;
+class JMethod;
 
 class JavaThread
 {
@@ -60,6 +62,7 @@ public:
   }
 
   std::generator<CallFrame&> callStack();
+
   bool isCallStackEmpty()
   {
     return mCurrentFrame == nullptr;

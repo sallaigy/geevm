@@ -5,7 +5,6 @@
 #include "vm/Class.h"
 #include "vm/ClassLoader.h"
 #include "vm/Heap.h"
-#include "vm/Interpreter.h"
 #include "vm/NativeMethods.h"
 #include "vm/Thread.h"
 
@@ -80,6 +79,7 @@ private:
   std::unordered_map<types::JString, std::unique_ptr<JClass>> mLoadedClasses;
   NativeMethodRegistry mNativeMethods;
   JavaHeap mHeap;
+
   // TODO: We only support one thread
   JavaThread* mMainThread = nullptr;
   std::vector<std::unique_ptr<JavaThread>> mThreads;

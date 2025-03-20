@@ -4,6 +4,7 @@
 #include "common/JvmError.h"
 #include "common/Memory.h"
 #include "vm/Class.h"
+#include "vm/Frame.h"
 #include "vm/GcRoots.h"
 #include "vm/Vm.h"
 

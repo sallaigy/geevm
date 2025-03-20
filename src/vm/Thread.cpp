@@ -1,7 +1,7 @@
 #include "vm/Thread.h"
 #include "common/Memory.h"
+#include "vm/Frame.h"
 #include "vm/Instance.h"
-#include "vm/Interpreter.h"
 #include "vm/Vm.h"
 #include "vm/VmUtils.h"
 
@@ -143,12 +143,6 @@ std::optional<Value> JavaThread::invokeWithArgs(JMethod* method, std::vector<Val
   this->handleCalleeException(current);
 
   return returnValue;
-}
-
-std::optional<Value> JavaThread::executeTopFrame()
-{
-  auto interpreter = createDefaultInterpreter(*this);
-  return interpreter->execute();
 }
 
 void JavaThread::handleCalleeException(CallFrame* callerFrame)
