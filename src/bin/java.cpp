@@ -1,12 +1,12 @@
-#include "common/DynamicLibrary.h"
+#include "common/Debug.h"
 #include "common/Encoding.h"
+#include "common/System.h"
 #include "vm/Thread.h"
 #include "vm/Value.h"
 #include "vm/Vm.h"
 
 #include <algorithm>
 #include <argparse/argparse.hpp>
-#include <common/System.h>
 #include <filesystem>
 #include <iostream>
 
@@ -19,6 +19,9 @@ int main(int argc, char* argv[])
   program.add_argument("-Xgc-after-every-alloc").hidden().flag();
   // Initialization
   program.add_argument("-Xno-system-init").hidden().flag();
+
+  // Debug logs
+  program.add_argument("-Xdebug").hidden();
 
   try {
     program.parse_args(argc, argv);
@@ -41,8 +44,23 @@ int main(int argc, char* argv[])
     settings.noSystemInit = true;
   }
 
+  if (program.present("-Xdebug")) {
+    std::string debugComponents = program.get<std::string>("-Xdebug");
+
+    size_t pos = 0;
+    size_t found;
+    while ((found = debugComponents.find(',', pos)) != std::string::npos) {
+      geevm::debug::DebugLogger::get().addComponent(std::string{debugComponents.substr(pos, found - pos)});
+      pos = found + 1;
+    }
+
+    if (pos <= debugComponents.size()) {
+      geevm::debug::DebugLogger::get().addComponent(std::string{debugComponents.substr(pos)});
+    }
+  }
+
 #ifndef NDEBUG
-  settings.runGcAfterEveryAllocation = true;
+  // settings.runGcAfterEveryAllocation = true;
 #endif
 
   if (settings.javaHome.empty()) {
