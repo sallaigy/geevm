@@ -1,9 +1,14 @@
-#include "Vm.h"
+#include "vm/Vm.h"
+#include "jit/JitCompiler.h"
 #include "vm/Frame.h"
 
-#include <iostream>
-
 using namespace geevm;
+
+Vm::Vm(VmSettings settings)
+  : mSettings(std::move(settings)), mBootstrapClassLoader(*this), mHeap(*this), mJitCompiler(JitCompiler::create(*this))
+{
+  mMainThread = mThreads.emplace_back(std::make_unique<JavaThread>(*this)).get();
+}
 
 void Vm::initialize()
 {

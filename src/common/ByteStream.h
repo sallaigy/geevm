@@ -45,6 +45,11 @@ public:
     return mPos;
   }
 
+  size_t size() const
+  {
+    return mBytes.size();
+  }
+
 private:
   std::span<const types::u1> mBytes;
   size_t mPos;

@@ -1,4 +1,5 @@
 #include "class_file/Opcode.h"
+#include "jit/JitCompiler.h"
 #include "vm/Frame.h"
 #include "vm/Instance.h"
 #include "vm/Vm.h"
@@ -144,6 +145,29 @@ private:
 
 std::optional<Value> JavaThread::executeTopFrame()
 {
+  JMethod* method = this->currentFrame().currentMethod();
+  if (method->jitFunction() != nullptr) {
+    // FIXME: Void returns
+    uint64_t result = method->jitFunction()(this->currentFrame().locals());
+    return Value{result};
+  }
+
+  if (!mVm.settings().jitFunctions.empty()) {
+    std::string signature = method->signatureString();
+    if (mVm.settings().jitFunctions.contains(signature)) {
+      JitFunction fn = mVm.jit().compile(this->currentFrame().currentMethod());
+      if (fn != nullptr) {
+        // FIXME: Void returns
+        uint64_t result = fn(this->currentFrame().locals());
+        method->setJitFunction(fn);
+
+        return Value{result};
+      } else {
+        geevm_panic("Failed to JIT-compile");
+      }
+    }
+  }
+
   DefaultInterpreter interpreter{*this};
   return interpreter.execute();
 }

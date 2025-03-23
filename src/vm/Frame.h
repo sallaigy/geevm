@@ -125,6 +125,11 @@ public:
     return value;
   }
 
+  uint64_t* locals() const
+  {
+    return mLocalVariables;
+  }
+
   uint16_t stackPointer() const
   {
     return mOperandStackPointer;

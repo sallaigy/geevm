@@ -7,12 +7,15 @@
 #include "vm/Heap.h"
 #include "vm/NativeMethods.h"
 #include "vm/Thread.h"
+#include "vm/jit/JitCompiler.h"
 
 #include <ranges>
 #include <unordered_map>
 
 namespace geevm
 {
+
+class JitCompiler;
 
 struct VmSettings
 {
@@ -21,16 +24,13 @@ struct VmSettings
   size_t maxHeapSize = 2 * 2048l * 1024;
   size_t maxStackSize = 1024l * 1024;
   std::string javaHome = "";
+  std::unordered_set<std::string> jitFunctions;
 };
 
 class Vm
 {
 public:
-  explicit Vm(VmSettings settings)
-    : mSettings(std::move(settings)), mBootstrapClassLoader(*this), mHeap(*this)
-  {
-    mMainThread = mThreads.emplace_back(std::make_unique<JavaThread>(*this)).get();
-  }
+  explicit Vm(VmSettings settings);
 
   JvmExpected<JClass*> resolveClass(const types::JString& name);
 
@@ -68,6 +68,13 @@ public:
     return mSettings;
   }
 
+  JitCompiler& jit() const
+  {
+    return *mJitCompiler;
+  }
+
+  ~Vm() = default;
+
 private:
   /// Resolves and initializes a core class
   JClass* requireClass(const types::JString& name);
@@ -79,6 +86,7 @@ private:
   std::unordered_map<types::JString, std::unique_ptr<JClass>> mLoadedClasses;
   NativeMethodRegistry mNativeMethods;
   JavaHeap mHeap;
+  std::unique_ptr<JitCompiler> mJitCompiler;
 
   // TODO: We only support one thread
   JavaThread* mMainThread = nullptr;

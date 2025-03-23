@@ -4,11 +4,30 @@
 #include "vm/Thread.h"
 #include "vm/Value.h"
 #include "vm/Vm.h"
+#include "vm/jit/JitCompiler.h"
 
 #include <algorithm>
 #include <argparse/argparse.hpp>
 #include <filesystem>
 #include <iostream>
+
+static std::vector<std::string> split(const std::string& str, char delim)
+{
+  std::vector<std::string> parts;
+
+  size_t pos = 0;
+  size_t found;
+  while ((found = str.find(delim, pos)) != std::string::npos) {
+    parts.emplace_back(str.substr(pos, found - pos));
+    pos = found + 1;
+  }
+
+  if (pos <= str.size()) {
+    parts.emplace_back(str.substr(pos));
+  }
+
+  return parts;
+}
 
 int main(int argc, char* argv[])
 {
@@ -22,6 +41,13 @@ int main(int argc, char* argv[])
 
   // Debug logs
   program.add_argument("-Xdebug").hidden();
+
+  // JIT
+  program.add_argument("-Xint").hidden().flag();
+  program.add_argument("-Xjit")
+      .help("Comma-separated list of function on which JIT compilation will be forced from the first invocation")
+
+      .hidden();
 
   try {
     program.parse_args(argc, argv);
@@ -45,17 +71,14 @@ int main(int argc, char* argv[])
   }
 
   if (program.present("-Xdebug")) {
-    std::string debugComponents = program.get<std::string>("-Xdebug");
-
-    size_t pos = 0;
-    size_t found;
-    while ((found = debugComponents.find(',', pos)) != std::string::npos) {
-      geevm::debug::DebugLogger::get().addComponent(std::string{debugComponents.substr(pos, found - pos)});
-      pos = found + 1;
+    for (const auto& debugComponent : split(program.get<std::string>("-Xdebug"), ',')) {
+      geevm::debug::DebugLogger::get().addComponent(debugComponent);
     }
+  }
 
-    if (pos <= debugComponents.size()) {
-      geevm::debug::DebugLogger::get().addComponent(std::string{debugComponents.substr(pos)});
+  if (program.present("-Xjit")) {
+    for (const auto& part : split(program.get<std::string>("-Xjit"), ',')) {
+      settings.jitFunctions.insert(part);
     }
   }
 

@@ -1,7 +1,6 @@
 #include "vm/GcRoots.h"
-
-#include "Class.h"
 #include "common/ByteStream.h"
+#include "vm/Class.h"
 #include "vm/Frame.h"
 #include "vm/Thread.h"
 

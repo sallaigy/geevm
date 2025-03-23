@@ -1,4 +1,4 @@
-// RUN: %compile -d %t  "%s" | FileCheck "%s"
+// RUN: %compile -d %t "%s" 2>&1 | FileCheck "%s"
 package org.geevm.tests.basic;
 
 import org.geevm.util.Printer;
