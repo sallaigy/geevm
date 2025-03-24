@@ -272,21 +272,79 @@ JitFunction JitCompilerX86::compile(JMethod* method)
       case Opcode::LREM: notImplemented(opcode); break;
       case Opcode::FREM: notImplemented(opcode); break;
       case Opcode::DREM: notImplemented(opcode); break;
-      case Opcode::INEG: notImplemented(opcode); break;
+      case Opcode::INEG: {
+        auto& value1 = stack[sp - 1];
+        cc.neg(value1);
+        break;
+      }
       case Opcode::LNEG: notImplemented(opcode); break;
       case Opcode::FNEG: notImplemented(opcode); break;
       case Opcode::DNEG: notImplemented(opcode); break;
-      case Opcode::ISHL: notImplemented(opcode); break;
+      case Opcode::ISHL: {
+        auto value2 = stack[--sp];
+        auto value1 = stack[--sp];
+        sp++;
+
+        auto offset = cc.newGpd();
+        cc.mov(offset, cc.newUInt32Const(ConstPoolScope::kGlobal, 0x1F));
+        cc.and_(offset, value2.r32());
+
+        cc.sal(value1.r32(), offset);
+        break;
+      }
       case Opcode::LSHL: notImplemented(opcode); break;
-      case Opcode::ISHR: notImplemented(opcode); break;
+      case Opcode::ISHR: {
+        auto value2 = stack[--sp];
+        auto value1 = stack[--sp];
+        sp++;
+
+        auto offset = cc.newGpd();
+        cc.mov(offset, cc.newUInt32Const(ConstPoolScope::kGlobal, 0x1F));
+        cc.and_(offset, value2.r32());
+
+        cc.sar(value1.r32(), offset);
+        break;
+      }
       case Opcode::LSHR: notImplemented(opcode); break;
-      case Opcode::IUSHR: notImplemented(opcode); break;
+      case Opcode::IUSHR: {
+        auto value2 = stack[--sp];
+        auto value1 = stack[--sp];
+        sp++;
+
+        auto offset = cc.newGpd();
+        cc.mov(offset, cc.newUInt32Const(ConstPoolScope::kGlobal, 0x1F));
+        cc.and_(offset, value2.r32());
+
+        cc.shr(value1.r32(), offset);
+        break;
+      }
       case Opcode::LUSHR: notImplemented(opcode); break;
-      case Opcode::IAND: notImplemented(opcode); break;
+      case Opcode::IAND: {
+        auto& value2 = stack[--sp];
+        auto& value1 = stack[--sp];
+        sp++;
+
+        cc.and_(value1, value2);
+        break;
+      }
       case Opcode::LAND: notImplemented(opcode); break;
-      case Opcode::IOR: notImplemented(opcode); break;
+      case Opcode::IOR: {
+        auto& value2 = stack[--sp];
+        auto& value1 = stack[--sp];
+        sp++;
+
+        cc.or_(value1, value2);
+        break;
+      }
       case Opcode::LOR: notImplemented(opcode); break;
-      case Opcode::IXOR: notImplemented(opcode); break;
+      case Opcode::IXOR: {
+        auto& value2 = stack[--sp];
+        auto& value1 = stack[--sp];
+        sp++;
+
+        cc.xor_(value1, value2);
+        break;
+      }
       case Opcode::LXOR: notImplemented(opcode); break;
       case Opcode::IINC: notImplemented(opcode); break;
       case Opcode::I2L: notImplemented(opcode); break;
