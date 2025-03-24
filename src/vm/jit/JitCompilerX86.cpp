@@ -31,6 +31,62 @@ public:
   }
 };
 
+class JitCompilerX86Impl
+{
+public:
+  explicit JitCompilerX86Impl(JMethod* method, asmjit::CodeHolder* codeHolder);
+
+  void doCompile();
+
+private:
+  template<std::derived_from<asmjit::Operand> T>
+  void push(const T& value)
+  {
+    auto& target = mStack[mStackPointer++];
+    mCompiler.mov(target, value);
+  }
+
+  template<std::derived_from<asmjit::Operand> T>
+  void pushCategoryTwo(const T& value)
+  {
+    auto& target = mStack[mStackPointer++];
+    mStackPointer++;
+    mCompiler.mov(target, value);
+  }
+
+  asmjit::x86::Gp& pop()
+  {
+    mStackPointer--;
+    return mStack[mStackPointer];
+  }
+
+  asmjit::x86::Gp& popCategoryTwo()
+  {
+    mStackPointer -= 2;
+    return mStack[mStackPointer];
+  }
+
+  void binaryIntOp(const std::function<void(asmjit::x86::Gp&, asmjit::x86::Gp&)>& function)
+  {
+    auto& value2 = this->pop();
+    auto& value1 = this->pop();
+
+    function(value1, value2);
+    mStackPointer++;
+  }
+
+private:
+  JMethod* mMethod;
+  asmjit::CodeHolder* mCode;
+  asmjit::x86::Compiler mCompiler;
+  ByteStream mBytes;
+  asmjit::FuncNode* mFunction = nullptr;
+
+  std::vector<asmjit::x86::Gp> mStack;
+  size_t mStackPointer = 0;
+  asmjit::x86::Gp mLocals;
+};
+
 class JitCompilerX86 : public JitCompiler
 {
 public:
@@ -53,12 +109,58 @@ std::unique_ptr<JitCompiler> JitCompiler::create(Vm& vm)
   return std::make_unique<JitCompilerX86>(vm);
 }
 
+JitCompilerX86Impl::JitCompilerX86Impl(JMethod* method, asmjit::CodeHolder* code)
+  : mMethod(method), mCode(code), mCompiler(mCode), mBytes(method->getCode().bytes())
+{
+  mCompiler.setLogger(mCode->logger());
+  mCompiler.setErrorHandler(mCode->errorHandler());
+
+  mFunction = mCompiler.addFunc(asmjit::FuncSignature::build<uint64_t, uint64_t*>());
+
+  mLocals = mCompiler.newIntPtr();
+  mFunction->setArg(0, mLocals);
+
+  for (size_t i = 0; i < mMethod->getCode().maxStack(); i++) {
+    mStack.emplace_back(mCompiler.newGpq());
+  }
+}
+
 static void notImplemented(Opcode opcode)
 {
   geevm_panic(std::format("cannot jit-compile unsupported opcode '{}'", opcodeToString(opcode)));
 }
 
 JitFunction JitCompilerX86::compile(JMethod* method)
+{
+  AsmJitDebugLogger logger;
+  logger.addFlags(asmjit::FormatFlags::kMachineCode);
+  logger.addFlags(asmjit::FormatFlags::kHexOffsets);
+  logger.addFlags(asmjit::FormatFlags::kExplainImms);
+  logger.addFlags(asmjit::FormatFlags::kHexImms);
+  logger.addFlags(asmjit::FormatFlags::kPositions);
+  logger.addFlags(asmjit::FormatFlags::kRegCasts);
+  logger.addFlags(asmjit::FormatFlags::kRegType);
+
+  AsmJitErrorHandler errorHandler;
+
+  asmjit::CodeHolder code;
+  code.setLogger(&logger);
+  code.init(mJitRuntime.environment(), mJitRuntime.cpuFeatures());
+  code.setErrorHandler(&errorHandler);
+
+  JitCompilerX86Impl impl{method, &code};
+  impl.doCompile();
+
+  JitFunction fnPtr = nullptr;
+  asmjit::Error err = mJitRuntime.add(&fnPtr, &code);
+  if (err) {
+    geevm_panic("Failed to JIT compile");
+  }
+
+  return fnPtr;
+}
+
+void JitCompilerX86Impl::doCompile()
 {
   using namespace asmjit;
 
@@ -73,50 +175,19 @@ JitFunction JitCompilerX86::compile(JMethod* method)
 
   AsmJitErrorHandler errorHandler;
 
-  CodeHolder code;
-  code.setLogger(&logger);
-  code.init(mJitRuntime.environment(), mJitRuntime.cpuFeatures());
-  code.setErrorHandler(&errorHandler);
-
-  x86::Compiler cc(&code);
-  cc.setLogger(&logger);
-  cc.setErrorHandler(&errorHandler);
-  FuncNode* func = cc.addFunc(FuncSignature::build<uint64_t, uint64_t*>());
-
-  auto localsPtr = cc.newIntPtr("localsPtr");
-  func->setArg(0, localsPtr);
-
-  ByteStream bytes{method->getCode().bytes()};
-
-  std::vector<x86::Gp> stack;
-  for (size_t i = 0; i < method->getCode().maxStack(); ++i) {
-    stack.emplace_back(cc.newGpq());
-  }
-
-  size_t sp = 0;
-
-  while (bytes.pos() < bytes.size()) {
-    auto opcode = static_cast<Opcode>(bytes.readU1());
+  while (mBytes.pos() < mBytes.size()) {
+    auto opcode = static_cast<Opcode>(mBytes.readU1());
 
     switch (opcode) {
       case Opcode::NOP: notImplemented(opcode); break;
       case Opcode::ACONST_NULL: notImplemented(opcode); break;
       case Opcode::ICONST_M1: notImplemented(opcode); break;
-      case Opcode::ICONST_0: {
-        cc.mov(stack[sp++], cc.newInt64Const(ConstPoolScope::kGlobal, 0));
-        break;
-      }
-      case Opcode::ICONST_1: {
-        cc.mov(stack[sp++], cc.newInt64Const(ConstPoolScope::kGlobal, 1));
-        break;
-      }
-      case Opcode::ICONST_2: {
-        cc.mov(stack[sp++], cc.newInt64Const(ConstPoolScope::kGlobal, 2));
-        break;
-      }
-      case Opcode::ICONST_3: notImplemented(opcode); break;
-      case Opcode::ICONST_4: notImplemented(opcode); break;
-      case Opcode::ICONST_5: notImplemented(opcode); break;
+      case Opcode::ICONST_0: this->push(mCompiler.newInt64Const(ConstPoolScope::kGlobal, 0)); break;
+      case Opcode::ICONST_1: this->push(mCompiler.newInt64Const(ConstPoolScope::kGlobal, 1)); break;
+      case Opcode::ICONST_2: this->push(mCompiler.newInt64Const(ConstPoolScope::kGlobal, 2)); break;
+      case Opcode::ICONST_3: this->push(mCompiler.newInt64Const(ConstPoolScope::kGlobal, 3)); break;
+      case Opcode::ICONST_4: this->push(mCompiler.newInt64Const(ConstPoolScope::kGlobal, 4)); break;
+      case Opcode::ICONST_5: this->push(mCompiler.newInt64Const(ConstPoolScope::kGlobal, 5)); break;
       case Opcode::LCONST_0: notImplemented(opcode); break;
       case Opcode::LCONST_1: notImplemented(opcode); break;
       case Opcode::FCONST_0: notImplemented(opcode); break;
@@ -139,7 +210,7 @@ JitFunction JitCompilerX86::compile(JMethod* method)
       case Opcode::ILOAD_2:
       case Opcode::ILOAD_3: {
         int32_t slotNumber = static_cast<int32_t>(opcode) - static_cast<int32_t>(Opcode::ILOAD_0);
-        cc.mov(stack[sp++], qword_ptr(localsPtr, slotNumber * sizeof(uint64_t)));
+        this->push(qword_ptr(mLocals, slotNumber * sizeof(uint64_t)));
         break;
       }
       case Opcode::LLOAD_0: notImplemented(opcode); break;
@@ -155,8 +226,7 @@ JitFunction JitCompilerX86::compile(JMethod* method)
       case Opcode::DLOAD_2:
       case Opcode::DLOAD_3: {
         int32_t slotNumber = static_cast<int32_t>(opcode) - static_cast<int32_t>(Opcode::DLOAD_0);
-        cc.mov(stack[sp++], qword_ptr(localsPtr, slotNumber * sizeof(uint64_t)));
-        sp++;
+        this->pushCategoryTwo(x86::qword_ptr(mLocals, slotNumber * sizeof(uint64_t)));
         break;
       }
       case Opcode::ALOAD_0: notImplemented(opcode); break;
@@ -176,13 +246,14 @@ JitFunction JitCompilerX86::compile(JMethod* method)
       case Opcode::FSTORE: notImplemented(opcode); break;
       case Opcode::DSTORE: notImplemented(opcode); break;
       case Opcode::ASTORE: notImplemented(opcode); break;
-      case Opcode::ISTORE_0: {
-        cc.mov(qword_ptr(localsPtr), stack[--sp]);
+      case Opcode::ISTORE_0:
+      case Opcode::ISTORE_1:
+      case Opcode::ISTORE_2:
+      case Opcode::ISTORE_3: {
+        int32_t slotNumber = static_cast<int32_t>(opcode) - static_cast<int32_t>(Opcode::ISTORE_0);
+        mCompiler.mov(qword_ptr(mLocals, slotNumber * sizeof(uint64_t)), this->pop());
         break;
       }
-      case Opcode::ISTORE_1: notImplemented(opcode); break;
-      case Opcode::ISTORE_2: notImplemented(opcode); break;
-      case Opcode::ISTORE_3: notImplemented(opcode); break;
       case Opcode::LSTORE_0: notImplemented(opcode); break;
       case Opcode::LSTORE_1: notImplemented(opcode); break;
       case Opcode::LSTORE_2: notImplemented(opcode); break;
@@ -216,51 +287,41 @@ JitFunction JitCompilerX86::compile(JMethod* method)
       case Opcode::DUP2_X1: notImplemented(opcode); break;
       case Opcode::DUP2_X2: notImplemented(opcode); break;
       case Opcode::SWAP: notImplemented(opcode); break;
-      case Opcode::IADD: {
-        auto& value2 = stack[--sp];
-        auto& value1 = stack[--sp];
-        sp++;
-
-        cc.add(value1, value2);
+      case Opcode::IADD:
+        this->binaryIntOp([this](auto& dst, auto& src) {
+          mCompiler.add(dst, src);
+        });
         break;
-      }
       case Opcode::LADD: notImplemented(opcode); break;
       case Opcode::FADD: notImplemented(opcode); break;
       case Opcode::DADD: {
-        --sp;
-        auto& value2 = stack[--sp];
-        --sp;
-        auto& value1 = stack[--sp];
+        auto& value2 = this->popCategoryTwo();
+        auto& value1 = this->popCategoryTwo();
 
-        auto xmm2 = cc.newXmm();
-        auto xmm1 = cc.newXmm();
+        auto xmm2 = mCompiler.newXmm();
+        auto xmm1 = mCompiler.newXmm();
 
-        cc.movq(xmm1, value1);
-        cc.movq(xmm2, value2);
-        cc.addsd(xmm1, xmm2);
-        cc.movq(stack[sp], xmm1);
-        sp += 2;
+        mCompiler.movq(xmm1, value1);
+        mCompiler.movq(xmm2, value2);
+        mCompiler.addsd(xmm1, xmm2);
+
+        mCompiler.movq(value1, xmm1);
+        mStackPointer += 2;
         break;
       }
-      case Opcode::ISUB: {
-        auto& value2 = stack[--sp];
-        auto& value1 = stack[--sp];
-        sp++;
-
-        cc.sub(value1, value2);
+      case Opcode::ISUB:
+        this->binaryIntOp([this](auto& dst, auto& src) {
+          mCompiler.sub(dst, src);
+        });
         break;
-      }
       case Opcode::LSUB: notImplemented(opcode); break;
       case Opcode::FSUB: notImplemented(opcode); break;
       case Opcode::DSUB: notImplemented(opcode); break;
-      case Opcode::IMUL: {
-        auto& value2 = stack[--sp];
-        auto& value1 = stack[--sp];
-        sp++;
-
-        cc.imul(value1, value2);
+      case Opcode::IMUL:
+        this->binaryIntOp([this](auto& dst, auto& src) {
+          mCompiler.imul(dst, src);
+        });
         break;
-      }
       case Opcode::LMUL: notImplemented(opcode); break;
       case Opcode::FMUL: notImplemented(opcode); break;
       case Opcode::DMUL: notImplemented(opcode); break;
@@ -273,78 +334,70 @@ JitFunction JitCompilerX86::compile(JMethod* method)
       case Opcode::FREM: notImplemented(opcode); break;
       case Opcode::DREM: notImplemented(opcode); break;
       case Opcode::INEG: {
-        auto& value1 = stack[sp - 1];
-        cc.neg(value1);
+        auto& value1 = this->pop();
+        mCompiler.neg(value1);
+        mStackPointer++;
         break;
       }
       case Opcode::LNEG: notImplemented(opcode); break;
       case Opcode::FNEG: notImplemented(opcode); break;
       case Opcode::DNEG: notImplemented(opcode); break;
       case Opcode::ISHL: {
-        auto value2 = stack[--sp];
-        auto value1 = stack[--sp];
-        sp++;
+        auto value2 = this->pop();
+        auto value1 = this->pop();
 
-        auto offset = cc.newGpd();
-        cc.mov(offset, cc.newUInt32Const(ConstPoolScope::kGlobal, 0x1F));
-        cc.and_(offset, value2.r32());
+        auto offset = mCompiler.newGpd();
+        mCompiler.mov(offset, mCompiler.newUInt32Const(ConstPoolScope::kGlobal, 0x1F));
+        mCompiler.and_(offset, value2.r32());
 
-        cc.sal(value1.r32(), offset);
+        mCompiler.sal(value1.r32(), offset);
+        mStackPointer++;
         break;
       }
       case Opcode::LSHL: notImplemented(opcode); break;
       case Opcode::ISHR: {
-        auto value2 = stack[--sp];
-        auto value1 = stack[--sp];
-        sp++;
+        auto value2 = this->pop();
+        auto value1 = this->pop();
 
-        auto offset = cc.newGpd();
-        cc.mov(offset, cc.newUInt32Const(ConstPoolScope::kGlobal, 0x1F));
-        cc.and_(offset, value2.r32());
+        auto offset = mCompiler.newGpd();
+        mCompiler.mov(offset, mCompiler.newUInt32Const(ConstPoolScope::kGlobal, 0x1F));
+        mCompiler.and_(offset, value2.r32());
 
-        cc.sar(value1.r32(), offset);
+        mCompiler.sar(value1.r32(), offset);
+        mStackPointer++;
         break;
       }
       case Opcode::LSHR: notImplemented(opcode); break;
       case Opcode::IUSHR: {
-        auto value2 = stack[--sp];
-        auto value1 = stack[--sp];
-        sp++;
+        auto value2 = this->pop();
+        auto value1 = this->pop();
 
-        auto offset = cc.newGpd();
-        cc.mov(offset, cc.newUInt32Const(ConstPoolScope::kGlobal, 0x1F));
-        cc.and_(offset, value2.r32());
+        auto offset = mCompiler.newGpd();
+        mCompiler.mov(offset, mCompiler.newUInt32Const(ConstPoolScope::kGlobal, 0x1F));
+        mCompiler.and_(offset, value2.r32());
 
-        cc.shr(value1.r32(), offset);
+        mCompiler.shr(value1.r32(), offset);
+        mStackPointer++;
         break;
       }
       case Opcode::LUSHR: notImplemented(opcode); break;
-      case Opcode::IAND: {
-        auto& value2 = stack[--sp];
-        auto& value1 = stack[--sp];
-        sp++;
-
-        cc.and_(value1, value2);
+      case Opcode::IAND:
+        this->binaryIntOp([this](auto& dst, auto& src) {
+          mCompiler.and_(dst, src);
+        });
         break;
-      }
       case Opcode::LAND: notImplemented(opcode); break;
-      case Opcode::IOR: {
-        auto& value2 = stack[--sp];
-        auto& value1 = stack[--sp];
-        sp++;
-
-        cc.or_(value1, value2);
+      case Opcode::IOR:
+        this->binaryIntOp([this](auto& dst, auto& src) {
+          mCompiler.or_(dst, src);
+        });
         break;
-      }
       case Opcode::LOR: notImplemented(opcode); break;
-      case Opcode::IXOR: {
-        auto& value2 = stack[--sp];
-        auto& value1 = stack[--sp];
-        sp++;
-
-        cc.xor_(value1, value2);
+      case Opcode::IXOR:
+        this->binaryIntOp([this](auto& dst, auto& src) {
+          mCompiler.xor_(dst, src);
+        });
         break;
-      }
       case Opcode::LXOR: notImplemented(opcode); break;
       case Opcode::IINC: notImplemented(opcode); break;
       case Opcode::I2L: notImplemented(opcode); break;
@@ -387,14 +440,13 @@ JitFunction JitCompilerX86::compile(JMethod* method)
       case Opcode::TABLESWITCH: notImplemented(opcode); break;
       case Opcode::LOOKUPSWITCH: notImplemented(opcode); break;
       case Opcode::IRETURN: {
-        cc.ret(stack[--sp]);
+        mCompiler.ret(this->pop());
         break;
       }
       case Opcode::LRETURN: notImplemented(opcode); break;
       case Opcode::FRETURN: notImplemented(opcode); break;
       case Opcode::DRETURN: {
-        --sp;
-        cc.ret(stack[--sp]);
+        mCompiler.ret(this->popCategoryTwo());
         break;
       }
       case Opcode::ARETURN: notImplemented(opcode); break;
@@ -429,14 +481,6 @@ JitFunction JitCompilerX86::compile(JMethod* method)
     }
   }
 
-  cc.endFunc();
-  cc.finalize();
-
-  JitFunction fnPtr = nullptr;
-  Error err = mJitRuntime.add(&fnPtr, &code);
-  if (err) {
-    geevm_panic("Failed to JIT compile");
-  }
-
-  return fnPtr;
+  mCompiler.endFunc();
+  mCompiler.finalize();
 }
