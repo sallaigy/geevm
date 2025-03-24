@@ -66,13 +66,22 @@ private:
     return mStack[mStackPointer];
   }
 
-  void binaryIntOp(const std::function<void(asmjit::x86::Gp&, asmjit::x86::Gp&)>& function)
+  void binaryOp(const std::function<void(asmjit::x86::Gp&, asmjit::x86::Gp&)>& function)
   {
     auto& value2 = this->pop();
     auto& value1 = this->pop();
 
     function(value1, value2);
     mStackPointer++;
+  }
+
+  void binaryOpCategoryTwo(const std::function<void(asmjit::x86::Gp&, asmjit::x86::Gp&)>& function)
+  {
+    auto& value2 = this->popCategoryTwo();
+    auto& value1 = this->popCategoryTwo();
+
+    function(value1, value2);
+    mStackPointer += 2;
   }
 
 private:
@@ -213,10 +222,14 @@ void JitCompilerX86Impl::doCompile()
         this->push(qword_ptr(mLocals, slotNumber * sizeof(uint64_t)));
         break;
       }
-      case Opcode::LLOAD_0: notImplemented(opcode); break;
-      case Opcode::LLOAD_1: notImplemented(opcode); break;
-      case Opcode::LLOAD_2: notImplemented(opcode); break;
-      case Opcode::LLOAD_3: notImplemented(opcode); break;
+      case Opcode::LLOAD_0:
+      case Opcode::LLOAD_1:
+      case Opcode::LLOAD_2:
+      case Opcode::LLOAD_3: {
+        int32_t slotNumber = static_cast<int32_t>(opcode) - static_cast<int32_t>(Opcode::LLOAD_0);
+        this->pushCategoryTwo(qword_ptr(mLocals, slotNumber * sizeof(uint64_t)));
+        break;
+      }
       case Opcode::FLOAD_0: notImplemented(opcode); break;
       case Opcode::FLOAD_1: notImplemented(opcode); break;
       case Opcode::FLOAD_2: notImplemented(opcode); break;
@@ -226,7 +239,7 @@ void JitCompilerX86Impl::doCompile()
       case Opcode::DLOAD_2:
       case Opcode::DLOAD_3: {
         int32_t slotNumber = static_cast<int32_t>(opcode) - static_cast<int32_t>(Opcode::DLOAD_0);
-        this->pushCategoryTwo(x86::qword_ptr(mLocals, slotNumber * sizeof(uint64_t)));
+        this->pushCategoryTwo(qword_ptr(mLocals, slotNumber * sizeof(uint64_t)));
         break;
       }
       case Opcode::ALOAD_0: notImplemented(opcode); break;
@@ -288,41 +301,51 @@ void JitCompilerX86Impl::doCompile()
       case Opcode::DUP2_X2: notImplemented(opcode); break;
       case Opcode::SWAP: notImplemented(opcode); break;
       case Opcode::IADD:
-        this->binaryIntOp([this](auto& dst, auto& src) {
+        this->binaryOp([this](auto& dst, auto& src) {
           mCompiler.add(dst, src);
         });
         break;
-      case Opcode::LADD: notImplemented(opcode); break;
+      case Opcode::LADD:
+        this->binaryOpCategoryTwo([this](auto& dst, auto& src) {
+          mCompiler.add(dst, src);
+        });
+        break;
       case Opcode::FADD: notImplemented(opcode); break;
       case Opcode::DADD: {
-        auto& value2 = this->popCategoryTwo();
-        auto& value1 = this->popCategoryTwo();
+        this->binaryOpCategoryTwo([this](auto& value1, auto& value2) {
+          auto xmm2 = mCompiler.newXmm();
+          auto xmm1 = mCompiler.newXmm();
 
-        auto xmm2 = mCompiler.newXmm();
-        auto xmm1 = mCompiler.newXmm();
+          mCompiler.movq(xmm1, value1);
+          mCompiler.movq(xmm2, value2);
+          mCompiler.addsd(xmm1, xmm2);
 
-        mCompiler.movq(xmm1, value1);
-        mCompiler.movq(xmm2, value2);
-        mCompiler.addsd(xmm1, xmm2);
-
-        mCompiler.movq(value1, xmm1);
-        mStackPointer += 2;
+          mCompiler.movq(value1, xmm1);
+        });
         break;
       }
       case Opcode::ISUB:
-        this->binaryIntOp([this](auto& dst, auto& src) {
+        this->binaryOp([this](auto& dst, auto& src) {
           mCompiler.sub(dst, src);
         });
         break;
-      case Opcode::LSUB: notImplemented(opcode); break;
+      case Opcode::LSUB:
+        this->binaryOpCategoryTwo([this](auto& dst, auto& src) {
+          mCompiler.sub(dst, src);
+        });
+        break;
       case Opcode::FSUB: notImplemented(opcode); break;
       case Opcode::DSUB: notImplemented(opcode); break;
       case Opcode::IMUL:
-        this->binaryIntOp([this](auto& dst, auto& src) {
+        this->binaryOp([this](auto& dst, auto& src) {
           mCompiler.imul(dst, src);
         });
         break;
-      case Opcode::LMUL: notImplemented(opcode); break;
+      case Opcode::LMUL:
+        this->binaryOpCategoryTwo([this](auto& dst, auto& src) {
+          mCompiler.imul(dst, src);
+        });
+        break;
       case Opcode::FMUL: notImplemented(opcode); break;
       case Opcode::DMUL: notImplemented(opcode); break;
       case Opcode::IDIV: notImplemented(opcode); break;
@@ -339,22 +362,34 @@ void JitCompilerX86Impl::doCompile()
         mStackPointer++;
         break;
       }
-      case Opcode::LNEG: notImplemented(opcode); break;
-      case Opcode::FNEG: notImplemented(opcode); break;
-      case Opcode::DNEG: notImplemented(opcode); break;
-      case Opcode::ISHL: {
-        auto value2 = this->pop();
-        auto value1 = this->pop();
-
-        auto offset = mCompiler.newGpd();
-        mCompiler.mov(offset, mCompiler.newUInt32Const(ConstPoolScope::kGlobal, 0x1F));
-        mCompiler.and_(offset, value2.r32());
-
-        mCompiler.sal(value1.r32(), offset);
-        mStackPointer++;
+      case Opcode::LNEG: {
+        auto& value1 = this->popCategoryTwo();
+        mCompiler.neg(value1);
+        mStackPointer += 2;
         break;
       }
-      case Opcode::LSHL: notImplemented(opcode); break;
+      case Opcode::FNEG: notImplemented(opcode); break;
+      case Opcode::DNEG: notImplemented(opcode); break;
+      case Opcode::ISHL:
+        this->binaryOp([this](auto& value1, auto& value2) {
+          auto offset = mCompiler.newGpd();
+          mCompiler.mov(offset, mCompiler.newUInt32Const(ConstPoolScope::kGlobal, 0x1F));
+          mCompiler.and_(offset, value2.r32());
+
+          mCompiler.sal(value1.r32(), offset);
+        });
+        break;
+      case Opcode::LSHL: {
+        auto& value2 = this->pop();
+        auto& value1 = this->popCategoryTwo();
+        auto offset = mCompiler.newGpd();
+        mCompiler.mov(offset, mCompiler.newUInt32Const(ConstPoolScope::kGlobal, 0x3F));
+        mCompiler.and_(offset, value2.r32());
+
+        mCompiler.sal(value1, offset);
+        mStackPointer += 2;
+        break;
+      }
       case Opcode::ISHR: {
         auto value2 = this->pop();
         auto value1 = this->pop();
@@ -367,7 +402,17 @@ void JitCompilerX86Impl::doCompile()
         mStackPointer++;
         break;
       }
-      case Opcode::LSHR: notImplemented(opcode); break;
+      case Opcode::LSHR: {
+        auto& value2 = this->pop();
+        auto& value1 = this->popCategoryTwo();
+        auto offset = mCompiler.newGpd();
+        mCompiler.mov(offset, mCompiler.newUInt32Const(ConstPoolScope::kGlobal, 0x3F));
+        mCompiler.and_(offset, value2.r32());
+
+        mCompiler.sar(value1, offset);
+        mStackPointer += 2;
+        break;
+      }
       case Opcode::IUSHR: {
         auto value2 = this->pop();
         auto value1 = this->pop();
@@ -380,30 +425,57 @@ void JitCompilerX86Impl::doCompile()
         mStackPointer++;
         break;
       }
-      case Opcode::LUSHR: notImplemented(opcode); break;
+      case Opcode::LUSHR: {
+        auto& value2 = this->pop();
+        auto& value1 = this->popCategoryTwo();
+        auto offset = mCompiler.newGpd();
+        mCompiler.mov(offset, mCompiler.newUInt32Const(ConstPoolScope::kGlobal, 0x3F));
+        mCompiler.and_(offset, value2.r32());
+
+        mCompiler.shr(value1, offset);
+        mStackPointer += 2;
+        break;
+      }
       case Opcode::IAND:
-        this->binaryIntOp([this](auto& dst, auto& src) {
+        this->binaryOp([this](auto& dst, auto& src) {
           mCompiler.and_(dst, src);
         });
         break;
-      case Opcode::LAND: notImplemented(opcode); break;
+      case Opcode::LAND:
+        this->binaryOpCategoryTwo([this](auto& dst, auto& src) {
+          mCompiler.and_(dst, src);
+        });
+        break;
       case Opcode::IOR:
-        this->binaryIntOp([this](auto& dst, auto& src) {
+        this->binaryOp([this](auto& dst, auto& src) {
           mCompiler.or_(dst, src);
         });
         break;
-      case Opcode::LOR: notImplemented(opcode); break;
+      case Opcode::LOR:
+        this->binaryOpCategoryTwo([this](auto& dst, auto& src) {
+          mCompiler.or_(dst, src);
+        });
+        break;
       case Opcode::IXOR:
-        this->binaryIntOp([this](auto& dst, auto& src) {
+        this->binaryOp([this](auto& dst, auto& src) {
           mCompiler.xor_(dst, src);
         });
         break;
-      case Opcode::LXOR: notImplemented(opcode); break;
+      case Opcode::LXOR:
+        this->binaryOpCategoryTwo([this](auto& dst, auto& src) {
+          mCompiler.xor_(dst, src);
+        });
+        break;
       case Opcode::IINC: notImplemented(opcode); break;
       case Opcode::I2L: notImplemented(opcode); break;
       case Opcode::I2F: notImplemented(opcode); break;
       case Opcode::I2D: notImplemented(opcode); break;
-      case Opcode::L2I: notImplemented(opcode); break;
+      case Opcode::L2I: {
+        // No need to implement the cast itself, as it merely just discards the top 32-bits.
+        auto& value = this->popCategoryTwo();
+        this->push(value);
+        break;
+      }
       case Opcode::L2F: notImplemented(opcode); break;
       case Opcode::L2D: notImplemented(opcode); break;
       case Opcode::F2I: notImplemented(opcode); break;
@@ -443,8 +515,8 @@ void JitCompilerX86Impl::doCompile()
         mCompiler.ret(this->pop());
         break;
       }
-      case Opcode::LRETURN: notImplemented(opcode); break;
       case Opcode::FRETURN: notImplemented(opcode); break;
+      case Opcode::LRETURN: [[fallthrough]];
       case Opcode::DRETURN: {
         mCompiler.ret(this->popCategoryTwo());
         break;

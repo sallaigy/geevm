@@ -718,8 +718,14 @@ template<JvmType T>
 void DefaultInterpreter::neg()
 {
   T value = currentFrame().popOperand<T>();
-  T result = -value;
-  currentFrame().pushOperand<T>(result);
+
+  if constexpr (JavaIntegerType<T>) {
+    T result = std::bit_cast<T>(-std::bit_cast<std::make_unsigned_t<T>>(value));
+    currentFrame().pushOperand<T>(result);
+  } else {
+    T result = -value;
+    currentFrame().pushOperand<T>(result);
+  }
 }
 
 template<CategoryOneJvmType T, class F>
