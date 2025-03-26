@@ -1,3 +1,4 @@
+#include "class_file/Opcode.h"
 #include "common/ByteStream.h"
 #include "vm/Vm.h"
 #include "vm/jit/JitCompiler.h"
@@ -5,7 +6,8 @@
 #include <asmjit/core/jitruntime.h>
 #include <asmjit/core/logger.h>
 #include <asmjit/x86/x86compiler.h>
-#include <class_file/Opcode.h>
+
+#include <cmath>
 
 using namespace geevm;
 
@@ -230,10 +232,14 @@ void JitCompilerX86Impl::doCompile()
         this->pushCategoryTwo(qword_ptr(mLocals, slotNumber * sizeof(uint64_t)));
         break;
       }
-      case Opcode::FLOAD_0: notImplemented(opcode); break;
-      case Opcode::FLOAD_1: notImplemented(opcode); break;
-      case Opcode::FLOAD_2: notImplemented(opcode); break;
-      case Opcode::FLOAD_3: notImplemented(opcode); break;
+      case Opcode::FLOAD_0:
+      case Opcode::FLOAD_1:
+      case Opcode::FLOAD_2:
+      case Opcode::FLOAD_3: {
+        int32_t slotNumber = static_cast<int32_t>(opcode) - static_cast<int32_t>(Opcode::FLOAD_0);
+        this->push(qword_ptr(mLocals, slotNumber * sizeof(uint64_t)));
+        break;
+      }
       case Opcode::DLOAD_0:
       case Opcode::DLOAD_1:
       case Opcode::DLOAD_2:
@@ -310,7 +316,19 @@ void JitCompilerX86Impl::doCompile()
           mCompiler.add(dst, src);
         });
         break;
-      case Opcode::FADD: notImplemented(opcode); break;
+      case Opcode::FADD: {
+        this->binaryOp([this](auto& value1, auto& value2) {
+          auto xmm2 = mCompiler.newXmm();
+          auto xmm1 = mCompiler.newXmm();
+
+          mCompiler.movd(xmm1, value1);
+          mCompiler.movd(xmm2, value2);
+          mCompiler.addss(xmm1, xmm2);
+
+          mCompiler.movd(value1.r32(), xmm1);
+        });
+        break;
+      }
       case Opcode::DADD: {
         this->binaryOpCategoryTwo([this](auto& value1, auto& value2) {
           auto xmm2 = mCompiler.newXmm();
@@ -334,8 +352,32 @@ void JitCompilerX86Impl::doCompile()
           mCompiler.sub(dst, src);
         });
         break;
-      case Opcode::FSUB: notImplemented(opcode); break;
-      case Opcode::DSUB: notImplemented(opcode); break;
+      case Opcode::FSUB: {
+        this->binaryOp([this](auto& value1, auto& value2) {
+          auto xmm2 = mCompiler.newXmm();
+          auto xmm1 = mCompiler.newXmm();
+
+          mCompiler.movd(xmm1, value1);
+          mCompiler.movd(xmm2, value2);
+          mCompiler.subss(xmm1, xmm2);
+
+          mCompiler.movd(value1.r32(), xmm1);
+        });
+        break;
+      }
+      case Opcode::DSUB: {
+        this->binaryOpCategoryTwo([this](auto& value1, auto& value2) {
+          auto xmm2 = mCompiler.newXmm();
+          auto xmm1 = mCompiler.newXmm();
+
+          mCompiler.movq(xmm1, value1);
+          mCompiler.movq(xmm2, value2);
+          mCompiler.subsd(xmm1, xmm2);
+
+          mCompiler.movq(value1, xmm1);
+        });
+        break;
+      }
       case Opcode::IMUL:
         this->binaryOp([this](auto& dst, auto& src) {
           mCompiler.imul(dst, src);
@@ -346,16 +388,100 @@ void JitCompilerX86Impl::doCompile()
           mCompiler.imul(dst, src);
         });
         break;
-      case Opcode::FMUL: notImplemented(opcode); break;
-      case Opcode::DMUL: notImplemented(opcode); break;
+      case Opcode::FMUL: {
+        this->binaryOp([this](auto& value1, auto& value2) {
+          auto xmm2 = mCompiler.newXmm();
+          auto xmm1 = mCompiler.newXmm();
+
+          mCompiler.movd(xmm1, value1);
+          mCompiler.movd(xmm2, value2);
+          mCompiler.mulss(xmm1, xmm2);
+
+          mCompiler.movd(value1.r32(), xmm1);
+        });
+        break;
+      }
+      case Opcode::DMUL: {
+        this->binaryOpCategoryTwo([this](auto& value1, auto& value2) {
+          auto xmm2 = mCompiler.newXmm();
+          auto xmm1 = mCompiler.newXmm();
+
+          mCompiler.movq(xmm1, value1);
+          mCompiler.movq(xmm2, value2);
+          mCompiler.mulsd(xmm1, xmm2);
+
+          mCompiler.movq(value1, xmm1);
+        });
+        break;
+      }
       case Opcode::IDIV: notImplemented(opcode); break;
       case Opcode::LDIV: notImplemented(opcode); break;
-      case Opcode::FDIV: notImplemented(opcode); break;
-      case Opcode::DDIV: notImplemented(opcode); break;
+      case Opcode::FDIV: {
+        this->binaryOp([this](auto& value1, auto& value2) {
+          auto xmm2 = mCompiler.newXmm();
+          auto xmm1 = mCompiler.newXmm();
+
+          mCompiler.movd(xmm1, value1);
+          mCompiler.movd(xmm2, value2);
+          mCompiler.divss(xmm1, xmm2);
+
+          mCompiler.movd(value1.r32(), xmm1);
+        });
+        break;
+      }
+      case Opcode::DDIV: {
+        this->binaryOpCategoryTwo([this](auto& value1, auto& value2) {
+          auto xmm2 = mCompiler.newXmm();
+          auto xmm1 = mCompiler.newXmm();
+
+          mCompiler.movq(xmm1, value1);
+          mCompiler.movq(xmm2, value2);
+          mCompiler.divsd(xmm1, xmm2);
+
+          mCompiler.movq(value1, xmm1);
+        });
+        break;
+      }
       case Opcode::IREM: notImplemented(opcode); break;
       case Opcode::LREM: notImplemented(opcode); break;
-      case Opcode::FREM: notImplemented(opcode); break;
-      case Opcode::DREM: notImplemented(opcode); break;
+      case Opcode::FREM: {
+        this->binaryOp([this](auto& value1, auto& value2) {
+          auto xmm2 = mCompiler.newXmm();
+          auto xmm1 = mCompiler.newXmm();
+          mCompiler.movd(xmm2, value2.r32());
+          mCompiler.movd(xmm1, value1.r32());
+
+          float (*ptr)(float, float) = std::fmodf;
+
+          InvokeNode* invokeNode;
+          mCompiler.invoke(&invokeNode, std::bit_cast<uint64_t>(ptr), FuncSignature::build<float, float, float>());
+          invokeNode->setArg(0, xmm1);
+          invokeNode->setArg(1, xmm2);
+          invokeNode->setRet(0, xmm1);
+
+          mCompiler.movd(value1.r32(), xmm1);
+        });
+        break;
+      }
+      case Opcode::DREM: {
+        this->binaryOpCategoryTwo([this](auto& value1, auto& value2) {
+          auto xmm2 = mCompiler.newXmm();
+          auto xmm1 = mCompiler.newXmm();
+          mCompiler.movq(xmm2, value2);
+          mCompiler.movq(xmm1, value1);
+
+          double (*ptr)(double, double) = std::fmod;
+
+          InvokeNode* invokeNode;
+          mCompiler.invoke(&invokeNode, std::bit_cast<uint64_t>(ptr), FuncSignature::build<double, double, double>());
+          invokeNode->setArg(0, xmm1);
+          invokeNode->setArg(1, xmm2);
+          invokeNode->setRet(0, xmm1);
+
+          mCompiler.movq(value1, xmm1);
+        });
+        break;
+      }
       case Opcode::INEG: {
         auto& value1 = this->pop();
         mCompiler.neg(value1);
@@ -368,8 +494,30 @@ void JitCompilerX86Impl::doCompile()
         mStackPointer += 2;
         break;
       }
-      case Opcode::FNEG: notImplemented(opcode); break;
-      case Opcode::DNEG: notImplemented(opcode); break;
+      case Opcode::FNEG: {
+        auto& value1 = this->pop();
+        auto xmm1 = mCompiler.newXmm();
+        auto xmm2 = mCompiler.newXmm();
+
+        mCompiler.movd(xmm1, value1);
+        mCompiler.movd(xmm2, mCompiler.newFloatConst(ConstPoolScope::kGlobal, -0.0));
+        mCompiler.xorps(xmm1, xmm2);
+        mCompiler.movd(value1, xmm1);
+        mStackPointer++;
+        break;
+      }
+      case Opcode::DNEG: {
+        auto& value1 = this->popCategoryTwo();
+        auto xmm1 = mCompiler.newXmm();
+        auto xmm2 = mCompiler.newXmm();
+
+        mCompiler.movq(xmm1, value1);
+        mCompiler.movq(xmm2, mCompiler.newDoubleConst(ConstPoolScope::kGlobal, -0.0));
+        mCompiler.xorpd(xmm1, xmm2);
+        mCompiler.movq(value1, xmm1);
+        mStackPointer += 2;
+        break;
+      }
       case Opcode::ISHL:
         this->binaryOp([this](auto& value1, auto& value2) {
           auto offset = mCompiler.newGpd();
@@ -511,11 +659,11 @@ void JitCompilerX86Impl::doCompile()
       case Opcode::RET: notImplemented(opcode); break;
       case Opcode::TABLESWITCH: notImplemented(opcode); break;
       case Opcode::LOOKUPSWITCH: notImplemented(opcode); break;
+      case Opcode::FRETURN: [[fallthrough]];
       case Opcode::IRETURN: {
         mCompiler.ret(this->pop());
         break;
       }
-      case Opcode::FRETURN: notImplemented(opcode); break;
       case Opcode::LRETURN: [[fallthrough]];
       case Opcode::DRETURN: {
         mCompiler.ret(this->popCategoryTwo());
