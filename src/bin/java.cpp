@@ -137,6 +137,7 @@ int main(int argc, char* argv[])
     argsArray->setArrayElement(i, handle.get());
   }
 
+  (*mainClass)->initialize(vm->mainThread());
   vm->mainThread().start(*mainMethod, {geevm::Value::from<geevm::Instance*>(argsArray.get())});
 
   return 0;

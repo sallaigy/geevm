@@ -1,5 +1,5 @@
 // RUN: %compile -d %t "%s" 2>&1 | FileCheck "%s"
-// RUN: %compile -d %t -f "-Xjit org/geevm/tests/Basic/CountToFive#count()I" "%s" 2>&1 | FileCheck "%s"
+// RUN: %compile -d %t -f "-Xjit org/geevm/tests/basic/CountToFive#count()I" "%s" 2>&1 | FileCheck "%s"
 package org.geevm.tests.basic;
 
 import org.geevm.util.Printer;

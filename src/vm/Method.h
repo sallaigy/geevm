@@ -10,11 +10,11 @@ namespace geevm
 class InstanceClass;
 class JClass;
 class CallFrame;
+class JavaThread;
 
 /// Calling convention for calling a JIT'ed function.
 /// The return value is the value returned by the function (if the function is void, the value is ignored).
-/// The parameter is the local variable array populated with the call arguments.
-using JitFunction = std::uint64_t (*)(std::uint64_t*);
+using JitFunction = std::uint64_t (*)(JavaThread*, CallFrame*);
 
 class JMethod
 {

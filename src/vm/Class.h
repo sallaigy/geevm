@@ -103,6 +103,11 @@ public:
     this->setStaticFieldValue(offset, Value::from<T>(value));
   }
 
+  uint64_t* staticFieldPtr(size_t offset)
+  {
+    return &mStaticFieldValues[offset];
+  }
+
   std::optional<JField*> lookupField(const types::JString& name, const types::JString& descriptor);
   std::optional<JField*> lookupFieldByName(types::JStringRef string);
 
@@ -173,7 +178,7 @@ protected:
   std::unordered_map<NameAndDescriptor, std::unique_ptr<JMethod>, PairHash> mMethods;
   std::unordered_map<NameAndDescriptor, std::unique_ptr<JField>, PairHash> mFields;
   std::vector<JField*> mInstanceFields;
-  std::vector<Value> mStaticFieldValues;
+  std::vector<uint64_t> mStaticFieldValues;
 
 private:
   types::JString mClassName;

@@ -1,4 +1,5 @@
 // RUN: %compile -d %t "%s" 2>&1 | FileCheck "%s"
+// RUN: %compile -d %t -f "-Xjit org/geevm/tests/basic/Count#main([Ljava/lang/String;)V" "%s" 2>&1 | FileCheck "%s"
 package org.geevm.tests.basic;
 
 import org.geevm.util.Printer;

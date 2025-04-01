@@ -50,6 +50,11 @@ public:
     return mBytes.size();
   }
 
+  void set(size_t pos)
+  {
+    mPos = pos;
+  }
+
 private:
   std::span<const types::u1> mBytes;
   size_t mPos;

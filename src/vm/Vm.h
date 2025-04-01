@@ -25,6 +25,7 @@ struct VmSettings
   size_t maxStackSize = 1024l * 1024;
   std::string javaHome = "";
   std::unordered_set<std::string> jitFunctions;
+  bool jitAllFunctions = false;
 };
 
 class Vm

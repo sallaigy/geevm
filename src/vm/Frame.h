@@ -23,6 +23,15 @@ public:
 
   ~CallFrame();
 
+  // Constants
+  //==--------------------------------------------------------------------==//
+  static constexpr size_t LocalVariablesOffset = 0;
+  static constexpr size_t OperandStackOffset = 8;
+  static constexpr size_t StackPointerOffset = 16;
+
+  // Current frame information
+  //==--------------------------------------------------------------------==//
+
   InstanceClass* currentClass() const
   {
     return mMethod->getClass();
