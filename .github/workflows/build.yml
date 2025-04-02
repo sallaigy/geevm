@@ -46,9 +46,9 @@ jobs:
           pip install -r requirements.txt
 
       - name: Configure
-        run: >
+        run: |
           cmake --version
-          cmake -GNinja -Bbuild -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx_compiler }}
+          cmake -GNinja -Bbuild -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx_compiler }} \
           -DCMAKE_CXX_FLAGS=${{ matrix.sanitizers }} -S ${{ github.workspace }}
 
       - name: Build
