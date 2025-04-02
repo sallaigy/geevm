@@ -100,6 +100,19 @@ private:
     mStackPointer += 2;
   }
 
+  void unaryJumpIf(const std::function<void(asmjit::Label& target)>& function)
+  {
+    auto opcodePos = mBytes.pos() - 1;
+
+    auto& value1 = this->pop();
+
+    auto offset = std::bit_cast<int16_t>(mBytes.readU2());
+    auto label = mLabels.at(opcodePos + offset);
+
+    mCompiler.test(value1.r32(), value1.r32());
+    function(label);
+  }
+
   void binaryJumpIf(const std::function<void(asmjit::Label& target)>& function)
   {
     auto opcodePos = mBytes.pos() - 1;
@@ -757,105 +770,63 @@ void JitCompilerX86Impl::doCompile()
       case Opcode::FCMPG: notImplemented(opcode); break;
       case Opcode::DCMPL: notImplemented(opcode); break;
       case Opcode::DCMPG: notImplemented(opcode); break;
-      case Opcode::IFEQ: {
-        auto opcodePos = mBytes.pos() - 1;
-
-        auto& value = this->pop();
-
-        auto offset = std::bit_cast<int16_t>(mBytes.readU2());
-        auto label = mLabels.at(opcodePos + offset);
-
-        mCompiler.test(value.r32(), value.r32());
-        mCompiler.je(label);
+      case Opcode::IFEQ:
+        this->unaryJumpIf([this](Label& label) {
+          mCompiler.je(label);
+        });
         break;
-      }
-      case Opcode::IFNE: {
-        auto opcodePos = mBytes.pos() - 1;
-
-        auto& value = this->pop();
-
-        auto offset = std::bit_cast<int16_t>(mBytes.readU2());
-        auto label = mLabels.at(opcodePos + offset);
-
-        mCompiler.test(value.r32(), value.r32());
-        mCompiler.jne(label);
+      case Opcode::IFNE:
+        this->unaryJumpIf([this](Label& label) {
+          mCompiler.jne(label);
+        });
         break;
-      }
-      case Opcode::IFLT: {
-        auto opcodePos = mBytes.pos() - 1;
-
-        auto& value = this->pop();
-
-        auto offset = std::bit_cast<int16_t>(mBytes.readU2());
-        auto label = mLabels.at(opcodePos + offset);
-
-        mCompiler.test(value.r32(), value.r32());
-        mCompiler.jl(label);
+      case Opcode::IFLT:
+        this->unaryJumpIf([this](Label& label) {
+          mCompiler.jl(label);
+        });
         break;
-      }
-      case Opcode::IFGE: {
-        auto opcodePos = mBytes.pos() - 1;
-
-        auto& value = this->pop();
-
-        auto offset = std::bit_cast<int16_t>(mBytes.readU2());
-        auto label = mLabels.at(opcodePos + offset);
-
-        mCompiler.test(value.r32(), value.r32());
-        mCompiler.jge(label);
+      case Opcode::IFGE:
+        this->unaryJumpIf([this](Label& label) {
+          mCompiler.jge(label);
+        });
         break;
-      }
-      case Opcode::IFGT: {
-        auto opcodePos = mBytes.pos() - 1;
-
-        auto& value = this->pop();
-
-        auto offset = std::bit_cast<int16_t>(mBytes.readU2());
-        auto label = mLabels.at(opcodePos + offset);
-
-        mCompiler.test(value.r32(), value.r32());
-        mCompiler.jg(label);
+      case Opcode::IFGT:
+        this->unaryJumpIf([this](Label& label) {
+          mCompiler.jg(label);
+        });
         break;
-      }
-      case Opcode::IFLE: {
-        auto opcodePos = mBytes.pos() - 1;
-
-        auto& value = this->pop();
-
-        auto offset = std::bit_cast<int16_t>(mBytes.readU2());
-        auto label = mLabels.at(opcodePos + offset);
-
-        mCompiler.test(value.r32(), value.r32());
-        mCompiler.jle(label);
+      case Opcode::IFLE:
+        this->unaryJumpIf([this](Label& label) {
+          mCompiler.jle(label);
+        });
         break;
-      }
       case Opcode::IF_ICMPEQ:
-        this->binaryJumpIf([this](asmjit::Label& label) {
+        this->binaryJumpIf([this](Label& label) {
           mCompiler.je(label);
         });
         break;
       case Opcode::IF_ICMPNE:
-        this->binaryJumpIf([this](asmjit::Label& label) {
+        this->binaryJumpIf([this](Label& label) {
           mCompiler.jne(label);
         });
         break;
       case Opcode::IF_ICMPLT:
-        this->binaryJumpIf([this](asmjit::Label& label) {
+        this->binaryJumpIf([this](Label& label) {
           mCompiler.jl(label);
         });
         break;
       case Opcode::IF_ICMPGE:
-        this->binaryJumpIf([this](asmjit::Label& label) {
+        this->binaryJumpIf([this](Label& label) {
           mCompiler.jge(label);
         });
         break;
       case Opcode::IF_ICMPGT:
-        this->binaryJumpIf([this](asmjit::Label& label) {
+        this->binaryJumpIf([this](Label& label) {
           mCompiler.jg(label);
         });
         break;
       case Opcode::IF_ICMPLE:
-        this->binaryJumpIf([this](asmjit::Label& label) {
+        this->binaryJumpIf([this](Label& label) {
           mCompiler.jle(label);
         });
         break;
