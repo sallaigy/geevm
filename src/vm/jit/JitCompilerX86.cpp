@@ -140,6 +140,9 @@ private:
   void safePoint();
   void endSafePoint();
 
+  void ldc(uint16_t index);
+  void ldc2w(uint16_t index);
+
 private:
   JMethod* mMethod;
   asmjit::CodeHolder* mCode;
@@ -280,8 +283,8 @@ void JitCompilerX86Impl::doCompile()
       case Opcode::ICONST_3: this->push(Imm{3}); break;
       case Opcode::ICONST_4: this->push(Imm{4}); break;
       case Opcode::ICONST_5: this->push(Imm{5}); break;
-      case Opcode::LCONST_0: notImplemented(opcode); break;
-      case Opcode::LCONST_1: notImplemented(opcode); break;
+      case Opcode::LCONST_0: this->pushCategoryTwo(Imm{0}); break;
+      case Opcode::LCONST_1: this->pushCategoryTwo(Imm{1}); break;
       case Opcode::FCONST_0: notImplemented(opcode); break;
       case Opcode::FCONST_1: notImplemented(opcode); break;
       case Opcode::FCONST_2: notImplemented(opcode); break;
@@ -297,28 +300,9 @@ void JitCompilerX86Impl::doCompile()
         this->push(constantValue);
         break;
       }
-      case Opcode::LDC: {
-        auto index = mBytes.readU1();
-        auto& runtimeConstantPool = mMethod->getClass()->runtimeConstantPool();
-        auto& [tag, data] = mMethod->getClass()->constantPool().getEntry(index);
-
-        if (tag == ConstantPool::Tag::CONSTANT_Integer) {
-          this->push(asmjit::Imm{data.singleInteger});
-        } else if (tag == ConstantPool::Tag::CONSTANT_Float) {
-          this->push(asmjit::Imm{data.singleFloat});
-        } else if (tag == ConstantPool::Tag::CONSTANT_String) {
-          this->push(asmjit::Imm{runtimeConstantPool.getString(index).get()});
-        } else if (tag == ConstantPool::Tag::CONSTANT_Class) {
-          auto klass = runtimeConstantPool.getClass(index);
-          // TODO: Check if class is loaded
-          this->push(asmjit::Imm{(*klass)->classInstance().get()});
-        } else {
-          GEEVM_UNREACHBLE("Unknown LDC/LDC_W type!");
-        }
-        break;
-      }
-      case Opcode::LDC_W: notImplemented(opcode); break;
-      case Opcode::LDC2_W: notImplemented(opcode); break;
+      case Opcode::LDC: this->ldc(mBytes.readU1()); break;
+      case Opcode::LDC_W: this->ldc(mBytes.readU2()); break;
+      case Opcode::LDC2_W: this->ldc2w(mBytes.readU2()); break;
       case Opcode::ILOAD: {
         int32_t slotNumber = mBytes.readU1();
         this->push(this->load(slotNumber));
@@ -415,13 +399,80 @@ void JitCompilerX86Impl::doCompile()
       case Opcode::SASTORE: notImplemented(opcode); break;
       case Opcode::POP: notImplemented(opcode); break;
       case Opcode::POP2: notImplemented(opcode); break;
-      case Opcode::DUP: notImplemented(opcode); break;
-      case Opcode::DUP_X1: notImplemented(opcode); break;
-      case Opcode::DUP_X2: notImplemented(opcode); break;
-      case Opcode::DUP2: notImplemented(opcode); break;
-      case Opcode::DUP2_X1: notImplemented(opcode); break;
-      case Opcode::DUP2_X2: notImplemented(opcode); break;
-      case Opcode::SWAP: notImplemented(opcode); break;
+      case Opcode::DUP: {
+        auto& topOfStack = mStack[mStackPointer - 1];
+        mCompiler.mov(mStack[mStackPointer++], topOfStack);
+        break;
+      }
+      case Opcode::DUP_X1: {
+        auto& value1 = mStack[mStackPointer - 1];
+        auto& value2 = mStack[mStackPointer - 2];
+
+        mCompiler.xchg(value1, value2);
+        this->push(value2);
+        break;
+      }
+      case Opcode::DUP_X2: {
+        auto& value1 = mStack[mStackPointer - 1];
+        auto& value2 = mStack[mStackPointer - 2];
+        auto& value3 = mStack[mStackPointer - 3];
+
+        this->push(value1);
+
+        mCompiler.xchg(value2, value1);
+        mCompiler.xchg(value3, value2);
+        break;
+      }
+      case Opcode::DUP2: {
+        auto& value1 = mStack[mStackPointer - 1];
+        auto& value2 = mStack[mStackPointer - 2];
+
+        this->push(value2);
+        this->push(value1);
+        break;
+      }
+      case Opcode::DUP2_X1: {
+        // v3 v2 v1 =>
+        // v2 v1 v3 v2 v1
+        auto& value1 = mStack[mStackPointer - 1];
+        auto& value2 = mStack[mStackPointer - 2];
+        auto& value3 = mStack[mStackPointer - 3];
+
+        // v3 v2 v1 v2 v1
+        this->push(value2);
+        this->push(value1);
+
+        // v3 v1 v2 v2 v1
+        mCompiler.xchg(value2, value1);
+        // v2 v1 v3 v2 v1
+        mCompiler.xchg(value3, value1);
+        break;
+      }
+      case Opcode::DUP2_X2: {
+        // v4 v3 v2 v1 =>
+        // v2 v1 v4 v3 v2 v1
+        auto& value1 = mStack[mStackPointer - 1];
+        auto& value2 = mStack[mStackPointer - 2];
+        auto& value3 = mStack[mStackPointer - 3];
+        auto& value4 = mStack[mStackPointer - 4];
+
+        // v4 v3 v2 v1 v2 v1
+        this->push(value2);
+        this->push(value1);
+
+        // v4 v1 v2 v3 v2 v1
+        mCompiler.xchg(value3, value1);
+        // v2 v1 v4 v1 v2 v1
+        mCompiler.xchg(value4, value2);
+        break;
+      }
+      case Opcode::SWAP: {
+        auto& value1 = mStack[mStackPointer - 1];
+        auto& value2 = mStack[mStackPointer - 2];
+
+        mCompiler.xchg(value1, value2);
+        break;
+      }
       case Opcode::IADD:
         this->binaryOp([this](auto& dst, auto& src) {
           mCompiler.add(dst, src);
@@ -1013,4 +1064,31 @@ void JitCompilerX86Impl::putStatic()
   auto fieldPtr = mCompiler.newIntPtr();
   mCompiler.mov(fieldPtr, klass->staticFieldPtr(field->offset()));
   mCompiler.mov(qword_ptr(fieldPtr), *value);
+}
+
+void JitCompilerX86Impl::ldc(uint16_t index)
+{
+  auto& runtimeConstantPool = mMethod->getClass()->runtimeConstantPool();
+  auto& [tag, data] = mMethod->getClass()->constantPool().getEntry(index);
+
+  if (tag == ConstantPool::Tag::CONSTANT_Integer) {
+    this->push(asmjit::Imm{data.singleInteger});
+  } else if (tag == ConstantPool::Tag::CONSTANT_Float) {
+    this->push(asmjit::Imm{data.singleFloat});
+  } else if (tag == ConstantPool::Tag::CONSTANT_String) {
+    this->push(asmjit::Imm{runtimeConstantPool.getString(index).get()});
+  } else if (tag == ConstantPool::Tag::CONSTANT_Class) {
+    auto klass = runtimeConstantPool.getClass(index);
+    // TODO: Check if class is loaded
+    this->push(asmjit::Imm{(*klass)->classInstance().get()});
+  } else {
+    GEEVM_UNREACHBLE("Unknown LDC/LDC_W type!");
+  }
+}
+
+void JitCompilerX86Impl::ldc2w(uint16_t index)
+{
+  auto& [tag, data] = mMethod->getClass()->constantPool().getEntry(index);
+
+  this->pushCategoryTwo(asmjit::Imm{data.doubleFloat});
 }
