@@ -581,8 +581,26 @@ void JitCompilerX86Impl::doCompile()
         });
         break;
       }
-      case Opcode::IDIV: notImplemented(opcode); break;
-      case Opcode::LDIV: notImplemented(opcode); break;
+      case Opcode::IDIV: {
+        auto& value2 = this->pop();
+        auto& value1 = this->pop();
+        auto rem = mCompiler.newGpq();
+
+        mCompiler.cdq(rem.r32(), value1.r32());
+        mCompiler.idiv(rem.r32(), value1.r32(), value2.r32());
+        this->push(value1);
+        break;
+      }
+      case Opcode::LDIV: {
+        auto& value2 = this->popCategoryTwo();
+        auto& value1 = this->popCategoryTwo();
+        auto rem = mCompiler.newGpq();
+
+        mCompiler.cqo(rem, value1);
+        mCompiler.idiv(rem, value1, value2);
+        this->pushCategoryTwo(value1);
+        break;
+      }
       case Opcode::FDIV: {
         this->binaryOp([this](auto& value1, auto& value2) {
           auto xmm2 = mCompiler.newXmm();
@@ -618,7 +636,16 @@ void JitCompilerX86Impl::doCompile()
         this->push(rem);
         break;
       }
-      case Opcode::LREM: notImplemented(opcode); break;
+      case Opcode::LREM: {
+        auto& value2 = this->popCategoryTwo();
+        auto& value1 = this->popCategoryTwo();
+        auto rem = mCompiler.newGpq();
+
+        mCompiler.cqo(rem, value1);
+        mCompiler.idiv(rem, value1, value2);
+        this->pushCategoryTwo(rem);
+        break;
+      }
       case Opcode::FREM: {
         this->binaryOp([this](auto& value1, auto& value2) {
           auto xmm2 = mCompiler.newXmm();
