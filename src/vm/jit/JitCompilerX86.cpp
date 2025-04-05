@@ -823,26 +823,281 @@ void JitCompilerX86Impl::doCompile()
         mCompiler.add(this->load(index).r32(), constValue);
         break;
       }
-      case Opcode::I2L: notImplemented(opcode); break;
-      case Opcode::I2F: notImplemented(opcode); break;
-      case Opcode::I2D: notImplemented(opcode); break;
+      case Opcode::I2L: {
+        auto& value = mStack[mStackPointer - 1];
+        mCompiler.movsxd(value, value.r32());
+        mStackPointer++;
+        break;
+      }
+      case Opcode::I2F: {
+        auto& value = mStack[mStackPointer - 1];
+        auto xmm0 = mCompiler.newXmm();
+        mCompiler.cvtsi2ss(xmm0, value.r32());
+        mCompiler.movd(value.r32(), xmm0);
+        break;
+      }
+      case Opcode::I2D: {
+        auto& value = mStack[mStackPointer - 1];
+        auto xmm0 = mCompiler.newXmm();
+        mCompiler.cvtsi2sd(xmm0, value.r32());
+        mCompiler.movq(value, xmm0);
+        mStackPointer++;
+        break;
+      }
       case Opcode::L2I: {
         // No need to implement the cast itself, as it merely just discards the top 32-bits.
         auto& value = this->popCategoryTwo();
         this->push(value);
         break;
       }
-      case Opcode::L2F: notImplemented(opcode); break;
-      case Opcode::L2D: notImplemented(opcode); break;
-      case Opcode::F2I: notImplemented(opcode); break;
-      case Opcode::F2L: notImplemented(opcode); break;
-      case Opcode::F2D: notImplemented(opcode); break;
-      case Opcode::D2I: notImplemented(opcode); break;
-      case Opcode::D2L: notImplemented(opcode); break;
-      case Opcode::D2F: notImplemented(opcode); break;
-      case Opcode::I2B: notImplemented(opcode); break;
-      case Opcode::I2C: notImplemented(opcode); break;
-      case Opcode::I2S: notImplemented(opcode); break;
+      case Opcode::L2F: {
+        auto& value = mStack[mStackPointer - 2];
+        auto xmm0 = mCompiler.newXmm();
+        mCompiler.cvtsi2ss(xmm0, value);
+        mCompiler.movd(value.r32(), xmm0);
+        mStackPointer -= 1;
+        break;
+      }
+      case Opcode::L2D: {
+        auto& value = mStack[mStackPointer - 2];
+        auto xmm0 = mCompiler.newXmm();
+        mCompiler.cvtsi2sd(xmm0, value);
+        mCompiler.movq(value, xmm0);
+        break;
+      }
+      case Opcode::F2I: {
+        auto& value = mStack[mStackPointer - 1];
+
+        auto pattern = mCompiler.newGpd();
+        auto xmm0 = mCompiler.newXmm();
+        auto xmm1 = mCompiler.newXmm();
+
+        auto nanLabel = mCompiler.newLabel();
+        auto tooBigLabel = mCompiler.newLabel();
+        auto tooSmallLabel = mCompiler.newLabel();
+        auto& nextInstLabel = mLabels[mBytes.pos()];
+
+        mCompiler.movd(xmm0, value.r32());
+        // Check if operand is NaN: if it is, the result is zero
+        mCompiler.ucomiss(xmm0, xmm0);
+        mCompiler.jp(nanLabel);
+        // Round the operand using truncate
+        mCompiler.roundss(xmm0, xmm0, 3);
+        // If the truncated value is larger than int max
+        mCompiler.mov(pattern.r32(), 0x4F000000);
+        mCompiler.movd(xmm1, pattern.r32());
+        mCompiler.ucomiss(xmm0, xmm1);
+        mCompiler.jae(tooBigLabel);
+        // If the truncated value is larger than int min
+        mCompiler.mov(pattern.r32(), 0xCF000000);
+        mCompiler.movd(xmm1, pattern.r32());
+        mCompiler.ucomiss(xmm0, xmm1);
+        mCompiler.jbe(tooSmallLabel);
+
+        // Convert
+        mCompiler.cvttss2si(value.r32(), xmm0);
+        mCompiler.jmp(nextInstLabel);
+
+        // Handle int max
+        mCompiler.bind(tooBigLabel);
+        mCompiler.mov(value.r32(), 0x7FFFFFFF);
+        mCompiler.jmp(nextInstLabel);
+
+        // Handle small value
+        mCompiler.bind(tooSmallLabel);
+        mCompiler.mov(value.r32(), 0x80000000);
+        mCompiler.jmp(nextInstLabel);
+
+        // Zero
+        mCompiler.bind(nanLabel);
+        mCompiler.xor_(value.r32(), value.r32());
+        break;
+      }
+      case Opcode::F2L: {
+        auto& value = mStack[mStackPointer - 1];
+
+        auto pattern = mCompiler.newGpd();
+        auto xmm0 = mCompiler.newXmm();
+        auto xmm1 = mCompiler.newXmm();
+
+        auto nanLabel = mCompiler.newLabel();
+        auto tooBigLabel = mCompiler.newLabel();
+        auto tooSmallLabel = mCompiler.newLabel();
+        auto& nextInstLabel = mLabels[mBytes.pos()];
+
+        mCompiler.movd(xmm0, value);
+        // Check if operand is NaN: if it is, the result is zero
+        mCompiler.ucomiss(xmm0, xmm0);
+        mCompiler.jp(nanLabel);
+        // Round the operand using truncate
+        mCompiler.roundss(xmm0, xmm0, 3);
+        // If the truncated value is larger than long max
+        mCompiler.mov(pattern, 0x5F000000);
+        mCompiler.movd(xmm1, pattern);
+        mCompiler.ucomiss(xmm0, xmm1);
+        mCompiler.jae(tooBigLabel);
+        // If the truncated value is larger than long min
+        mCompiler.mov(pattern, 0xDF000000);
+        mCompiler.movd(xmm1, pattern);
+        mCompiler.ucomiss(xmm0, xmm1);
+        mCompiler.jbe(tooSmallLabel);
+
+        // Convert
+        mCompiler.cvttss2si(value, xmm0);
+        mCompiler.jmp(nextInstLabel);
+
+        // Handle too big value
+        mCompiler.bind(tooBigLabel);
+        mCompiler.mov(value, 0x7FFFFFFFFFFFFFFF);
+        mCompiler.jmp(nextInstLabel);
+
+        // Handle too small value
+        mCompiler.bind(tooSmallLabel);
+        mCompiler.mov(value, 0x8000000000000000);
+        mCompiler.jmp(nextInstLabel);
+
+        // Zero
+        mCompiler.bind(nanLabel);
+        mCompiler.xor_(value, value);
+
+        mStackPointer++;
+        break;
+      }
+      case Opcode::F2D: {
+        auto& value = mStack[mStackPointer - 1];
+        auto xmm0 = mCompiler.newXmm();
+
+        mCompiler.movq(xmm0, value);
+        mCompiler.cvtss2sd(xmm0, xmm0);
+        mCompiler.movq(value, xmm0);
+
+        mStackPointer++;
+        break;
+      }
+      case Opcode::D2I: {
+        auto& value = mStack[mStackPointer - 2];
+
+        auto pattern = mCompiler.newGpq();
+        auto xmm0 = mCompiler.newXmm();
+        auto xmm1 = mCompiler.newXmm();
+
+        auto nanLabel = mCompiler.newLabel();
+        auto tooBigLabel = mCompiler.newLabel();
+        auto tooSmallLabel = mCompiler.newLabel();
+        auto& nextInstLabel = mLabels[mBytes.pos()];
+
+        mCompiler.movq(xmm0, value);
+        // Check if operand is NaN: if it is, the result is zero
+        mCompiler.ucomisd(xmm0, xmm0);
+        mCompiler.jp(nanLabel);
+        // // Round the operand using truncate
+        mCompiler.roundsd(xmm0, xmm0, 3);
+        // // If the truncated value is larger than int max
+        mCompiler.movabs(pattern, 0x4080000000000000);
+        mCompiler.movq(xmm1, pattern);
+        mCompiler.ucomisd(xmm0, xmm1);
+        mCompiler.jae(tooBigLabel);
+        // // If the truncated value is larger than int min
+        mCompiler.movabs(pattern, 0xC080000000000000);
+        mCompiler.movq(xmm1, pattern);
+        mCompiler.ucomisd(xmm0, xmm1);
+        mCompiler.jbe(tooSmallLabel);
+
+        // Convert
+        mCompiler.cvttsd2si(value, xmm0);
+        mCompiler.jmp(nextInstLabel);
+
+        // Handle int max
+        mCompiler.bind(tooBigLabel);
+        mCompiler.mov(value.r32(), 0x7FFFFFFF);
+        mCompiler.jmp(nextInstLabel);
+
+        // Handle small value
+        mCompiler.bind(tooSmallLabel);
+        mCompiler.mov(value.r32(), 0x80000000);
+        mCompiler.jmp(nextInstLabel);
+
+        // Zero
+        mCompiler.bind(nanLabel);
+        mCompiler.xor_(value.r32(), value.r32());
+
+        mStackPointer--;
+        break;
+      }
+      case Opcode::D2L: {
+        auto& value = mStack[mStackPointer - 2];
+
+        auto pattern = mCompiler.newGpq();
+        auto xmm0 = mCompiler.newXmm();
+        auto xmm1 = mCompiler.newXmm();
+
+        auto nanLabel = mCompiler.newLabel();
+        auto tooBigLabel = mCompiler.newLabel();
+        auto tooSmallLabel = mCompiler.newLabel();
+        auto& nextInstLabel = mLabels[mBytes.pos()];
+
+        mCompiler.movq(xmm0, value);
+        // Check if operand is NaN: if it is, the result is zero
+        mCompiler.ucomisd(xmm0, xmm0);
+        mCompiler.jp(nanLabel);
+        // Round the operand using truncate
+        mCompiler.roundsd(xmm0, xmm0, 3);
+        // If the truncated value is larger than long max
+        mCompiler.movabs(pattern, 0x43E0000000000000);
+        mCompiler.movq(xmm1, pattern);
+        mCompiler.ucomisd(xmm0, xmm1);
+        mCompiler.jae(tooBigLabel);
+        // If the truncated value is larger than long min
+        mCompiler.movabs(pattern, 0xC3E0000000000000);
+        mCompiler.movq(xmm1, pattern);
+        mCompiler.ucomisd(xmm0, xmm1);
+        mCompiler.jbe(tooSmallLabel);
+
+        // Convert
+        mCompiler.cvttsd2si(value, xmm0);
+        mCompiler.jmp(nextInstLabel);
+
+        // Handle too big value
+        mCompiler.bind(tooBigLabel);
+        mCompiler.mov(value, 0x7FFFFFFFFFFFFFFF);
+        mCompiler.jmp(nextInstLabel);
+
+        // Handle too small value
+        mCompiler.bind(tooSmallLabel);
+        mCompiler.mov(value, 0x8000000000000000);
+        mCompiler.jmp(nextInstLabel);
+
+        // Zero
+        mCompiler.bind(nanLabel);
+        mCompiler.xor_(value, value);
+        break;
+      }
+      case Opcode::D2F: {
+        auto& value = mStack[mStackPointer - 2];
+        auto xmm0 = mCompiler.newXmm();
+
+        mCompiler.movq(xmm0, value);
+        mCompiler.cvtsd2ss(xmm0, xmm0);
+        mCompiler.movq(value, xmm0);
+
+        mStackPointer--;
+        break;
+      }
+      case Opcode::I2B: {
+        auto& value = mStack[mStackPointer - 1];
+        mCompiler.movsx(value.r32(), value.r8());
+        break;
+      }
+      case Opcode::I2C: {
+        auto& value = mStack[mStackPointer - 1];
+        mCompiler.movzx(value.r32(), value.r16());
+        break;
+      }
+      case Opcode::I2S: {
+        auto& value = mStack[mStackPointer - 1];
+        mCompiler.movsx(value.r32(), value.r16());
+        break;
+      }
       case Opcode::LCMP: notImplemented(opcode); break;
       case Opcode::FCMPL: notImplemented(opcode); break;
       case Opcode::FCMPG: notImplemented(opcode); break;
