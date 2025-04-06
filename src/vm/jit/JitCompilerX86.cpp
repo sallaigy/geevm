@@ -397,8 +397,8 @@ void JitCompilerX86Impl::doCompile()
       case Opcode::BASTORE: notImplemented(opcode); break;
       case Opcode::CASTORE: notImplemented(opcode); break;
       case Opcode::SASTORE: notImplemented(opcode); break;
-      case Opcode::POP: notImplemented(opcode); break;
-      case Opcode::POP2: notImplemented(opcode); break;
+      case Opcode::POP: mStackPointer--; break;
+      case Opcode::POP2: mStackPointer -= 2; break;
       case Opcode::DUP: {
         auto& topOfStack = mStack[mStackPointer - 1];
         mCompiler.mov(mStack[mStackPointer++], topOfStack);
@@ -1098,11 +1098,125 @@ void JitCompilerX86Impl::doCompile()
         mCompiler.movsx(value.r32(), value.r16());
         break;
       }
-      case Opcode::LCMP: notImplemented(opcode); break;
-      case Opcode::FCMPL: notImplemented(opcode); break;
-      case Opcode::FCMPG: notImplemented(opcode); break;
-      case Opcode::DCMPL: notImplemented(opcode); break;
-      case Opcode::DCMPG: notImplemented(opcode); break;
+      case Opcode::LCMP: {
+        auto& value2 = this->popCategoryTwo();
+        auto& value1 = this->popCategoryTwo();
+        auto flag = mCompiler.newGpd();
+
+        auto greaterLabel = mCompiler.newLabel();
+        auto nextInst = mLabels[mBytes.pos()];
+
+        mCompiler.cmp(value1, value2);
+        mCompiler.jg(greaterLabel);
+        mCompiler.xor_(flag, flag);
+        mCompiler.cmp(value1, value2);
+        mCompiler.setne(flag);
+        mCompiler.neg(flag);
+        mCompiler.mov(value1.r32(), flag);
+        mCompiler.jmp(nextInst);
+        mCompiler.bind(greaterLabel);
+        mCompiler.mov(value1.r32(), Imm{1});
+        mStackPointer++;
+        break;
+      }
+      case Opcode::FCMPL: {
+        auto& value2 = this->pop();
+        auto& value1 = this->pop();
+
+        auto xmm2 = mCompiler.newXmm();
+        auto xmm1 = mCompiler.newXmm();
+
+        mCompiler.movd(xmm1, value1.r32());
+        mCompiler.movd(xmm2, value2.r32());
+
+        auto smallerLabel = mCompiler.newLabel();
+        auto nextInst = mLabels[mBytes.pos()];
+
+        mCompiler.xor_(value1.r32(), value1.r32());
+        mCompiler.ucomiss(xmm1, xmm2);
+        mCompiler.jp(smallerLabel);
+        mCompiler.jb(smallerLabel);
+        mCompiler.setne(value1.r32());
+        mCompiler.jmp(nextInst);
+        mCompiler.bind(smallerLabel);
+        mCompiler.mov(value1.r32(), Imm{-1});
+        mStackPointer++;
+        break;
+      }
+      case Opcode::FCMPG: {
+        auto& value2 = this->pop();
+        auto& value1 = this->pop();
+
+        auto xmm2 = mCompiler.newXmm();
+        auto xmm1 = mCompiler.newXmm();
+
+        mCompiler.movd(xmm1, value1.r32());
+        mCompiler.movd(xmm2, value2.r32());
+
+        auto greaterLabel = mCompiler.newLabel();
+        auto nextInst = mLabels[mBytes.pos()];
+
+        mCompiler.xor_(value1.r32(), value1.r32());
+        mCompiler.ucomiss(xmm1, xmm2);
+        mCompiler.jp(greaterLabel);
+        mCompiler.ja(greaterLabel);
+        mCompiler.setne(value1.r32());
+        mCompiler.neg(value1.r32());
+        mCompiler.jmp(nextInst);
+        mCompiler.bind(greaterLabel);
+        mCompiler.mov(value1.r32(), Imm{1});
+        mStackPointer++;
+        break;
+      }
+      case Opcode::DCMPL: {
+        auto& value2 = this->popCategoryTwo();
+        auto& value1 = this->popCategoryTwo();
+
+        auto xmm2 = mCompiler.newXmm();
+        auto xmm1 = mCompiler.newXmm();
+
+        mCompiler.movq(xmm1, value1);
+        mCompiler.movq(xmm2, value2);
+
+        auto smallerLabel = mCompiler.newLabel();
+        auto nextInst = mLabels[mBytes.pos()];
+
+        mCompiler.xor_(value1.r32(), value1.r32());
+        mCompiler.ucomisd(xmm1, xmm2);
+        mCompiler.jp(smallerLabel);
+        mCompiler.jb(smallerLabel);
+        mCompiler.setne(value1.r32());
+        mCompiler.jmp(nextInst);
+        mCompiler.bind(smallerLabel);
+        mCompiler.mov(value1.r32(), Imm{-1});
+        mStackPointer++;
+        break;
+      }
+      case Opcode::DCMPG: {
+        auto& value2 = this->popCategoryTwo();
+        auto& value1 = this->popCategoryTwo();
+
+        auto xmm2 = mCompiler.newXmm();
+        auto xmm1 = mCompiler.newXmm();
+
+        mCompiler.movq(xmm1, value1);
+        mCompiler.movq(xmm2, value2);
+
+        auto greaterLabel = mCompiler.newLabel();
+        auto nextInst = mLabels[mBytes.pos()];
+
+        mCompiler.xor_(value1.r32(), value1.r32());
+        mCompiler.ucomisd(xmm1, xmm2);
+        mCompiler.jp(greaterLabel);
+        mCompiler.ja(greaterLabel);
+        mCompiler.setne(value1.r32());
+        mCompiler.neg(value1.r32());
+        mCompiler.jmp(nextInst);
+        mCompiler.bind(greaterLabel);
+        mCompiler.mov(value1.r32(), Imm{1});
+        mStackPointer++;
+        break;
+      }
       case Opcode::IFEQ:
         this->unaryJumpIf([this](Label& label) {
           mCompiler.je(label);
