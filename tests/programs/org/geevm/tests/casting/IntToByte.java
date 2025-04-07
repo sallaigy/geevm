@@ -1,4 +1,5 @@
 // RUN: %compile -d %t "%s" | FileCheck "%s"
+// RUN: %compile -d %t -f "-Xjit org/geevm/tests/casting/IntToByte#castAndPrint(I)V" "%s" 2>&1 | FileCheck "%s"
 package org.geevm.tests.casting;
 
 import org.geevm.util.Printer;

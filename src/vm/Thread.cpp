@@ -1,7 +1,7 @@
 #include "vm/Thread.h"
 #include "common/Memory.h"
+#include "vm/Frame.h"
 #include "vm/Instance.h"
-#include "vm/Interpreter.h"
 #include "vm/Vm.h"
 #include "vm/VmUtils.h"
 
@@ -129,7 +129,7 @@ std::optional<Value> JavaThread::invokeWithArgs(JMethod* method, std::vector<Val
 
     for (size_t i = 0; i < method->descriptor().parameters().size(); ++i) {
       auto& param = method->descriptor().parameters()[i];
-      newFrame->storeGenericValue(argIndex, arguments[i + instanceCallOffset].toRaw().first);
+      newFrame->storeGenericValue(argIndex, arguments[i + instanceCallOffset].toRaw());
       argIndex += 1;
       if (param.isCategoryTwo()) {
         argIndex += 1;
@@ -143,12 +143,6 @@ std::optional<Value> JavaThread::invokeWithArgs(JMethod* method, std::vector<Val
   this->handleCalleeException(current);
 
   return returnValue;
-}
-
-std::optional<Value> JavaThread::executeTopFrame()
-{
-  auto interpreter = createDefaultInterpreter(*this);
-  return interpreter->execute();
 }
 
 void JavaThread::handleCalleeException(CallFrame* callerFrame)

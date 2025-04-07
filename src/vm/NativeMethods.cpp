@@ -1,11 +1,10 @@
 #include "vm/NativeMethods.h"
-#include "vm/JniImplementation.h"
-#include "vm/VmUtils.h"
 #include "common/DynamicLibrary.h"
 #include "common/Encoding.h"
-#include "vm/Frame.h"
+#include "vm/JniImplementation.h"
 #include "vm/Thread.h"
 #include "vm/Vm.h"
+#include "vm/VmUtils.h"
 
 #include <algorithm>
 #include <ffi.h>

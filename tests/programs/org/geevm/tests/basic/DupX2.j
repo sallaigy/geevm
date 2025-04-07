@@ -1,4 +1,5 @@
 ; RUN: %compile -d %t "%s" | FileCheck "%s"
+; RUN: %compile -d %t -f "-Xjit org/geevm/tests/basic/DupX2#main([Ljava/lang/String;)V" "%s" 2>&1 | FileCheck "%s"
 .class org/geevm/tests/basic/DupX2
 .super java/lang/Object
 

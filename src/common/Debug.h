@@ -1,6 +1,9 @@
 #ifndef GEEVM_COMMON_DEBUG_H
 #define GEEVM_COMMON_DEBUG_H
 
+#include <string>
+#include <unordered_set>
+
 // Address sanitizer utilities
 //==--------------------------------------------------------------------------==
 #if defined(__has_feature)
@@ -40,4 +43,36 @@ namespace geevm::debug
   }
 #endif
 
-#endif // GEEVM_COMMON_DEBUG_H
+// Debug logging
+//==--------------------------------------------------------------------------==
+
+namespace geevm::debug
+{
+
+class DebugLogger
+{
+  DebugLogger() = default;
+  DebugLogger(const DebugLogger&) = delete;
+  const DebugLogger& operator=(DebugLogger&&) = delete;
+
+  void doLog(const std::string& component, const std::string& message);
+
+public:
+  static DebugLogger& get();
+
+  void addComponent(const std::string& component);
+
+  void log(const std::string& component, const std::string& message)
+  {
+#ifndef NDEBUG
+    this->doLog(component, message);
+#endif
+  }
+
+private:
+  std::unordered_set<std::string> mComponents;
+};
+
+} // namespace geevm::debug
+
+#endif

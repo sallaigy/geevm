@@ -1,7 +1,7 @@
 ; RUN: %compile -d %t "%s" | FileCheck "%s"
-; RUN: %compile -d %t -f "-Xjit org/geevm/tests/basic/Dup#main([Ljava/lang/String;)V" "%s" 2>&1 | FileCheck "%s"
+; RUN: %compile -d %t -f "-Xjit org/geevm/tests/basic/Pop#main([Ljava/lang/String;)V" "%s" 2>&1 | FileCheck "%s"
 .bytecode 61.0
-.class org/geevm/tests/basic/Dup
+.class org/geevm/tests/basic/Pop
 .super java/lang/Object
 
 .method public <init>()V
@@ -15,10 +15,9 @@
 
    iconst_0
    iconst_1
-   dup
+   iconst_2
+   pop
    ; CHECK: 1
-   invokestatic org/geevm/util/Printer/println(I)V
-   ; CHECK-NEXT: 1
    invokestatic org/geevm/util/Printer/println(I)V
    ; CHECK-NEXT: 0
    invokestatic org/geevm/util/Printer/println(I)V

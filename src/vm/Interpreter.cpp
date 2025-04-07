@@ -1,5 +1,6 @@
-#include "vm/Interpreter.h"
 #include "class_file/Opcode.h"
+#include "common/Encoding.h"
+#include "jit/JitCompiler.h"
 #include "vm/Frame.h"
 #include "vm/Instance.h"
 #include "vm/Vm.h"
@@ -12,21 +13,24 @@ using namespace geevm;
 namespace
 {
 
-class DefaultInterpreter : public Interpreter
+class DefaultInterpreter
 {
 public:
   explicit DefaultInterpreter(JavaThread& thread)
-    : mThread(thread)
+    : mThread(thread), mCurrentFrame(&thread.currentFrame())
   {
   }
 
-  std::optional<Value> execute() override;
+  DefaultInterpreter(const DefaultInterpreter&) = delete;
+  DefaultInterpreter& operator=(const DefaultInterpreter&) = delete;
+
+  std::optional<Value> execute();
 
 private:
   void invoke(JMethod* method);
   void handleErrorAsException(const VmError& error);
 
-  std::optional<types::u2> tryHandleException(GcRootRef<> exception, RuntimeConstantPool& rt, const Code& code, size_t pc);
+  std::optional<types::u2> tryHandleException(GcRootRef<> exception, const Code& code, size_t pc);
 
   CallFrame& currentFrame()
   {
@@ -87,9 +91,13 @@ private:
   template<JvmType T, auto CheckedValue, class Func>
   void unaryJumpIf();
 
+  void newObject();
   void newArray();
   void newReferenceArray();
   void newMultiArray();
+
+  void checkCast();
+  void instanceOf();
 
   template<std::signed_integral T, class F>
   struct WrapSignedArithmetic
@@ -103,12 +111,15 @@ private:
     }
   };
 
-  void invokeVirtual(RuntimeConstantPool& runtimeConstantPool);
+  void invokeVirtual();
+  void invokeStatic();
+  void invokeSpecial();
+  void invokeInterface();
 
-  void getStatic(RuntimeConstantPool& runtimeConstantPool);
-  void putStatic(RuntimeConstantPool& runtimeConstantPool);
-  void getField(RuntimeConstantPool& runtimeConstantPool);
-  void putField(RuntimeConstantPool& runtimeConstantPool);
+  void getStatic();
+  void putStatic();
+  void getField();
+  void putField();
 
   void swap();
   void dup();
@@ -124,7 +135,7 @@ private:
   void tableSwitch();
   void wide(Opcode modifiedOpcode);
 
-  bool checkException(RuntimeConstantPool& runtimeConstantPool);
+  bool checkException();
 
 private:
   JavaThread& mThread;
@@ -133,9 +144,36 @@ private:
 
 } // namespace
 
-std::unique_ptr<Interpreter> geevm::createDefaultInterpreter(JavaThread& thread)
+std::optional<Value> JavaThread::executeTopFrame()
 {
-  return std::make_unique<DefaultInterpreter>(thread);
+  JMethod* method = this->currentFrame().currentMethod();
+  if (method->jitFunction() != nullptr) {
+    // FIXME: Void returns
+    uint64_t result = method->jitFunction()(this, &this->currentFrame());
+    return Value{result};
+  }
+
+  std::string signature = method->signatureString();
+  if (mVm.settings().jitFunctions.contains(signature)) {
+    debug::DebugLogger::get().log("JIT", std::format("JIT-compiling {}", utf16ToUtf8(method->name())));
+    JitFunction fn = mVm.jit().compile(this->currentFrame().currentMethod());
+    if (fn != nullptr) {
+      // FIXME: Void returns
+      uint64_t result = fn(this, &this->currentFrame());
+      method->setJitFunction(fn);
+
+      if (!method->isVoid()) {
+        return Value{result};
+      }
+
+      return std::nullopt;
+    } else {
+      geevm_panic("Failed to JIT-compile");
+    }
+  }
+
+  DefaultInterpreter interpreter{*this};
+  return interpreter.execute();
 }
 
 static void notImplemented(Opcode opcode)
@@ -143,14 +181,14 @@ static void notImplemented(Opcode opcode)
   geevm_panic(std::format("using unsupported opcode '{}'", opcodeToString(opcode)));
 }
 
-bool DefaultInterpreter::checkException(RuntimeConstantPool& runtimeConstantPool)
+bool DefaultInterpreter::checkException()
 {
   const Code& code = mCurrentFrame->currentMethod()->getCode();
   auto exception = mThread.currentException();
   assert(exception != nullptr);
   size_t pc = mCurrentFrame->programCounter() - 1;
 
-  auto newPc = this->tryHandleException(exception, runtimeConstantPool, code, pc);
+  auto newPc = this->tryHandleException(exception, code, pc);
 
   if (newPc.has_value()) {
     mCurrentFrame->set(newPc.value());
@@ -162,30 +200,24 @@ bool DefaultInterpreter::checkException(RuntimeConstantPool& runtimeConstantPool
   return false;
 }
 
-#define WITH_EXCEPTION_CHECK(INSTRUCTION)                                 \
-  {                                                                       \
-    INSTRUCTION;                                                          \
-    if (mThread.currentException() != nullptr) [[unlikely]] {             \
-      bool uncaughtException = this->checkException(runtimeConstantPool); \
-      if (uncaughtException) {                                            \
-        return std::nullopt;                                              \
-      }                                                                   \
-    }                                                                     \
+#define WITH_EXCEPTION_CHECK(INSTRUCTION)                     \
+  {                                                           \
+    INSTRUCTION;                                              \
+    if (mThread.currentException() != nullptr) [[unlikely]] { \
+      bool uncaughtException = this->checkException();        \
+      if (uncaughtException) {                                \
+        return std::nullopt;                                  \
+      }                                                       \
+    }                                                         \
   }
 
 std::optional<Value> DefaultInterpreter::execute()
 {
-  mCurrentFrame = &mThread.currentFrame();
-  RuntimeConstantPool& runtimeConstantPool = mCurrentFrame->currentClass()->runtimeConstantPool();
-
   while (true) {
     Opcode opcode = mCurrentFrame->next();
 
     switch (opcode) {
       using enum Opcode;
-      case NOP:
-        // Nothing to do
-        break;
       //==--------------------------------------------------------------------==
       // Constant push
       //==--------------------------------------------------------------------==
@@ -427,78 +459,22 @@ std::optional<Value> DefaultInterpreter::execute()
       //==--------------------------------------------------------------------==
       // Field manipulation
       //==--------------------------------------------------------------------==
-      case GETSTATIC: WITH_EXCEPTION_CHECK(getStatic(runtimeConstantPool)) break;
-      case PUTSTATIC: WITH_EXCEPTION_CHECK(putStatic(runtimeConstantPool)) break;
-      case GETFIELD: WITH_EXCEPTION_CHECK(getField(runtimeConstantPool)) break;
-      case PUTFIELD: WITH_EXCEPTION_CHECK(putField(runtimeConstantPool)) break;
+      case GETSTATIC: WITH_EXCEPTION_CHECK(getStatic()) break;
+      case PUTSTATIC: WITH_EXCEPTION_CHECK(putStatic()) break;
+      case GETFIELD: WITH_EXCEPTION_CHECK(getField()) break;
+      case PUTFIELD: WITH_EXCEPTION_CHECK(putField()) break;
       //==--------------------------------------------------------------------==
       // Invocations
       //==--------------------------------------------------------------------==
-      case INVOKEVIRTUAL: WITH_EXCEPTION_CHECK(invokeVirtual(runtimeConstantPool)) break;
-      case INVOKESPECIAL:
-        WITH_EXCEPTION_CHECK({
-          auto index = mCurrentFrame->readU2();
-          JMethod* method = runtimeConstantPool.getMethodRef(index);
-
-          this->invoke(method);
-        })
-        break;
-      case INVOKESTATIC:
-        WITH_EXCEPTION_CHECK({
-          auto index = mCurrentFrame->readU2();
-          JMethod* method = runtimeConstantPool.getMethodRef(index);
-          assert(method->isStatic());
-
-          method->getClass()->initialize(mThread);
-          // Initialization can fail with an exception, so only proceed if an exception did not occur
-          if (mThread.currentException() == nullptr) {
-            this->invoke(method);
-          }
-        })
-        break;
-      case INVOKEINTERFACE:
-        WITH_EXCEPTION_CHECK({
-          auto index = mCurrentFrame->readU2();
-          const JMethod* methodRef = runtimeConstantPool.getMethodRef(index);
-
-          // Consume 'count'
-          mCurrentFrame->readU1();
-          // Consume '0'
-          mCurrentFrame->readU1();
-
-          int numArgs = methodRef->descriptor().parameters().size();
-          JClass* target = mCurrentFrame->peek<Instance*>(numArgs)->getClass();
-          auto method = target->getVirtualMethod(methodRef->name(), methodRef->rawDescriptor());
-
-          this->invoke(*method);
-        })
-        break;
+      case INVOKEVIRTUAL: WITH_EXCEPTION_CHECK(invokeVirtual()) break;
+      case INVOKESPECIAL: WITH_EXCEPTION_CHECK(invokeSpecial()) break;
+      case INVOKESTATIC: WITH_EXCEPTION_CHECK(invokeStatic()) break;
+      case INVOKEINTERFACE: WITH_EXCEPTION_CHECK(invokeInterface()) break;
       case INVOKEDYNAMIC: notImplemented(opcode); break;
       //==--------------------------------------------------------------------==
       // OOP
       //==--------------------------------------------------------------------==
-      case NEW:
-        WITH_EXCEPTION_CHECK({
-          auto index = mCurrentFrame->readU2();
-          auto className = mCurrentFrame->currentClass()->constantPool().getClassName(index);
-
-          auto klass = mThread.resolveClass(types::JString{className});
-          if (!klass) {
-            this->handleErrorAsException(klass.error());
-            break;
-          }
-
-          (*klass)->initialize(mThread);
-
-          if (auto instanceClass = (*klass)->asInstanceClass(); instanceClass != nullptr) {
-            Instance* instance = mThread.heap().allocate<ObjectInstance>(instanceClass);
-            mCurrentFrame->pushOperand<Instance*>(instance);
-          } else {
-            // TODO: New with array class
-            geevm_panic("new called with array class");
-          }
-        })
-        break;
+      case NEW: WITH_EXCEPTION_CHECK(newObject()); break;
       case NEWARRAY: WITH_EXCEPTION_CHECK(newArray()); break;
       case ANEWARRAY: WITH_EXCEPTION_CHECK(newReferenceArray()); break;
       case ARRAYLENGTH:
@@ -513,49 +489,8 @@ std::optional<Value> DefaultInterpreter::execute()
           mThread.throwException(exception);
         })
         break;
-      case CHECKCAST:
-        WITH_EXCEPTION_CHECK({
-          types::u2 index = mCurrentFrame->readU2();
-          auto objectRef = mCurrentFrame->popOperand<Instance*>();
-          if (objectRef == nullptr) {
-            mCurrentFrame->pushOperand<Instance*>(objectRef);
-          } else {
-            auto klass = runtimeConstantPool.getClass(index);
-            if (!klass) {
-              this->handleErrorAsException(klass.error());
-            } else {
-              JClass* classToCheck = objectRef->getClass();
-              if (!classToCheck->isInstanceOf(*klass)) {
-                types::JString message = u"class " + classToCheck->javaClassName() + u" cannot be cast to class " + (*klass)->javaClassName();
-                mThread.throwException(u"java/lang/ClassCastException", message);
-              } else {
-                mCurrentFrame->pushOperand<Instance*>(objectRef);
-              }
-            }
-          }
-        })
-        break;
-      case INSTANCEOF:
-        WITH_EXCEPTION_CHECK({
-          auto index = mCurrentFrame->readU2();
-          ScopedGcRootRef<> objectRef = mThread.heap().gc().pin(mCurrentFrame->popOperand<Instance*>());
-          if (objectRef == nullptr) {
-            mCurrentFrame->pushOperand<int32_t>(0);
-          } else {
-            auto klass = runtimeConstantPool.getClass(index);
-            if (!klass) {
-              this->handleErrorAsException(klass.error());
-            } else {
-              JClass* classToCheck = objectRef->getClass();
-              if (classToCheck->isInstanceOf(*klass)) {
-                mCurrentFrame->pushOperand<int32_t>(1);
-              } else {
-                mCurrentFrame->pushOperand<int32_t>(0);
-              }
-            }
-          }
-        })
-        break;
+      case CHECKCAST: WITH_EXCEPTION_CHECK(this->checkCast()); break;
+      case INSTANCEOF: WITH_EXCEPTION_CHECK(this->instanceOf()); break;
       case MONITORENTER:
         WITH_EXCEPTION_CHECK({
           // FIXME
@@ -583,6 +518,8 @@ std::optional<Value> DefaultInterpreter::execute()
         // `jsr_w` is deprecated, we're not going to support it
         notImplemented(opcode);
         break;
+      case NOP:
+        // Nothing to do
       case BREAKPOINT:
       case IMPDEP1:
       case IMPDEP2:
@@ -595,7 +532,7 @@ std::optional<Value> DefaultInterpreter::execute()
   GEEVM_UNREACHBLE("Interpreter unexepectedly broke execution loop");
 }
 
-std::optional<types::u2> DefaultInterpreter::tryHandleException(GcRootRef<> exception, RuntimeConstantPool& rt, const Code& code, size_t pc)
+std::optional<types::u2> DefaultInterpreter::tryHandleException(GcRootRef<> exception, const Code& code, size_t pc)
 {
   for (auto& entry : code.exceptionTable()) {
     if (pc < entry.startPc || pc >= entry.endPc) {
@@ -605,7 +542,7 @@ std::optional<types::u2> DefaultInterpreter::tryHandleException(GcRootRef<> exce
 
     bool caught = false;
     if (entry.catchType != 0) {
-      auto exceptionClass = rt.getClass(entry.catchType);
+      auto exceptionClass = currentFrame().currentClass()->runtimeConstantPool().getClass(entry.catchType);
 
       assert(exceptionClass.has_value());
       if (exception->getClass()->isInstanceOf(*exceptionClass)) {
@@ -662,7 +599,7 @@ void DefaultInterpreter::invoke(JMethod* method)
 
   if (returnValue.has_value()) {
     if (!method->isVoid()) {
-      mThread.currentFrame().pushGenericOperand(returnValue->toRaw().first);
+      mThread.currentFrame().pushGenericOperand(returnValue->toRaw());
       if (method->descriptor().returnType().getType().isCategoryTwo()) {
         mThread.currentFrame().pushGenericOperand(0);
       }
@@ -785,8 +722,14 @@ template<JvmType T>
 void DefaultInterpreter::neg()
 {
   T value = currentFrame().popOperand<T>();
-  T result = -value;
-  currentFrame().pushOperand<T>(result);
+
+  if constexpr (JavaIntegerType<T>) {
+    T result = std::bit_cast<T>(-std::bit_cast<std::make_unsigned_t<T>>(value));
+    currentFrame().pushOperand<T>(result);
+  } else {
+    T result = -value;
+    currentFrame().pushOperand<T>(result);
+  }
 }
 
 template<CategoryOneJvmType T, class F>
@@ -911,10 +854,10 @@ void DefaultInterpreter::compare()
   }
 }
 
-void DefaultInterpreter::invokeVirtual(RuntimeConstantPool& runtimeConstantPool)
+void DefaultInterpreter::invokeVirtual()
 {
   auto index = mCurrentFrame->readU2();
-  const JMethod* baseMethod = runtimeConstantPool.getMethodRef(index);
+  const JMethod* baseMethod = currentFrame().currentClass()->runtimeConstantPool().getMethodRef(index);
 
   int numArgs = baseMethod->descriptor().numParameterSlots();
   auto objectRef = mCurrentFrame->peek<Instance*>(numArgs);
@@ -930,25 +873,63 @@ void DefaultInterpreter::invokeVirtual(RuntimeConstantPool& runtimeConstantPool)
   }
 }
 
-void DefaultInterpreter::getStatic(RuntimeConstantPool& runtimeConstantPool)
+void DefaultInterpreter::invokeSpecial()
 {
   auto index = mCurrentFrame->readU2();
-  const JField* field = runtimeConstantPool.getFieldRef(index);
+  JMethod* method = currentFrame().currentClass()->runtimeConstantPool().getMethodRef(index);
+
+  this->invoke(method);
+}
+
+void DefaultInterpreter::invokeStatic()
+{
+  auto index = mCurrentFrame->readU2();
+  JMethod* method = currentFrame().currentClass()->runtimeConstantPool().getMethodRef(index);
+  assert(method->isStatic());
+
+  method->getClass()->initialize(mThread);
+  // Initialization can fail with an exception, so only proceed if an exception did not occur
+  if (mThread.currentException() == nullptr) {
+    this->invoke(method);
+  }
+}
+
+void DefaultInterpreter::invokeInterface()
+{
+  auto index = mCurrentFrame->readU2();
+  const JMethod* methodRef = currentFrame().currentClass()->runtimeConstantPool().getMethodRef(index);
+
+  // Consume 'count'
+  mCurrentFrame->readU1();
+  // Consume '0'
+  mCurrentFrame->readU1();
+
+  int numArgs = methodRef->descriptor().parameters().size();
+  JClass* target = mCurrentFrame->peek<Instance*>(numArgs)->getClass();
+  auto method = target->getVirtualMethod(methodRef->name(), methodRef->rawDescriptor());
+
+  this->invoke(*method);
+}
+
+void DefaultInterpreter::getStatic()
+{
+  auto index = mCurrentFrame->readU2();
+  const JField* field = currentFrame().currentClass()->runtimeConstantPool().getFieldRef(index);
 
   JClass* klass = field->getClass();
   klass->initialize(mThread);
 
   Value value = klass->getStaticFieldValue(field->offset());
-  mCurrentFrame->pushGenericOperand(value.toRaw().first);
+  mCurrentFrame->pushGenericOperand(value.toRaw());
   if (field->fieldType().isCategoryTwo()) {
     mCurrentFrame->pushGenericOperand(0);
   }
 }
 
-void DefaultInterpreter::putStatic(RuntimeConstantPool& runtimeConstantPool)
+void DefaultInterpreter::putStatic()
 {
   auto index = mCurrentFrame->readU2();
-  const JField* field = runtimeConstantPool.getFieldRef(index);
+  const JField* field = currentFrame().currentClass()->runtimeConstantPool().getFieldRef(index);
 
   JClass* klass = field->getClass();
   klass->initialize(mThread);
@@ -961,10 +942,10 @@ void DefaultInterpreter::putStatic(RuntimeConstantPool& runtimeConstantPool)
   klass->setStaticFieldValue(field->offset(), value);
 }
 
-void DefaultInterpreter::getField(RuntimeConstantPool& runtimeConstantPool)
+void DefaultInterpreter::getField()
 {
   types::u2 index = mCurrentFrame->readU2();
-  const JField* field = runtimeConstantPool.getFieldRef(index);
+  const JField* field = currentFrame().currentClass()->runtimeConstantPool().getFieldRef(index);
   auto objectRef = mCurrentFrame->popOperand<Instance*>();
 
   if (objectRef == nullptr) {
@@ -987,10 +968,10 @@ void DefaultInterpreter::getField(RuntimeConstantPool& runtimeConstantPool)
   }
 }
 
-void DefaultInterpreter::putField(RuntimeConstantPool& runtimeConstantPool)
+void DefaultInterpreter::putField()
 {
   auto index = mCurrentFrame->readU2();
-  auto field = runtimeConstantPool.getFieldRef(index);
+  auto field = currentFrame().currentClass()->runtimeConstantPool().getFieldRef(index);
 
   if (field->fieldType().isCategoryTwo()) {
     mCurrentFrame->popGenericOperand();
@@ -1022,8 +1003,8 @@ void DefaultInterpreter::putField(RuntimeConstantPool& runtimeConstantPool)
 void DefaultInterpreter::dup()
 {
   auto value = currentFrame().popGenericOperand();
-  currentFrame().pushGenericOperand(value.toRaw().first);
-  currentFrame().pushGenericOperand(value.toRaw().first);
+  currentFrame().pushGenericOperand(value.toRaw());
+  currentFrame().pushGenericOperand(value.toRaw());
 }
 
 void DefaultInterpreter::dupX1()
@@ -1031,9 +1012,9 @@ void DefaultInterpreter::dupX1()
   auto value1 = currentFrame().popGenericOperand();
   auto value2 = currentFrame().popGenericOperand();
 
-  currentFrame().pushGenericOperand(value1.toRaw().first);
-  currentFrame().pushGenericOperand(value2.toRaw().first);
-  currentFrame().pushGenericOperand(value1.toRaw().first);
+  currentFrame().pushGenericOperand(value1.toRaw());
+  currentFrame().pushGenericOperand(value2.toRaw());
+  currentFrame().pushGenericOperand(value1.toRaw());
 }
 
 void DefaultInterpreter::dupX2()
@@ -1041,20 +1022,20 @@ void DefaultInterpreter::dupX2()
   auto value1 = currentFrame().popGenericOperand();
   auto value2 = currentFrame().popGenericOperand();
   auto value3 = currentFrame().popGenericOperand();
-  currentFrame().pushGenericOperand(value1.toRaw().first);
-  currentFrame().pushGenericOperand(value3.toRaw().first);
-  currentFrame().pushGenericOperand(value2.toRaw().first);
-  currentFrame().pushGenericOperand(value1.toRaw().first);
+  currentFrame().pushGenericOperand(value1.toRaw());
+  currentFrame().pushGenericOperand(value3.toRaw());
+  currentFrame().pushGenericOperand(value2.toRaw());
+  currentFrame().pushGenericOperand(value1.toRaw());
 }
 
 void DefaultInterpreter::dup2()
 {
   auto value1 = currentFrame().popGenericOperand();
   auto value2 = currentFrame().popGenericOperand();
-  currentFrame().pushGenericOperand(value2.toRaw().first);
-  currentFrame().pushGenericOperand(value1.toRaw().first);
-  currentFrame().pushGenericOperand(value2.toRaw().first);
-  currentFrame().pushGenericOperand(value1.toRaw().first);
+  currentFrame().pushGenericOperand(value2.toRaw());
+  currentFrame().pushGenericOperand(value1.toRaw());
+  currentFrame().pushGenericOperand(value2.toRaw());
+  currentFrame().pushGenericOperand(value1.toRaw());
 }
 
 void DefaultInterpreter::dup2X1()
@@ -1062,11 +1043,11 @@ void DefaultInterpreter::dup2X1()
   auto value1 = currentFrame().popGenericOperand();
   auto value2 = currentFrame().popGenericOperand();
   auto value3 = currentFrame().popGenericOperand();
-  currentFrame().pushGenericOperand(value2.toRaw().first);
-  currentFrame().pushGenericOperand(value1.toRaw().first);
-  currentFrame().pushGenericOperand(value3.toRaw().first);
-  currentFrame().pushGenericOperand(value2.toRaw().first);
-  currentFrame().pushGenericOperand(value1.toRaw().first);
+  currentFrame().pushGenericOperand(value2.toRaw());
+  currentFrame().pushGenericOperand(value1.toRaw());
+  currentFrame().pushGenericOperand(value3.toRaw());
+  currentFrame().pushGenericOperand(value2.toRaw());
+  currentFrame().pushGenericOperand(value1.toRaw());
 }
 
 void DefaultInterpreter::dup2X2()
@@ -1075,12 +1056,12 @@ void DefaultInterpreter::dup2X2()
   auto value2 = currentFrame().popGenericOperand();
   auto value3 = currentFrame().popGenericOperand();
   auto value4 = currentFrame().popGenericOperand();
-  currentFrame().pushGenericOperand(value2.toRaw().first);
-  currentFrame().pushGenericOperand(value1.toRaw().first);
-  currentFrame().pushGenericOperand(value4.toRaw().first);
-  currentFrame().pushGenericOperand(value3.toRaw().first);
-  currentFrame().pushGenericOperand(value2.toRaw().first);
-  currentFrame().pushGenericOperand(value1.toRaw().first);
+  currentFrame().pushGenericOperand(value2.toRaw());
+  currentFrame().pushGenericOperand(value1.toRaw());
+  currentFrame().pushGenericOperand(value4.toRaw());
+  currentFrame().pushGenericOperand(value3.toRaw());
+  currentFrame().pushGenericOperand(value2.toRaw());
+  currentFrame().pushGenericOperand(value1.toRaw());
 }
 
 void DefaultInterpreter::swap()
@@ -1088,8 +1069,30 @@ void DefaultInterpreter::swap()
   auto value1 = currentFrame().popGenericOperand();
   auto value2 = currentFrame().popGenericOperand();
 
-  currentFrame().pushGenericOperand(value1.toRaw().first);
-  currentFrame().pushGenericOperand(value2.toRaw().first);
+  currentFrame().pushGenericOperand(value1.toRaw());
+  currentFrame().pushGenericOperand(value2.toRaw());
+}
+
+void DefaultInterpreter::newObject()
+{
+  auto index = mCurrentFrame->readU2();
+  auto className = mCurrentFrame->currentClass()->constantPool().getClassName(index);
+
+  auto klass = mThread.resolveClass(types::JString{className});
+  if (!klass) {
+    this->handleErrorAsException(klass.error());
+    return;
+  }
+
+  (*klass)->initialize(mThread);
+
+  if (auto instanceClass = (*klass)->asInstanceClass(); instanceClass != nullptr) {
+    Instance* instance = mThread.heap().allocate<ObjectInstance>(instanceClass);
+    mCurrentFrame->pushOperand<Instance*>(instance);
+  } else {
+    // TODO: New with array class
+    geevm_panic("new called with array class");
+  }
 }
 
 void DefaultInterpreter::newArray()
@@ -1214,6 +1217,53 @@ void DefaultInterpreter::newMultiArray()
   GcRootRef<ArrayInstance> result = makeInnerArray(makeInnerArray, dimensionCounts, (*klass)->asArrayClass());
   currentFrame().pushOperand<Instance*>(result.get());
   mThread.heap().gc().release(result);
+}
+
+void DefaultInterpreter::checkCast()
+{
+  types::u2 index = mCurrentFrame->readU2();
+  auto objectRef = mCurrentFrame->popOperand<Instance*>();
+  if (objectRef == nullptr) {
+    mCurrentFrame->pushOperand<Instance*>(objectRef);
+    return;
+  }
+
+  auto klass = currentFrame().currentClass()->runtimeConstantPool().getClass(index);
+  if (!klass) {
+    this->handleErrorAsException(klass.error());
+    return;
+  }
+
+  JClass* classToCheck = objectRef->getClass();
+  if (!classToCheck->isInstanceOf(*klass)) {
+    types::JString message = u"class " + classToCheck->javaClassName() + u" cannot be cast to class " + (*klass)->javaClassName();
+    mThread.throwException(u"java/lang/ClassCastException", message);
+  } else {
+    mCurrentFrame->pushOperand<Instance*>(objectRef);
+  }
+}
+
+void DefaultInterpreter::instanceOf()
+{
+  auto index = mCurrentFrame->readU2();
+  ScopedGcRootRef<> objectRef = mThread.heap().gc().pin(mCurrentFrame->popOperand<Instance*>());
+  if (objectRef == nullptr) {
+    mCurrentFrame->pushOperand<int32_t>(0);
+    return;
+  }
+
+  auto klass = currentFrame().currentClass()->runtimeConstantPool().getClass(index);
+  if (!klass) {
+    this->handleErrorAsException(klass.error());
+    return;
+  }
+
+  JClass* classToCheck = objectRef->getClass();
+  if (classToCheck->isInstanceOf(*klass)) {
+    mCurrentFrame->pushOperand<int32_t>(1);
+  } else {
+    mCurrentFrame->pushOperand<int32_t>(0);
+  }
 }
 
 void DefaultInterpreter::lookupSwitch()

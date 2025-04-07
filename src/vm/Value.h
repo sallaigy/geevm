@@ -39,15 +39,9 @@ struct unsigned_type_of_length<64>
 
 class Value
 {
-  struct Storage
-  {
-    std::uint64_t value;
-    bool isReference;
-  };
-
 public:
-  Value(std::uint64_t value, bool isReference)
-    : mStorage(value, isReference)
+  explicit Value(std::uint64_t value)
+    : mStorage(value)
   {
   }
 
@@ -60,50 +54,28 @@ public:
     using U = typename unsigned_type_of_length<sizeof(T) * CHAR_BIT>::type;
     U valueAsU = std::bit_cast<U>(value);
 
-    if constexpr (std::is_same_v<T, Instance*>) {
-      return Value(static_cast<uint64_t>(valueAsU), true);
-    } else {
-      return Value(static_cast<uint64_t>(valueAsU), false);
-    }
-  }
-
-  template<JvmType T>
-  static Value fromRaw(uint64_t rawValue)
-  {
-    if constexpr (std::is_same_v<T, Instance*>) {
-      return Value::from<Instance*>(std::bit_cast<Instance*>(rawValue));
-    } else {
-      using U = typename unsigned_type_of_length<sizeof(T) * CHAR_BIT>::type;
-      return Value::from<T>(std::bit_cast<T>(static_cast<U>(rawValue)));
-    }
+    return Value(static_cast<uint64_t>(valueAsU));
   }
 
   template<JvmType T>
   T get() const
   {
     using U = typename unsigned_type_of_length<sizeof(T) * CHAR_BIT>::type;
-
-    return std::bit_cast<T>(static_cast<U>(mStorage.value));
+    return std::bit_cast<T>(static_cast<U>(mStorage));
   }
 
   static Value defaultValue(const FieldType& fieldType)
   {
-    return fieldType.map([]<PrimitiveType Type>() {
-      return Value::from<typename PrimitiveTypeTraits<Type>::Representation>(0);
-    }, [](types::JStringRef name) {
-      return Value::from<Instance*>(nullptr);
-    }, [](const ArrayType& array) {
-      return Value::from<Instance*>(nullptr);
-    });
+    return Value(0);
   }
 
-  std::pair<std::uint64_t, bool> toRaw() const
+  std::uint64_t toRaw() const
   {
-    return std::make_pair(mStorage.value, mStorage.isReference);
+    return mStorage;
   }
 
 private:
-  Storage mStorage;
+  std::uint64_t mStorage;
 };
 
 } // namespace geevm

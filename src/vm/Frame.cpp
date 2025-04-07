@@ -1,5 +1,7 @@
 #include "vm/Frame.h"
 
+#include <cstring>
+
 using namespace geevm;
 
 CallFrame::CallFrame(JMethod* method, CallFrame* previous, std::uint64_t* localVariables, std::uint64_t* operandStack)
