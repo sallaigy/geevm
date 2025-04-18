@@ -1342,7 +1342,15 @@ void JitCompilerX86Impl::doCompile()
       case Opcode::MULTIANEWARRAY: notImplemented(opcode); break;
       case Opcode::IFNULL: notImplemented(opcode); break;
       case Opcode::IFNONNULL: notImplemented(opcode); break;
-      case Opcode::GOTO_W: notImplemented(opcode); break;
+      case Opcode::GOTO_W: {
+        auto opcodePos = mBytes.pos() - 1;
+
+        auto offset = std::bit_cast<int32_t>(mBytes.readU4());
+        auto label = mLabels.at(opcodePos + offset);
+
+        mCompiler.jmp(label);
+        break;
+      }
       case Opcode::JSR_W: notImplemented(opcode); break;
       case Opcode::BREAKPOINT: notImplemented(opcode); break;
       case Opcode::IMPDEP1: notImplemented(opcode); break;
