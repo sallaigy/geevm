@@ -344,10 +344,14 @@ void JitCompilerX86Impl::doCompile()
         this->pushCategoryTwo(this->load(slotNumber));
         break;
       }
-      case Opcode::ALOAD_0: notImplemented(opcode); break;
-      case Opcode::ALOAD_1: notImplemented(opcode); break;
-      case Opcode::ALOAD_2: notImplemented(opcode); break;
-      case Opcode::ALOAD_3: notImplemented(opcode); break;
+      case Opcode::ALOAD_0:
+      case Opcode::ALOAD_1:
+      case Opcode::ALOAD_2:
+      case Opcode::ALOAD_3: {
+        int32_t slotNumber = static_cast<int32_t>(opcode) - static_cast<int32_t>(Opcode::ALOAD_0);
+        this->push(this->load(slotNumber));
+        break;
+      }
       case Opcode::IALOAD: notImplemented(opcode); break;
       case Opcode::LALOAD: notImplemented(opcode); break;
       case Opcode::FALOAD: notImplemented(opcode); break;
@@ -1218,11 +1222,13 @@ void JitCompilerX86Impl::doCompile()
         break;
       }
       case Opcode::IFEQ:
+      case Opcode::IFNULL:
         this->unaryJumpIf([this](Label& label) {
           mCompiler.je(label);
         });
         break;
       case Opcode::IFNE:
+      case Opcode::IFNONNULL:
         this->unaryJumpIf([this](Label& label) {
           mCompiler.jne(label);
         });
@@ -1248,11 +1254,13 @@ void JitCompilerX86Impl::doCompile()
         });
         break;
       case Opcode::IF_ICMPEQ:
+      case Opcode::IF_ACMPEQ:
         this->binaryJumpIf([this](Label& label) {
           mCompiler.je(label);
         });
         break;
       case Opcode::IF_ICMPNE:
+      case Opcode::IF_ACMPNE:
         this->binaryJumpIf([this](Label& label) {
           mCompiler.jne(label);
         });
@@ -1277,8 +1285,6 @@ void JitCompilerX86Impl::doCompile()
           mCompiler.jle(label);
         });
         break;
-      case Opcode::IF_ACMPEQ: notImplemented(opcode); break;
-      case Opcode::IF_ACMPNE: notImplemented(opcode); break;
       case Opcode::GOTO: {
         auto opcodePos = mBytes.pos() - 1;
 
@@ -1340,8 +1346,6 @@ void JitCompilerX86Impl::doCompile()
       case Opcode::MONITOREXIT: notImplemented(opcode); break;
       case Opcode::WIDE: notImplemented(opcode); break;
       case Opcode::MULTIANEWARRAY: notImplemented(opcode); break;
-      case Opcode::IFNULL: notImplemented(opcode); break;
-      case Opcode::IFNONNULL: notImplemented(opcode); break;
       case Opcode::GOTO_W: {
         auto opcodePos = mBytes.pos() - 1;
 
