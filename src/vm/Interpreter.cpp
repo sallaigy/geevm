@@ -1268,8 +1268,6 @@ void DefaultInterpreter::instanceOf()
 
 void DefaultInterpreter::lookupSwitch()
 {
-  CallFrame& frame = currentFrame();
-
   auto opcodePos = mCurrentFrame->programCounter() - 1;
   while (mCurrentFrame->programCounter() % 4 != 0) {
     mCurrentFrame->next();
@@ -1303,7 +1301,6 @@ void DefaultInterpreter::lookupSwitch()
 
 void DefaultInterpreter::tableSwitch()
 {
-  CallFrame& frame = currentFrame();
   auto opcodePos = mCurrentFrame->programCounter() - 1;
   while (mCurrentFrame->programCounter() % 4 != 0) {
     mCurrentFrame->next();

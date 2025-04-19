@@ -142,6 +142,8 @@ private:
 
   void ldc(uint16_t index);
   void ldc2w(uint16_t index);
+  void lookupSwitch();
+  void tableSwitch();
 
 private:
   JMethod* mMethod;
@@ -275,8 +277,8 @@ void JitCompilerX86Impl::doCompile()
 
     switch (opcode) {
       case Opcode::NOP: notImplemented(opcode); break;
-      case Opcode::ACONST_NULL: notImplemented(opcode); break;
-      case Opcode::ICONST_M1: notImplemented(opcode); break;
+      case Opcode::ICONST_M1: this->push(Imm{-1}); break;
+      case Opcode::ACONST_NULL: [[fallthrough]];
       case Opcode::ICONST_0: this->push(Imm{0}); break;
       case Opcode::ICONST_1: this->push(Imm{1}); break;
       case Opcode::ICONST_2: this->push(Imm{2}); break;
@@ -303,15 +305,19 @@ void JitCompilerX86Impl::doCompile()
       case Opcode::LDC: this->ldc(mBytes.readU1()); break;
       case Opcode::LDC_W: this->ldc(mBytes.readU2()); break;
       case Opcode::LDC2_W: this->ldc2w(mBytes.readU2()); break;
+      case Opcode::ALOAD: [[fallthrough]];
+      case Opcode::FLOAD: [[fallthrough]];
       case Opcode::ILOAD: {
         int32_t slotNumber = mBytes.readU1();
         this->push(this->load(slotNumber));
         break;
       }
-      case Opcode::LLOAD: notImplemented(opcode); break;
-      case Opcode::FLOAD: notImplemented(opcode); break;
-      case Opcode::DLOAD: notImplemented(opcode); break;
-      case Opcode::ALOAD: notImplemented(opcode); break;
+      case Opcode::LLOAD: [[fallthrough]];
+      case Opcode::DLOAD: {
+        int32_t slotNumber = mBytes.readU1();
+        this->pushCategoryTwo(this->load(slotNumber));
+        break;
+      }
       case Opcode::ILOAD_0:
       case Opcode::ILOAD_1:
       case Opcode::ILOAD_2:
@@ -727,7 +733,7 @@ void JitCompilerX86Impl::doCompile()
       case Opcode::ISHL:
         this->binaryOp([this](auto& value1, auto& value2) {
           auto offset = mCompiler.newGpd();
-          mCompiler.mov(offset, mCompiler.newUInt32Const(ConstPoolScope::kLocal, 0x1F));
+          mCompiler.mov(offset, 0x1F);
           mCompiler.and_(offset, value2.r32());
 
           mCompiler.sal(value1.r32(), offset);
@@ -737,7 +743,7 @@ void JitCompilerX86Impl::doCompile()
         auto& value2 = this->pop();
         auto& value1 = this->popCategoryTwo();
         auto offset = mCompiler.newGpd();
-        mCompiler.mov(offset, mCompiler.newUInt32Const(ConstPoolScope::kLocal, 0x3F));
+        mCompiler.mov(offset, 0x3F);
         mCompiler.and_(offset, value2.r32());
 
         mCompiler.sal(value1, offset);
@@ -749,7 +755,7 @@ void JitCompilerX86Impl::doCompile()
         auto value1 = this->pop();
 
         auto offset = mCompiler.newGpd();
-        mCompiler.mov(offset, mCompiler.newUInt32Const(ConstPoolScope::kLocal, 0x1F));
+        mCompiler.mov(offset, 0x1F);
         mCompiler.and_(offset, value2.r32());
 
         mCompiler.sar(value1.r32(), offset);
@@ -760,7 +766,7 @@ void JitCompilerX86Impl::doCompile()
         auto& value2 = this->pop();
         auto& value1 = this->popCategoryTwo();
         auto offset = mCompiler.newGpd();
-        mCompiler.mov(offset, mCompiler.newUInt32Const(ConstPoolScope::kLocal, 0x3F));
+        mCompiler.mov(offset, 0x3F);
         mCompiler.and_(offset, value2.r32());
 
         mCompiler.sar(value1, offset);
@@ -772,7 +778,7 @@ void JitCompilerX86Impl::doCompile()
         auto value1 = this->pop();
 
         auto offset = mCompiler.newGpd();
-        mCompiler.mov(offset, mCompiler.newUInt32Const(ConstPoolScope::kLocal, 0x1F));
+        mCompiler.mov(offset, 0x1F);
         mCompiler.and_(offset, value2.r32());
 
         mCompiler.shr(value1.r32(), offset);
@@ -783,7 +789,7 @@ void JitCompilerX86Impl::doCompile()
         auto& value2 = this->pop();
         auto& value1 = this->popCategoryTwo();
         auto offset = mCompiler.newGpd();
-        mCompiler.mov(offset, mCompiler.newUInt32Const(ConstPoolScope::kLocal, 0x3F));
+        mCompiler.mov(offset, 0x3F);
         mCompiler.and_(offset, value2.r32());
 
         mCompiler.shr(value1, offset);
@@ -994,14 +1000,14 @@ void JitCompilerX86Impl::doCompile()
         // Check if operand is NaN: if it is, the result is zero
         mCompiler.ucomisd(xmm0, xmm0);
         mCompiler.jp(nanLabel);
-        // // Round the operand using truncate
+        // Round the operand using truncate
         mCompiler.roundsd(xmm0, xmm0, 3);
-        // // If the truncated value is larger than int max
+        // If the truncated value is larger than int max
         mCompiler.movabs(pattern, 0x4080000000000000);
         mCompiler.movq(xmm1, pattern);
         mCompiler.ucomisd(xmm0, xmm1);
         mCompiler.jae(tooBigLabel);
-        // // If the truncated value is larger than int min
+        // If the truncated value is larger than int min
         mCompiler.movabs(pattern, 0xC080000000000000);
         mCompiler.movq(xmm1, pattern);
         mCompiler.ucomisd(xmm0, xmm1);
@@ -1221,13 +1227,13 @@ void JitCompilerX86Impl::doCompile()
         mStackPointer++;
         break;
       }
-      case Opcode::IFEQ:
+      case Opcode::IFEQ: [[fallthrough]];
       case Opcode::IFNULL:
         this->unaryJumpIf([this](Label& label) {
           mCompiler.je(label);
         });
         break;
-      case Opcode::IFNE:
+      case Opcode::IFNE: [[fallthrough]];
       case Opcode::IFNONNULL:
         this->unaryJumpIf([this](Label& label) {
           mCompiler.jne(label);
@@ -1253,13 +1259,13 @@ void JitCompilerX86Impl::doCompile()
           mCompiler.jle(label);
         });
         break;
-      case Opcode::IF_ICMPEQ:
+      case Opcode::IF_ICMPEQ: [[fallthrough]];
       case Opcode::IF_ACMPEQ:
         this->binaryJumpIf([this](Label& label) {
           mCompiler.je(label);
         });
         break;
-      case Opcode::IF_ICMPNE:
+      case Opcode::IF_ICMPNE: [[fallthrough]];
       case Opcode::IF_ACMPNE:
         this->binaryJumpIf([this](Label& label) {
           mCompiler.jne(label);
@@ -1296,8 +1302,9 @@ void JitCompilerX86Impl::doCompile()
       }
       case Opcode::JSR: notImplemented(opcode); break;
       case Opcode::RET: notImplemented(opcode); break;
-      case Opcode::TABLESWITCH: notImplemented(opcode); break;
-      case Opcode::LOOKUPSWITCH: notImplemented(opcode); break;
+      case Opcode::TABLESWITCH: this->tableSwitch(); break;
+      case Opcode::LOOKUPSWITCH: this->lookupSwitch(); break;
+      case Opcode::ARETURN: [[fallthrough]];
       case Opcode::FRETURN: [[fallthrough]];
       case Opcode::IRETURN: {
         mCompiler.ret(this->pop());
@@ -1308,7 +1315,6 @@ void JitCompilerX86Impl::doCompile()
         mCompiler.ret(this->popCategoryTwo());
         break;
       }
-      case Opcode::ARETURN: notImplemented(opcode); break;
       case Opcode::RETURN: {
         break;
       }
@@ -1499,4 +1505,69 @@ void JitCompilerX86Impl::ldc2w(uint16_t index)
   auto& [tag, data] = mMethod->getClass()->constantPool().getEntry(index);
 
   this->pushCategoryTwo(asmjit::Imm{data.doubleFloat});
+}
+
+void JitCompilerX86Impl::lookupSwitch()
+{
+  auto opcodePos = mBytes.pos() - 1;
+  while (mBytes.pos() % 4 != 0) {
+    mBytes.skip(1);
+  }
+
+  int32_t defaultOffset = std::bit_cast<int32_t>(mBytes.readU4());
+  int32_t numPairs = std::bit_cast<int32_t>(mBytes.readU4());
+
+  std::vector<std::pair<int32_t, int32_t>> pairs;
+  for (int32_t i = 0; i < numPairs; i++) {
+    auto matchValue = mBytes.readU4();
+    auto offset = std::bit_cast<int32_t>(mBytes.readU4());
+    pairs.emplace_back(matchValue, offset);
+  }
+
+  auto key = this->pop();
+  for (auto& [matchValue, offset] : pairs) {
+    mCompiler.cmp(key, asmjit::Imm{matchValue});
+    mCompiler.je(mLabels.at(opcodePos + offset));
+  }
+
+  mCompiler.jmp(mLabels.at(opcodePos + defaultOffset));
+}
+
+void JitCompilerX86Impl::tableSwitch()
+{
+  auto opcodePos = mBytes.pos() - 1;
+  while (mBytes.pos() % 4 != 0) {
+    mBytes.skip(1);
+  }
+
+  auto defaultOffset = std::bit_cast<int32_t>(mBytes.readU4());
+  auto low = std::bit_cast<int32_t>(mBytes.readU4());
+  auto high = std::bit_cast<int32_t>(mBytes.readU4());
+  assert(low <= high);
+
+  int32_t count = high - low + 1;
+
+  std::vector<int32_t> table;
+  table.reserve(count);
+
+  for (int32_t i = 0; i < count; i++) {
+    int32_t offset = std::bit_cast<int32_t>(mBytes.readU4());
+    table.push_back(offset);
+  }
+
+  auto index = this->pop();
+  // TODO: This should be a proper table switch with indirect jumps
+
+  mCompiler.cmp(index.r32(), asmjit::Imm{low});
+  mCompiler.jl(mLabels.at(opcodePos + defaultOffset));
+
+  auto valueToMatch = mCompiler.newGpd();
+  mCompiler.mov(valueToMatch, index.r32());
+  mCompiler.sub(valueToMatch, low);
+
+  for (size_t i = 0; i < table.size(); i++) {
+    mCompiler.cmp(valueToMatch, i);
+    mCompiler.je(mLabels.at(opcodePos + table[i]));
+  }
+  mCompiler.jmp(mLabels.at(opcodePos + defaultOffset));
 }
