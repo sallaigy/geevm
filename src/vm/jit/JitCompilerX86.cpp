@@ -145,6 +145,8 @@ private:
   void lookupSwitch();
   void tableSwitch();
 
+  void newArray();
+
 private:
   JMethod* mMethod;
   asmjit::CodeHolder* mCode;
@@ -293,8 +295,7 @@ void JitCompilerX86Impl::doCompile()
       case Opcode::DCONST_0: notImplemented(opcode); break;
       case Opcode::DCONST_1: notImplemented(opcode); break;
       case Opcode::BIPUSH: {
-        auto constantValue = mCompiler.newInt32Const(ConstPoolScope::kLocal, std::bit_cast<int8_t>(mBytes.readU1()));
-        this->push(constantValue);
+        this->push(Imm{mBytes.readU1()});
         break;
       }
       case Opcode::SIPUSH: {
@@ -358,7 +359,18 @@ void JitCompilerX86Impl::doCompile()
         this->push(this->load(slotNumber));
         break;
       }
-      case Opcode::IALOAD: notImplemented(opcode); break;
+      case Opcode::IALOAD: {
+        auto& index = this->pop();
+        auto& array = this->pop();
+
+        // TODO: Null check
+        // TODO: Check bounds
+
+        mCompiler.mov(mStack[mStackPointer++].r32(),
+                      dword_ptr(array, index.r32(), std::bit_width(JavaArray<int32_t>::ElementIndexScale), JavaArray<int32_t>::ElementStartOffset));
+
+        break;
+      }
       case Opcode::LALOAD: notImplemented(opcode); break;
       case Opcode::FALOAD: notImplemented(opcode); break;
       case Opcode::DALOAD: notImplemented(opcode); break;
@@ -395,11 +407,26 @@ void JitCompilerX86Impl::doCompile()
       case Opcode::DSTORE_1: notImplemented(opcode); break;
       case Opcode::DSTORE_2: notImplemented(opcode); break;
       case Opcode::DSTORE_3: notImplemented(opcode); break;
-      case Opcode::ASTORE_0: notImplemented(opcode); break;
-      case Opcode::ASTORE_1: notImplemented(opcode); break;
-      case Opcode::ASTORE_2: notImplemented(opcode); break;
-      case Opcode::ASTORE_3: notImplemented(opcode); break;
-      case Opcode::IASTORE: notImplemented(opcode); break;
+      case Opcode::ASTORE_0:
+      case Opcode::ASTORE_1:
+      case Opcode::ASTORE_2:
+      case Opcode::ASTORE_3: {
+        int32_t slotNumber = static_cast<int32_t>(opcode) - static_cast<int32_t>(Opcode::ASTORE_0);
+        this->store(slotNumber, this->pop());
+        break;
+      }
+      case Opcode::IASTORE: {
+        auto& value = this->pop();
+        auto& index = this->pop();
+        auto& array = this->pop();
+
+        // TODO: Null check
+        // TODO: Check bounds
+
+        mCompiler.mov(dword_ptr(array, index, std::bit_width(JavaArray<int32_t>::ElementIndexScale), JavaArray<int32_t>::ElementStartOffset), value.r32());
+
+        break;
+      }
       case Opcode::LASTORE: notImplemented(opcode); break;
       case Opcode::FASTORE: notImplemented(opcode); break;
       case Opcode::DASTORE: notImplemented(opcode); break;
@@ -1342,9 +1369,16 @@ void JitCompilerX86Impl::doCompile()
       case Opcode::INVOKEINTERFACE: notImplemented(opcode); break;
       case Opcode::INVOKEDYNAMIC: notImplemented(opcode); break;
       case Opcode::NEW: notImplemented(opcode); break;
-      case Opcode::NEWARRAY: notImplemented(opcode); break;
+      case Opcode::NEWARRAY: {
+        this->newArray();
+        break;
+      }
       case Opcode::ANEWARRAY: notImplemented(opcode); break;
-      case Opcode::ARRAYLENGTH: notImplemented(opcode); break;
+      case Opcode::ARRAYLENGTH: {
+        auto& arrayRef = this->pop();
+        mCompiler.mov(mStack[mStackPointer++].r32(), dword_ptr(arrayRef, ArrayInstance::LengthFieldOffset));
+        break;
+      }
       case Opcode::ATHROW: notImplemented(opcode); break;
       case Opcode::CHECKCAST: notImplemented(opcode); break;
       case Opcode::INSTANCEOF: notImplemented(opcode); break;
@@ -1375,7 +1409,9 @@ void JitCompilerX86Impl::doCompile()
 void JitCompilerX86Impl::safePoint()
 {
   auto stackAddr = mCompiler.newGpq();
+  auto localsAddr = mCompiler.newGpq();
   mCompiler.mov(stackAddr, qword_ptr(mCallFrame, CallFrame::OperandStackOffset));
+  mCompiler.mov(localsAddr, qword_ptr(mCallFrame, CallFrame::LocalVariablesOffset));
 
   for (int32_t i = 0; i < mStackPointer; i++) {
     mCompiler.mov(qword_ptr(stackAddr, i * sizeof(uint64_t)), mStack[i]);
@@ -1383,7 +1419,7 @@ void JitCompilerX86Impl::safePoint()
 
   mCompiler.mov(qword_ptr(mCallFrame, CallFrame::StackPointerOffset), mStackPointer);
   for (size_t i = 0; i < mLocalVariables.size(); i++) {
-    // TODO
+    mCompiler.mov(qword_ptr(localsAddr, i * sizeof(uint64_t)), mLocalVariables[i]);
   }
 }
 
@@ -1391,15 +1427,16 @@ void JitCompilerX86Impl::endSafePoint()
 {
   // Copy back from the call frame to the registers
   auto stackAddr = mCompiler.newGpq();
+  auto localsAddr = mCompiler.newGpq();
   mCompiler.mov(stackAddr, qword_ptr(mCallFrame, CallFrame::OperandStackOffset));
+  mCompiler.mov(localsAddr, qword_ptr(mCallFrame, CallFrame::LocalVariablesOffset));
 
   for (int32_t i = 0; i < mStackPointer; i++) {
     mCompiler.mov(mStack[i], qword_ptr(stackAddr, i * sizeof(uint64_t)));
   }
 
-  mCompiler.mov(qword_ptr(mCallFrame, CallFrame::StackPointerOffset), mStackPointer);
   for (size_t i = 0; i < mLocalVariables.size(); i++) {
-    // TODO
+    mCompiler.mov(mLocalVariables[i], qword_ptr(localsAddr, i * sizeof(uint64_t)));
   }
 }
 
@@ -1570,4 +1607,36 @@ void JitCompilerX86Impl::tableSwitch()
     mCompiler.je(mLabels.at(opcodePos + table[i]));
   }
   mCompiler.jmp(mLabels.at(opcodePos + defaultOffset));
+}
+
+static void createNewArray(JavaThread* thread, uint8_t kind, int32_t count)
+{
+  auto arrayType = static_cast<PrimitiveType>(kind);
+  types::JStringRef arrayClsName = mapPrimitive(arrayType, []<PrimitiveType Type>() {
+    return PrimitiveTypeTraits<Type>::ArrayClassName;
+  });
+
+  auto arrayClass = thread->resolveClass(types::JString{arrayClsName});
+  // TODO:
+  assert(arrayClass);
+  assert(count >= 0);
+
+  ArrayInstance* newInstance = thread->heap().allocateArray((*arrayClass)->asArrayClass(), count);
+  thread->currentFrame().pushOperand<Instance*>(newInstance);
+}
+
+void JitCompilerX86Impl::newArray()
+{
+  uint8_t arrayType = mBytes.readU1();
+  auto& count = this->pop();
+
+  asmjit::InvokeNode* invoke;
+
+  this->safePoint();
+  mCompiler.invoke(&invoke, createNewArray, asmjit::FuncSignature::build<void, JavaThread*, int8_t, int32_t>());
+  invoke->setArg(0, mThread);
+  invoke->setArg(1, asmjit::Imm{arrayType});
+  invoke->setArg(2, count);
+  mStackPointer++;
+  this->endSafePoint();
 }

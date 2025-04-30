@@ -1097,36 +1097,14 @@ void DefaultInterpreter::newObject()
 
 void DefaultInterpreter::newArray()
 {
-  enum class ArrayType
-  {
-    T_BOOLEAN = 4,
-    T_CHAR = 5,
-    T_FLOAT = 6,
-    T_DOUBLE = 7,
-    T_BYTE = 8,
-    T_SHORT = 9,
-    T_INT = 10,
-    T_LONG = 11,
-  };
-
-  auto arrayType = static_cast<ArrayType>(currentFrame().readU1());
+  auto arrayType = static_cast<PrimitiveType>(currentFrame().readU1());
   auto count = currentFrame().popOperand<int32_t>();
 
-  types::JString arrayClsName;
+  types::JStringRef arrayClsName = mapPrimitive(arrayType, []<PrimitiveType Type>() {
+    return PrimitiveTypeTraits<Type>::ArrayClassName;
+  });
 
-  switch (arrayType) {
-    case ArrayType::T_BOOLEAN: arrayClsName = u"[Z"; break;
-    case ArrayType::T_CHAR: arrayClsName = u"[C"; break;
-    case ArrayType::T_FLOAT: arrayClsName = u"[F"; break;
-    case ArrayType::T_DOUBLE: arrayClsName = u"[D"; break;
-    case ArrayType::T_BYTE: arrayClsName = u"[B"; break;
-    case ArrayType::T_SHORT: arrayClsName = u"[S"; break;
-    case ArrayType::T_INT: arrayClsName = u"[I"; break;
-    case ArrayType::T_LONG: arrayClsName = u"[J"; break;
-    default: GEEVM_UNREACHBLE("Unknown array type");
-  }
-
-  auto arrayClass = mThread.resolveClass(arrayClsName);
+  auto arrayClass = mThread.resolveClass(types::JString{arrayClsName});
   if (!arrayClass) {
     this->handleErrorAsException(arrayClass.error());
     return;
