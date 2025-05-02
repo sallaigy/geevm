@@ -1130,14 +1130,14 @@ void DefaultInterpreter::newReferenceArray()
     return;
   }
 
-  types::JString elementClassName;
+  types::JString arrayClassName;
   if ((*klass)->isArrayType()) {
-    elementClassName = u"[" + (*klass)->className();
+    arrayClassName = u"[" + (*klass)->className();
   } else {
-    elementClassName = u"[L" + (*klass)->className() + u";";
+    arrayClassName = u"[L" + (*klass)->className() + u";";
   }
 
-  auto arrayClass = mThread.resolveClass(elementClassName);
+  auto arrayClass = mThread.resolveClass(arrayClassName);
   if (!arrayClass) {
     this->handleErrorAsException(arrayClass.error());
     return;

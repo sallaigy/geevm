@@ -147,6 +147,69 @@ private:
 
   void newArray();
 
+  template<class T>
+  void arrayStore()
+  {
+    asmjit::x86::Gp value;
+    if constexpr (CategoryTwoJvmType<T>) {
+      value = this->popCategoryTwo();
+    } else {
+      value = this->pop();
+    }
+    auto& index = this->pop();
+    auto& array = this->pop();
+
+    // TODO: Null check
+    // TODO: Check bounds
+
+    static constexpr size_t ElementSize = sizeof(T);
+    static constexpr size_t IndexShift = std::bit_width(JavaArray<T>::ElementIndexScale) - 1;
+    static constexpr size_t IndexOffset = JavaArray<T>::ElementStartOffset;
+
+    if (ElementSize == 8) {
+      mCompiler.mov(qword_ptr(array, index, IndexShift, IndexOffset), value);
+    } else if (ElementSize == 4) {
+      mCompiler.mov(dword_ptr(array, index, IndexShift, IndexOffset), value.r32());
+    } else if (ElementSize == 2) {
+      mCompiler.mov(word_ptr(array, index, IndexShift, IndexOffset), value.r16());
+    } else if (ElementSize == 1) {
+      mCompiler.mov(byte_ptr(array, index, IndexShift, IndexOffset), value.r8());
+    }
+  }
+
+  template<class T>
+  void arrayLoad()
+  {
+    auto& index = this->pop();
+    auto& array = this->pop();
+
+    // TODO: Null check
+    // TODO: Check bounds
+
+    static constexpr size_t ElementSize = sizeof(T);
+    static constexpr size_t IndexShift = std::bit_width(JavaArray<T>::ElementIndexScale) - 1;
+    static constexpr size_t IndexOffset = JavaArray<T>::ElementStartOffset;
+
+    if (ElementSize == 8) {
+      mCompiler.mov(mStack[mStackPointer++], qword_ptr(array, index, IndexShift, IndexOffset));
+    } else if (ElementSize == 4) {
+      mCompiler.mov(mStack[mStackPointer++].r32(), dword_ptr(array, index, IndexShift, IndexOffset));
+    } else if (ElementSize == 2) {
+      // CALOAD zero-extends the stored value before pushing onto the stack, the others sign-extend
+      if constexpr (std::is_same_v<T, char16_t>) {
+        mCompiler.movzx(mStack[mStackPointer++].r32(), word_ptr(array, index, IndexShift, IndexOffset));
+      } else {
+        mCompiler.movsx(mStack[mStackPointer++].r32(), word_ptr(array, index, IndexShift, IndexOffset));
+      }
+    } else if (ElementSize == 1) {
+      mCompiler.movsx(mStack[mStackPointer++].r32(), byte_ptr(array, index, IndexShift, IndexOffset));
+    }
+
+    if constexpr (CategoryTwoJvmType<T>) {
+      mStackPointer++;
+    }
+  }
+
 private:
   JMethod* mMethod;
   asmjit::CodeHolder* mCode;
@@ -359,25 +422,14 @@ void JitCompilerX86Impl::doCompile()
         this->push(this->load(slotNumber));
         break;
       }
-      case Opcode::IALOAD: {
-        auto& index = this->pop();
-        auto& array = this->pop();
-
-        // TODO: Null check
-        // TODO: Check bounds
-
-        mCompiler.mov(mStack[mStackPointer++].r32(),
-                      dword_ptr(array, index.r32(), std::bit_width(JavaArray<int32_t>::ElementIndexScale), JavaArray<int32_t>::ElementStartOffset));
-
-        break;
-      }
-      case Opcode::LALOAD: notImplemented(opcode); break;
-      case Opcode::FALOAD: notImplemented(opcode); break;
-      case Opcode::DALOAD: notImplemented(opcode); break;
+      case Opcode::IALOAD: this->arrayLoad<int32_t>(); break;
+      case Opcode::FALOAD: this->arrayLoad<float>(); break;
+      case Opcode::LALOAD: this->arrayLoad<int64_t>(); break;
+      case Opcode::DALOAD: this->arrayLoad<double>(); break;
       case Opcode::AALOAD: notImplemented(opcode); break;
-      case Opcode::BALOAD: notImplemented(opcode); break;
-      case Opcode::CALOAD: notImplemented(opcode); break;
-      case Opcode::SALOAD: notImplemented(opcode); break;
+      case Opcode::BALOAD: this->arrayLoad<int8_t>(); break;
+      case Opcode::CALOAD: this->arrayLoad<char16_t>(); break;
+      case Opcode::SALOAD: this->arrayLoad<int16_t>(); break;
       case Opcode::ISTORE: {
         int32_t slotNumber = mBytes.readU1();
         this->store(slotNumber, this->pop());
@@ -415,25 +467,14 @@ void JitCompilerX86Impl::doCompile()
         this->store(slotNumber, this->pop());
         break;
       }
-      case Opcode::IASTORE: {
-        auto& value = this->pop();
-        auto& index = this->pop();
-        auto& array = this->pop();
-
-        // TODO: Null check
-        // TODO: Check bounds
-
-        mCompiler.mov(dword_ptr(array, index, std::bit_width(JavaArray<int32_t>::ElementIndexScale), JavaArray<int32_t>::ElementStartOffset), value.r32());
-
-        break;
-      }
-      case Opcode::LASTORE: notImplemented(opcode); break;
-      case Opcode::FASTORE: notImplemented(opcode); break;
-      case Opcode::DASTORE: notImplemented(opcode); break;
+      case Opcode::IASTORE: this->arrayStore<int32_t>(); break;
+      case Opcode::FASTORE: this->arrayStore<float>(); break;
+      case Opcode::LASTORE: this->arrayStore<int64_t>(); break;
+      case Opcode::DASTORE: this->arrayStore<double>(); break;
       case Opcode::AASTORE: notImplemented(opcode); break;
-      case Opcode::BASTORE: notImplemented(opcode); break;
-      case Opcode::CASTORE: notImplemented(opcode); break;
-      case Opcode::SASTORE: notImplemented(opcode); break;
+      case Opcode::BASTORE: this->arrayStore<int8_t>(); break;
+      case Opcode::CASTORE: this->arrayStore<char16_t>(); break;
+      case Opcode::SASTORE: this->arrayStore<int16_t>(); break;
       case Opcode::POP: mStackPointer--; break;
       case Opcode::POP2: mStackPointer -= 2; break;
       case Opcode::DUP: {
@@ -1369,10 +1410,7 @@ void JitCompilerX86Impl::doCompile()
       case Opcode::INVOKEINTERFACE: notImplemented(opcode); break;
       case Opcode::INVOKEDYNAMIC: notImplemented(opcode); break;
       case Opcode::NEW: notImplemented(opcode); break;
-      case Opcode::NEWARRAY: {
-        this->newArray();
-        break;
-      }
+      case Opcode::NEWARRAY: this->newArray(); break;
       case Opcode::ANEWARRAY: notImplemented(opcode); break;
       case Opcode::ARRAYLENGTH: {
         auto& arrayRef = this->pop();
@@ -1523,9 +1561,11 @@ void JitCompilerX86Impl::ldc(uint16_t index)
   auto& [tag, data] = mMethod->getClass()->constantPool().getEntry(index);
 
   if (tag == ConstantPool::Tag::CONSTANT_Integer) {
-    this->push(asmjit::Imm{data.singleInteger});
+    auto v = mCompiler.newInt32Const(asmjit::ConstPoolScope::kGlobal, data.singleInteger);
+    this->push(v);
   } else if (tag == ConstantPool::Tag::CONSTANT_Float) {
-    this->push(asmjit::Imm{data.singleFloat});
+    auto v = mCompiler.newFloatConst(asmjit::ConstPoolScope::kGlobal, data.singleFloat);
+    this->push(v);
   } else if (tag == ConstantPool::Tag::CONSTANT_String) {
     this->push(asmjit::Imm{runtimeConstantPool.getString(index).get()});
   } else if (tag == ConstantPool::Tag::CONSTANT_Class) {
@@ -1639,4 +1679,27 @@ void JitCompilerX86Impl::newArray()
   invoke->setArg(2, count);
   mStackPointer++;
   this->endSafePoint();
+}
+
+static void createNewReferenceArray(JavaThread* thread, uint16_t index, int32_t count)
+{
+  auto klass = thread->currentFrame().currentClass()->runtimeConstantPool().getClass(index);
+
+  // TODO Check class
+  assert(klass);
+
+  types::JString arrayClassName;
+  if ((*klass)->isArrayType()) {
+    arrayClassName = u"[" + (*klass)->className();
+  } else {
+    arrayClassName = u"[L" + (*klass)->className() + u";";
+  }
+
+  auto arrayClass = thread->resolveClass(arrayClassName);
+  // TODO Check class
+  assert(arrayClass);
+
+  // TODO Check negative count
+  ArrayInstance* newInstance = thread->heap().allocateArray((*arrayClass)->asArrayClass(), count);
+  thread->currentFrame().pushOperand<Instance*>(newInstance);
 }
