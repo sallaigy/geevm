@@ -40,6 +40,7 @@ class JitCompilerX86Impl
 public:
   explicit JitCompilerX86Impl(JMethod* method, asmjit::CodeHolder* codeHolder);
 
+  void invokeVirtual();
   void doCompile();
 
 private:
@@ -145,7 +146,9 @@ private:
   void lookupSwitch();
   void tableSwitch();
 
+  void newObject();
   void newArray();
+  void newReferenceArray();
 
   template<class T>
   void arrayStore();
@@ -405,7 +408,7 @@ void JitCompilerX86Impl::doCompile()
       case Opcode::FALOAD: this->arrayLoad<float>(); break;
       case Opcode::LALOAD: this->arrayLoad<int64_t>(); break;
       case Opcode::DALOAD: this->arrayLoad<double>(); break;
-      case Opcode::AALOAD: notImplemented(opcode); break;
+      case Opcode::AALOAD: this->arrayLoad<Instance*>(); break;
       case Opcode::BALOAD: this->arrayLoad<int8_t>(); break;
       case Opcode::CALOAD: this->arrayLoad<char16_t>(); break;
       case Opcode::SALOAD: this->arrayLoad<int16_t>(); break;
@@ -450,7 +453,7 @@ void JitCompilerX86Impl::doCompile()
       case Opcode::FASTORE: this->arrayStore<float>(); break;
       case Opcode::LASTORE: this->arrayStore<int64_t>(); break;
       case Opcode::DASTORE: this->arrayStore<double>(); break;
-      case Opcode::AASTORE: notImplemented(opcode); break;
+      case Opcode::AASTORE: this->arrayStore<Instance*>(); break;
       case Opcode::BASTORE: this->arrayStore<int8_t>(); break;
       case Opcode::CASTORE: this->arrayStore<char16_t>(); break;
       case Opcode::SASTORE: this->arrayStore<int16_t>(); break;
@@ -1372,8 +1375,15 @@ void JitCompilerX86Impl::doCompile()
       case Opcode::PUTSTATIC: this->putStatic(); break;
       case Opcode::GETFIELD: notImplemented(opcode); break;
       case Opcode::PUTFIELD: notImplemented(opcode); break;
-      case Opcode::INVOKEVIRTUAL: notImplemented(opcode); break;
-      case Opcode::INVOKESPECIAL: notImplemented(opcode); break;
+      case Opcode::INVOKEVIRTUAL: this->invokeVirtual(); break;
+      case Opcode::INVOKESPECIAL: {
+        // TODO: Exception check
+        auto index = mBytes.readU2();
+        JMethod* method = mMethod->getClass()->runtimeConstantPool().getMethodRef(index);
+
+        this->generateInvoke(method);
+        break;
+      }
       case Opcode::INVOKESTATIC: {
         // TODO: Exception check
         auto index = mBytes.readU2();
@@ -1388,9 +1398,9 @@ void JitCompilerX86Impl::doCompile()
       }
       case Opcode::INVOKEINTERFACE: notImplemented(opcode); break;
       case Opcode::INVOKEDYNAMIC: notImplemented(opcode); break;
-      case Opcode::NEW: notImplemented(opcode); break;
+      case Opcode::NEW: this->newObject(); break;
       case Opcode::NEWARRAY: this->newArray(); break;
-      case Opcode::ANEWARRAY: notImplemented(opcode); break;
+      case Opcode::ANEWARRAY: this->newReferenceArray(); break;
       case Opcode::ARRAYLENGTH: {
         auto& arrayRef = this->pop();
         mCompiler.mov(mStack[mStackPointer++].r32(), dword_ptr(arrayRef, ArrayInstance::LengthFieldOffset));
@@ -1479,7 +1489,13 @@ void JitCompilerX86Impl::generateInitializationCall(JClass* klass)
 
 static void invokeMethod(JMethod* method, JavaThread* thread)
 {
-  thread->invoke(method);
+  auto result = thread->invoke(method);
+  if (!method->isVoid()) {
+    thread->currentFrame().pushGenericOperand(result->toRaw());
+    if (method->descriptor().returnType().getType().isCategoryTwo()) {
+      thread->currentFrame().pushGenericOperand(0);
+    }
+  }
 }
 
 void JitCompilerX86Impl::generateInvoke(JMethod* method)
@@ -1489,8 +1505,17 @@ void JitCompilerX86Impl::generateInvoke(JMethod* method)
   mCompiler.invoke(&invokeNode, invokeMethod, asmjit::FuncSignature::build<void, JMethod*, JavaThread*>());
   invokeNode->setArg(0, method);
   invokeNode->setArg(1, mThread);
-  // TODO: Return value
   mStackPointer -= method->descriptor().numParameterSlots();
+  if (!method->isStatic()) {
+    mStackPointer -= 1;
+  }
+
+  if (!method->isVoid()) {
+    mStackPointer += 1;
+    if (method->descriptor().returnType().getType().isCategoryTwo()) {
+      mStackPointer += 1;
+    }
+  }
   this->endSafePoint();
 }
 
@@ -1628,6 +1653,40 @@ void JitCompilerX86Impl::tableSwitch()
   mCompiler.jmp(mLabels.at(opcodePos + defaultOffset));
 }
 
+static void createNewObject(JavaThread* thread, uint16_t index)
+{
+  auto className = thread->currentFrame().currentClass()->constantPool().getClassName(index);
+
+  auto klass = thread->resolveClass(types::JString{className});
+  if (!klass) {
+    // TODO: Throw exception
+    geevm_panic("Cannot resolve class");
+  }
+
+  (*klass)->initialize(*thread);
+
+  if (auto instanceClass = (*klass)->asInstanceClass(); instanceClass != nullptr) {
+    Instance* instance = thread->heap().allocate<ObjectInstance>(instanceClass);
+    thread->currentFrame().pushOperand<Instance*>(instance);
+  } else {
+    // TODO: New with array class
+    geevm_panic("new called with array class");
+  }
+}
+
+void JitCompilerX86Impl::newObject()
+{
+  auto index = mBytes.readU2();
+  asmjit::InvokeNode* invoke;
+
+  this->safePoint();
+  mCompiler.invoke(&invoke, createNewObject, asmjit::FuncSignature::build<void, JavaThread*, uint16_t>());
+  invoke->setArg(0, mThread);
+  invoke->setArg(1, asmjit::Imm{index});
+  mStackPointer++;
+  this->endSafePoint();
+}
+
 static void createNewArray(JavaThread* thread, uint8_t kind, int32_t count)
 {
   auto arrayType = static_cast<PrimitiveType>(kind);
@@ -1686,11 +1745,6 @@ void JitCompilerX86Impl::arrayStore()
   } else if (ElementSize == 2) {
     mCompiler.mov(word_ptr(array, index, IndexShift, IndexOffset), value.r16());
   } else if (ElementSize == 1) {
-    // asmjit::InvokeNode* invoke;
-    // mCompiler.invoke(&invoke, debugArrayStore, asmjit::FuncSignature::build<void, JavaArray<int8_t>*, int32_t>());
-    // invoke->setArg(0, array);
-    // invoke->setArg(1, index);
-
     mCompiler.mov(byte_ptr(array, index, IndexShift, IndexOffset), value.r8());
   }
 }
@@ -1716,6 +1770,61 @@ static void createNewReferenceArray(JavaThread* thread, uint16_t index, int32_t 
   // TODO Check negative count
   ArrayInstance* newInstance = thread->heap().allocateArray((*arrayClass)->asArrayClass(), count);
   thread->currentFrame().pushOperand<Instance*>(newInstance);
+}
+
+void JitCompilerX86Impl::newReferenceArray()
+{
+  auto index = mBytes.readU2();
+  auto& count = this->pop();
+
+  asmjit::InvokeNode* invoke;
+
+  this->safePoint();
+  mCompiler.invoke(&invoke, createNewReferenceArray, asmjit::FuncSignature::build<void, JavaThread*, uint16_t, int32_t>());
+  invoke->setArg(0, mThread);
+  invoke->setArg(1, index);
+  invoke->setArg(2, count);
+  mStackPointer++;
+  this->endSafePoint();
+}
+
+static void resolveAndInvokeVirtualMethod(JMethod* baseMethod, Instance* objectRef, JavaThread* thread)
+{
+  JClass* target = objectRef->getClass();
+  auto targetMethod = target->getVirtualMethod(baseMethod->name(), baseMethod->rawDescriptor());
+
+  assert(targetMethod.has_value());
+
+  auto returnValue = thread->invoke(*targetMethod);
+  if (returnValue.has_value()) {
+    thread->currentFrame().pushGenericOperand(returnValue->toRaw());
+  }
+}
+
+void JitCompilerX86Impl::invokeVirtual()
+{
+  auto index = mBytes.readU2();
+  const JMethod* baseMethod = mMethod->getClass()->runtimeConstantPool().getMethodRef(index);
+
+  int numArgs = baseMethod->descriptor().numParameterSlots();
+  auto objectRef = mStack[mStackPointer - 1 - numArgs];
+  // TODO: Check for null
+
+  this->safePoint();
+  asmjit::InvokeNode* invokeNode;
+  mCompiler.invoke(&invokeNode, resolveAndInvokeVirtualMethod, asmjit::FuncSignature::build<void, JMethod*, Instance*, JavaThread*>());
+  invokeNode->setArg(0, baseMethod);
+  invokeNode->setArg(1, objectRef);
+  invokeNode->setArg(2, mThread);
+  mStackPointer -= baseMethod->descriptor().numParameterSlots();
+  mStackPointer -= 1;
+
+  if (!baseMethod->isVoid()) {
+    mStackPointer += 1;
+  }
+
+  // TODO: Return value
+  this->endSafePoint();
 }
 
 void JitCompilerX86Impl::adjustStackPointer()
