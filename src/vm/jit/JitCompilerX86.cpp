@@ -148,34 +148,7 @@ private:
   void newArray();
 
   template<class T>
-  void arrayStore()
-  {
-    asmjit::x86::Gp value;
-    if constexpr (CategoryTwoJvmType<T>) {
-      value = this->popCategoryTwo();
-    } else {
-      value = this->pop();
-    }
-    auto& index = this->pop();
-    auto& array = this->pop();
-
-    // TODO: Null check
-    // TODO: Check bounds
-
-    static constexpr size_t ElementSize = sizeof(T);
-    static constexpr size_t IndexShift = std::bit_width(JavaArray<T>::ElementIndexScale) - 1;
-    static constexpr size_t IndexOffset = JavaArray<T>::ElementStartOffset;
-
-    if (ElementSize == 8) {
-      mCompiler.mov(qword_ptr(array, index, IndexShift, IndexOffset), value);
-    } else if (ElementSize == 4) {
-      mCompiler.mov(dword_ptr(array, index, IndexShift, IndexOffset), value.r32());
-    } else if (ElementSize == 2) {
-      mCompiler.mov(word_ptr(array, index, IndexShift, IndexOffset), value.r16());
-    } else if (ElementSize == 1) {
-      mCompiler.mov(byte_ptr(array, index, IndexShift, IndexOffset), value.r8());
-    }
-  }
+  void arrayStore();
 
   template<class T>
   void arrayLoad()
@@ -210,8 +183,12 @@ private:
     }
   }
 
+  /// After jumps, the stack pointer can be different between target branches, so it needs adjustment.
+  void adjustStackPointer();
+
 private:
   JMethod* mMethod;
+  StackMap mStackMap;
   asmjit::CodeHolder* mCode;
   asmjit::x86::Compiler mCompiler;
   ByteStream mBytes;
@@ -248,7 +225,7 @@ std::unique_ptr<JitCompiler> JitCompiler::create(Vm& vm)
 }
 
 JitCompilerX86Impl::JitCompilerX86Impl(JMethod* method, asmjit::CodeHolder* code)
-  : mMethod(method), mCode(code), mCompiler(mCode), mBytes(method->getCode().bytes())
+  : mMethod(method), mStackMap(StackMap::parseStackMap(mMethod)), mCode(code), mCompiler(mCode), mBytes(method->getCode().bytes())
 {
   mCompiler.setLogger(mCode->logger());
   mCompiler.setErrorHandler(mCode->errorHandler());
@@ -337,7 +314,9 @@ void JitCompilerX86Impl::doCompile()
 
   // Some initialization
   while (mBytes.pos() < mBytes.size()) {
+    this->adjustStackPointer();
     mCompiler.bind(mLabels.at(mBytes.pos()));
+
     auto opcode = static_cast<Opcode>(mBytes.readU1());
 
     switch (opcode) {
@@ -1681,6 +1660,41 @@ void JitCompilerX86Impl::newArray()
   this->endSafePoint();
 }
 
+template<class T>
+void JitCompilerX86Impl::arrayStore()
+{
+  asmjit::x86::Gp value;
+  if constexpr (CategoryTwoJvmType<T>) {
+    value = this->popCategoryTwo();
+  } else {
+    value = this->pop();
+  }
+  auto& index = this->pop();
+  auto& array = this->pop();
+
+  // TODO: Null check
+  // TODO: Check bounds
+
+  static constexpr size_t ElementSize = sizeof(T);
+  static constexpr size_t IndexShift = std::bit_width(JavaArray<T>::ElementIndexScale) - 1;
+  static constexpr size_t IndexOffset = JavaArray<T>::ElementStartOffset;
+
+  if (ElementSize == 8) {
+    mCompiler.mov(qword_ptr(array, index, IndexShift, IndexOffset), value);
+  } else if (ElementSize == 4) {
+    mCompiler.mov(dword_ptr(array, index, IndexShift, IndexOffset), value.r32());
+  } else if (ElementSize == 2) {
+    mCompiler.mov(word_ptr(array, index, IndexShift, IndexOffset), value.r16());
+  } else if (ElementSize == 1) {
+    // asmjit::InvokeNode* invoke;
+    // mCompiler.invoke(&invoke, debugArrayStore, asmjit::FuncSignature::build<void, JavaArray<int8_t>*, int32_t>());
+    // invoke->setArg(0, array);
+    // invoke->setArg(1, index);
+
+    mCompiler.mov(byte_ptr(array, index, IndexShift, IndexOffset), value.r8());
+  }
+}
+
 static void createNewReferenceArray(JavaThread* thread, uint16_t index, int32_t count)
 {
   auto klass = thread->currentFrame().currentClass()->runtimeConstantPool().getClass(index);
@@ -1702,4 +1716,12 @@ static void createNewReferenceArray(JavaThread* thread, uint16_t index, int32_t 
   // TODO Check negative count
   ArrayInstance* newInstance = thread->heap().allocateArray((*arrayClass)->asArrayClass(), count);
   thread->currentFrame().pushOperand<Instance*>(newInstance);
+}
+
+void JitCompilerX86Impl::adjustStackPointer()
+{
+  auto& frame = mStackMap.frameAt(mBytes.pos());
+  if (frame.startPos == mBytes.pos()) {
+    mStackPointer = frame.operandStack.size();
+  }
 }
