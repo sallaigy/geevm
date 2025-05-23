@@ -1,0 +1,29 @@
+// RUN: %compile -d %t "%s" | FileCheck "%s"
+// RUN: %compile -d %t -f "-Xjit org/geevm/tests/basic/FieldsByte#check()V" "%s" 2>&1 | FileCheck "%s"
+package org.geevm.tests.basic;
+
+import org.geevm.util.Printer;
+
+public class FieldsByte {
+
+    private byte sum = 100;
+    private byte inc = 2;
+
+    public static void main(String[] args) {
+        FieldsByte instance = new FieldsByte();
+        instance.check();
+    }
+
+    public void check() {
+        // CHECK: 100
+        Printer.println(sum);
+
+        sum = 100;
+        // CHECK-NEXT: 100
+        Printer.println(sum);
+
+        sum += inc;
+        // CHECK-NEXT: 102
+        Printer.println(sum);
+    }
+}

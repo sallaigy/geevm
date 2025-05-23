@@ -1,6 +1,8 @@
 // RUN: split-file %s %t
 // RUN: %compile --no-copy-sources -d %t -m org.geevm.tests.oop.InheritanceFields %t/org/geevm/tests/oop/Base.java \
 // RUN: %t/org/geevm/tests/oop/Derived.java %t/org/geevm/tests/oop/InheritanceFields.java | FileCheck "%s"
+// RUN: %compile --no-copy-sources -d %t -m org.geevm.tests.oop.InheritanceFields -f "-Xjit org/geevm/tests/oop/InheritanceFields#main([Ljava/lang/String;)V" \
+// RUN: %t/org/geevm/tests/oop/Base.java %t/org/geevm/tests/oop/Derived.java %t/org/geevm/tests/oop/InheritanceFields.java | FileCheck "%s"
 
 //--- org/geevm/tests/oop/InheritanceFields.java
 package org.geevm.tests.oop;

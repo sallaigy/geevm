@@ -10,6 +10,7 @@
 #include <asmjit/x86/x86compiler.h>
 
 #include <cmath>
+#include <iostream>
 
 using namespace geevm;
 
@@ -130,6 +131,8 @@ private:
 
   void getStatic();
   void putStatic();
+  void getField();
+  void putField();
 
   asmjit::x86::Mem locals()
   {
@@ -188,6 +191,8 @@ private:
 
   /// After jumps, the stack pointer can be different between target branches, so it needs adjustment.
   void adjustStackPointer();
+
+  [[maybe_unused]] void runtimeDebug(const asmjit::x86::Gp& value);
 
 private:
   JMethod* mMethod;
@@ -1373,8 +1378,8 @@ void JitCompilerX86Impl::doCompile()
         break;
       }
       case Opcode::PUTSTATIC: this->putStatic(); break;
-      case Opcode::GETFIELD: notImplemented(opcode); break;
-      case Opcode::PUTFIELD: notImplemented(opcode); break;
+      case Opcode::GETFIELD: this->getField(); break;
+      case Opcode::PUTFIELD: this->putField(); break;
       case Opcode::INVOKEVIRTUAL: this->invokeVirtual(); break;
       case Opcode::INVOKESPECIAL: {
         // TODO: Exception check
@@ -1409,8 +1414,14 @@ void JitCompilerX86Impl::doCompile()
       case Opcode::ATHROW: notImplemented(opcode); break;
       case Opcode::CHECKCAST: notImplemented(opcode); break;
       case Opcode::INSTANCEOF: notImplemented(opcode); break;
-      case Opcode::MONITORENTER: notImplemented(opcode); break;
-      case Opcode::MONITOREXIT: notImplemented(opcode); break;
+      case Opcode::MONITORENTER: {
+        mStackPointer--;
+        break;
+      }
+      case Opcode::MONITOREXIT: {
+        mStackPointer--;
+        break;
+      }
       case Opcode::WIDE: notImplemented(opcode); break;
       case Opcode::MULTIANEWARRAY: notImplemented(opcode); break;
       case Opcode::GOTO_W: {
@@ -1557,6 +1568,64 @@ void JitCompilerX86Impl::putStatic()
   auto fieldPtr = mCompiler.newIntPtr();
   mCompiler.mov(fieldPtr, klass->staticFieldPtr(field->offset()));
   mCompiler.mov(qword_ptr(fieldPtr), *value);
+}
+
+void JitCompilerX86Impl::getField()
+{
+  JField* field = mMethod->getClass()->runtimeConstantPool().getFieldRef(mBytes.readU2());
+  auto& objectRef = this->pop();
+
+  // TODO: Check for null
+  // TODO: Check if static
+
+  size_t fieldSize = field->fieldType().sizeOf();
+  if (fieldSize == 8) {
+    mCompiler.mov(mStack[mStackPointer], qword_ptr(objectRef, field->offset()));
+  } else if (fieldSize == 4) {
+    mCompiler.mov(mStack[mStackPointer].r32(), dword_ptr(objectRef, field->offset()));
+  } else if (fieldSize == 2) {
+    if (field->fieldType().asPrimitive().value() == PrimitiveType::Char) {
+      mCompiler.movzx(mStack[mStackPointer].r32(), word_ptr(objectRef, field->offset()));
+    } else {
+      mCompiler.movsx(mStack[mStackPointer].r32(), word_ptr(objectRef, field->offset()));
+    }
+  } else if (fieldSize == 1) {
+    mCompiler.movsx(mStack[mStackPointer].r32(), byte_ptr(objectRef, field->offset()));
+  } else {
+    GEEVM_UNREACHBLE("Invalid field size");
+  }
+
+  mStackPointer++;
+  if (field->fieldType().isCategoryTwo()) {
+    mStackPointer++;
+  }
+}
+
+void JitCompilerX86Impl::putField()
+{
+  JField* field = mMethod->getClass()->runtimeConstantPool().getFieldRef(mBytes.readU2());
+  if (field->fieldType().isCategoryTwo()) {
+    mStackPointer--;
+  }
+
+  auto& value = this->pop();
+  auto& objectRef = this->pop();
+
+  // TODO: Check for null
+  // TODO: Check if static
+
+  size_t fieldSize = field->fieldType().sizeOf();
+  if (fieldSize == 8) {
+    mCompiler.mov(qword_ptr(objectRef, field->offset()), value);
+  } else if (fieldSize == 4) {
+    mCompiler.mov(dword_ptr(objectRef, field->offset()), value.r32());
+  } else if (fieldSize == 2) {
+    mCompiler.mov(word_ptr(objectRef, field->offset()), value.r16());
+  } else if (fieldSize == 1) {
+    mCompiler.mov(byte_ptr(objectRef, field->offset()), value.r8());
+  } else {
+    GEEVM_UNREACHBLE("Invalid field size");
+  }
 }
 
 void JitCompilerX86Impl::ldc(uint16_t index)
@@ -1833,4 +1902,16 @@ void JitCompilerX86Impl::adjustStackPointer()
   if (frame.startPos == mBytes.pos()) {
     mStackPointer = frame.operandStack.size();
   }
+}
+
+static void debugCall(uint64_t value)
+{
+  std::cout << "DEBUG: " << value << std::endl;
+}
+
+void JitCompilerX86Impl::runtimeDebug(const asmjit::x86::Gp& value)
+{
+  asmjit::InvokeNode* invoke;
+  mCompiler.invoke(&invoke, debugCall, asmjit::FuncSignature::build<void, uint64_t>());
+  invoke->setArg(0, value);
 }
