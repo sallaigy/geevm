@@ -41,7 +41,6 @@ class JitCompilerX86Impl
 public:
   explicit JitCompilerX86Impl(JMethod* method, asmjit::CodeHolder* codeHolder);
 
-  void invokeVirtual();
   void doCompile();
 
 private:
@@ -188,6 +187,9 @@ private:
       mStackPointer++;
     }
   }
+
+  void invokeVirtual();
+  void invokeInterface();
 
   /// After jumps, the stack pointer can be different between target branches, so it needs adjustment.
   void adjustStackPointer();
@@ -1401,7 +1403,7 @@ void JitCompilerX86Impl::doCompile()
 
         break;
       }
-      case Opcode::INVOKEINTERFACE: notImplemented(opcode); break;
+      case Opcode::INVOKEINTERFACE: this->invokeInterface(); break;
       case Opcode::INVOKEDYNAMIC: notImplemented(opcode); break;
       case Opcode::NEW: this->newObject(); break;
       case Opcode::NEWARRAY: this->newArray(); break;
@@ -1876,6 +1878,35 @@ void JitCompilerX86Impl::invokeVirtual()
   const JMethod* baseMethod = mMethod->getClass()->runtimeConstantPool().getMethodRef(index);
 
   int numArgs = baseMethod->descriptor().numParameterSlots();
+  auto objectRef = mStack[mStackPointer - 1 - numArgs];
+  // TODO: Check for null
+
+  this->safePoint();
+  asmjit::InvokeNode* invokeNode;
+  mCompiler.invoke(&invokeNode, resolveAndInvokeVirtualMethod, asmjit::FuncSignature::build<void, JMethod*, Instance*, JavaThread*>());
+  invokeNode->setArg(0, baseMethod);
+  invokeNode->setArg(1, objectRef);
+  invokeNode->setArg(2, mThread);
+  mStackPointer -= baseMethod->descriptor().numParameterSlots();
+  mStackPointer -= 1;
+
+  if (!baseMethod->isVoid()) {
+    mStackPointer += 1;
+  }
+
+  // TODO: Return value
+  this->endSafePoint();
+}
+
+void JitCompilerX86Impl::invokeInterface()
+{
+  auto index = mBytes.readU2();
+  const JMethod* baseMethod = mMethod->getClass()->runtimeConstantPool().getMethodRef(index);
+
+  // Consume 'count' and '0'
+  mBytes.skip(2);
+
+  int numArgs = baseMethod->descriptor().parameters().size();
   auto objectRef = mStack[mStackPointer - 1 - numArgs];
   // TODO: Check for null
 
