@@ -341,11 +341,11 @@ void JitCompilerX86Impl::doCompile()
       case Opcode::ICONST_5: this->push(Imm{5}); break;
       case Opcode::LCONST_0: this->pushCategoryTwo(Imm{0}); break;
       case Opcode::LCONST_1: this->pushCategoryTwo(Imm{1}); break;
-      case Opcode::FCONST_0: notImplemented(opcode); break;
-      case Opcode::FCONST_1: notImplemented(opcode); break;
-      case Opcode::FCONST_2: notImplemented(opcode); break;
-      case Opcode::DCONST_0: notImplemented(opcode); break;
-      case Opcode::DCONST_1: notImplemented(opcode); break;
+      case Opcode::FCONST_0: this->push(Imm{std::bit_cast<uint32_t>(0.0f)}); break;
+      case Opcode::FCONST_1: this->push(Imm{std::bit_cast<uint32_t>(1.0f)}); break;
+      case Opcode::FCONST_2: this->push(Imm{std::bit_cast<uint32_t>(2.0f)}); break;
+      case Opcode::DCONST_0: this->pushCategoryTwo(Imm{std::bit_cast<uint64_t>(0.0)}); break;
+      case Opcode::DCONST_1: this->pushCategoryTwo(Imm{std::bit_cast<uint64_t>(1.0)}); break;
       case Opcode::BIPUSH: {
         this->push(Imm{mBytes.readU1()});
         break;
@@ -419,38 +419,54 @@ void JitCompilerX86Impl::doCompile()
       case Opcode::BALOAD: this->arrayLoad<int8_t>(); break;
       case Opcode::CALOAD: this->arrayLoad<char16_t>(); break;
       case Opcode::SALOAD: this->arrayLoad<int16_t>(); break;
+      case Opcode::FSTORE: [[fallthrough]];
+      case Opcode::ASTORE: [[fallthrough]];
       case Opcode::ISTORE: {
         int32_t slotNumber = mBytes.readU1();
         this->store(slotNumber, this->pop());
         break;
       }
-      case Opcode::LSTORE: notImplemented(opcode); break;
-      case Opcode::FSTORE: notImplemented(opcode); break;
-      case Opcode::DSTORE: notImplemented(opcode); break;
-      case Opcode::ASTORE: notImplemented(opcode); break;
-      case Opcode::ISTORE_0:
-      case Opcode::ISTORE_1:
-      case Opcode::ISTORE_2:
+      case Opcode::LSTORE: [[fallthrough]];
+      case Opcode::DSTORE: {
+        int32_t slotNumber = mBytes.readU1();
+        this->store(slotNumber, this->popCategoryTwo());
+        break;
+      }
+      case Opcode::ISTORE_0: [[fallthrough]];
+      case Opcode::ISTORE_1: [[fallthrough]];
+      case Opcode::ISTORE_2: [[fallthrough]];
       case Opcode::ISTORE_3: {
         int32_t slotNumber = static_cast<int32_t>(opcode) - static_cast<int32_t>(Opcode::ISTORE_0);
         this->store(slotNumber, this->pop());
         break;
       }
-      case Opcode::LSTORE_0: notImplemented(opcode); break;
-      case Opcode::LSTORE_1: notImplemented(opcode); break;
-      case Opcode::LSTORE_2: notImplemented(opcode); break;
-      case Opcode::LSTORE_3: notImplemented(opcode); break;
-      case Opcode::FSTORE_0: notImplemented(opcode); break;
-      case Opcode::FSTORE_1: notImplemented(opcode); break;
-      case Opcode::FSTORE_2: notImplemented(opcode); break;
-      case Opcode::FSTORE_3: notImplemented(opcode); break;
-      case Opcode::DSTORE_0: notImplemented(opcode); break;
-      case Opcode::DSTORE_1: notImplemented(opcode); break;
-      case Opcode::DSTORE_2: notImplemented(opcode); break;
-      case Opcode::DSTORE_3: notImplemented(opcode); break;
-      case Opcode::ASTORE_0:
-      case Opcode::ASTORE_1:
-      case Opcode::ASTORE_2:
+      case Opcode::LSTORE_0: [[fallthrough]];
+      case Opcode::LSTORE_1: [[fallthrough]];
+      case Opcode::LSTORE_2: [[fallthrough]];
+      case Opcode::LSTORE_3: {
+        int32_t slotNumber = static_cast<int32_t>(opcode) - static_cast<int32_t>(Opcode::LSTORE_0);
+        this->store(slotNumber, this->popCategoryTwo());
+        break;
+      }
+      case Opcode::FSTORE_0: [[fallthrough]];
+      case Opcode::FSTORE_1: [[fallthrough]];
+      case Opcode::FSTORE_2: [[fallthrough]];
+      case Opcode::FSTORE_3: {
+        int32_t slotNumber = static_cast<int32_t>(opcode) - static_cast<int32_t>(Opcode::FSTORE_0);
+        this->store(slotNumber, this->pop());
+        break;
+      }
+      case Opcode::DSTORE_0: [[fallthrough]];
+      case Opcode::DSTORE_1: [[fallthrough]];
+      case Opcode::DSTORE_2: [[fallthrough]];
+      case Opcode::DSTORE_3: {
+        int32_t slotNumber = static_cast<int32_t>(opcode) - static_cast<int32_t>(Opcode::DSTORE_0);
+        this->store(slotNumber, this->popCategoryTwo());
+        break;
+      }
+      case Opcode::ASTORE_0: [[fallthrough]];
+      case Opcode::ASTORE_1: [[fallthrough]];
+      case Opcode::ASTORE_2: [[fallthrough]];
       case Opcode::ASTORE_3: {
         int32_t slotNumber = static_cast<int32_t>(opcode) - static_cast<int32_t>(Opcode::ASTORE_0);
         this->store(slotNumber, this->pop());
