@@ -11,6 +11,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <map>
 
 using namespace geevm;
 
@@ -39,7 +40,7 @@ public:
 class JitCompilerX86Impl
 {
 public:
-  explicit JitCompilerX86Impl(JMethod* method, asmjit::CodeHolder* codeHolder);
+  explicit JitCompilerX86Impl(JMethod* method, asmjit::CodeHolder* codeHolder, size_t exceptionPointerOffset);
 
   void doCompile();
 
@@ -142,6 +143,9 @@ private:
   void generateInvoke(JMethod* method);
   void safePoint();
   void endSafePoint();
+  void generateExceptionHandlingCode();
+  void throwException();
+  void detectException(size_t opcodePos);
 
   void ldc(uint16_t index);
   void ldc2w(uint16_t index);
@@ -210,6 +214,9 @@ private:
   asmjit::x86::Gp mThread;
   asmjit::x86::Gp mCallFrame;
   std::unordered_map<size_t, asmjit::Label> mLabels;
+  size_t mExceptionPointerOffset;
+  asmjit::x86::Gp mExceptionPointer;
+  std::map<size_t, asmjit::Label> mExceptionHandlers;
 };
 
 class JitCompilerX86 : public JitCompiler
@@ -234,8 +241,13 @@ std::unique_ptr<JitCompiler> JitCompiler::create(Vm& vm)
   return std::make_unique<JitCompilerX86>(vm);
 }
 
-JitCompilerX86Impl::JitCompilerX86Impl(JMethod* method, asmjit::CodeHolder* code)
-  : mMethod(method), mStackMap(StackMap::parseStackMap(mMethod)), mCode(code), mCompiler(mCode), mBytes(method->getCode().bytes())
+JitCompilerX86Impl::JitCompilerX86Impl(JMethod* method, asmjit::CodeHolder* code, size_t exceptionPointerOffset)
+  : mMethod(method),
+    mStackMap(StackMap::parseStackMap(mMethod)),
+    mCode(code),
+    mCompiler(mCode),
+    mBytes(method->getCode().bytes()),
+    mExceptionPointerOffset(exceptionPointerOffset)
 {
   mCompiler.setLogger(mCode->logger());
   mCompiler.setErrorHandler(mCode->errorHandler());
@@ -244,6 +256,7 @@ JitCompilerX86Impl::JitCompilerX86Impl(JMethod* method, asmjit::CodeHolder* code
 
   mThread = mCompiler.newIntPtr();
   mCallFrame = mCompiler.newIntPtr();
+  mExceptionPointer = mCompiler.newIntPtr();
   mFunction->setArg(0, mThread);
   mFunction->setArg(1, mCallFrame);
 
@@ -294,7 +307,9 @@ JitFunction JitCompilerX86::compile(JMethod* method)
   code.init(mJitRuntime.environment(), mJitRuntime.cpuFeatures());
   code.setErrorHandler(&errorHandler);
 
-  JitCompilerX86Impl impl{method, &code};
+  size_t exceptionPointerOffset = mVm.mainThread().currentExceptionOffset();
+
+  JitCompilerX86Impl impl{method, &code, exceptionPointerOffset};
   impl.doCompile();
 
   JitFunction fnPtr = nullptr;
@@ -306,6 +321,22 @@ JitFunction JitCompilerX86::compile(JMethod* method)
   return fnPtr;
 }
 
+void JitCompilerX86Impl::detectException(size_t opcodePos)
+{
+  // Detect exceptions: fetch the exception pointer from the current frame.
+  mCompiler.mov(mExceptionPointer, qword_ptr(mThread, mExceptionPointerOffset));
+  // Jump to the exception handling logic if the exception pointer is not null
+  asmjit::Label exceptionHandlingLabel;
+  if (mExceptionHandlers.contains(opcodePos)) {
+    exceptionHandlingLabel = mExceptionHandlers.at(opcodePos);
+  } else {
+    exceptionHandlingLabel = mCompiler.newLabel();
+    mExceptionHandlers[opcodePos] = exceptionHandlingLabel;
+  }
+
+  mCompiler.test(mExceptionPointer, mExceptionPointer);
+  mCompiler.jnz(exceptionHandlingLabel);
+}
 void JitCompilerX86Impl::doCompile()
 {
   using namespace asmjit;
@@ -322,11 +353,12 @@ void JitCompilerX86Impl::doCompile()
 
   AsmJitErrorHandler errorHandler;
 
-  // Some initialization
+  size_t opcodePos = 0;
   while (mBytes.pos() < mBytes.size()) {
+    opcodePos = mBytes.pos();
     this->adjustStackPointer();
-    mCompiler.bind(mLabels.at(mBytes.pos()));
 
+    mCompiler.bind(mLabels.at(opcodePos));
     auto opcode = static_cast<Opcode>(mBytes.readU1());
 
     switch (opcode) {
@@ -1389,6 +1421,7 @@ void JitCompilerX86Impl::doCompile()
         break;
       }
       case Opcode::RETURN: {
+        mCompiler.ret();
         break;
       }
       case Opcode::GETSTATIC: {
@@ -1429,7 +1462,7 @@ void JitCompilerX86Impl::doCompile()
         mCompiler.mov(mStack[mStackPointer++].r32(), dword_ptr(arrayRef, ArrayInstance::LengthFieldOffset));
         break;
       }
-      case Opcode::ATHROW: notImplemented(opcode); break;
+      case Opcode::ATHROW: this->throwException(); break;
       case Opcode::CHECKCAST: notImplemented(opcode); break;
       case Opcode::INSTANCEOF: notImplemented(opcode); break;
       case Opcode::MONITORENTER: {
@@ -1456,7 +1489,13 @@ void JitCompilerX86Impl::doCompile()
       case Opcode::IMPDEP1: notImplemented(opcode); break;
       case Opcode::IMPDEP2: notImplemented(opcode); break;
     }
+
+    if (canThrowException(opcode)) {
+      this->detectException(opcodePos);
+    }
   }
+
+  this->generateExceptionHandlingCode();
 
   mCompiler.endFunc();
   mCompiler.finalize();
@@ -1943,12 +1982,107 @@ void JitCompilerX86Impl::invokeInterface()
   this->endSafePoint();
 }
 
+static void throwExceptionInThread(JavaThread* thread, Instance* exception)
+{
+  thread->throwException(exception);
+}
+
+void JitCompilerX86Impl::throwException()
+{
+  auto& exception = this->pop();
+  asmjit::InvokeNode* invoke;
+  mCompiler.invoke(&invoke, throwExceptionInThread, asmjit::FuncSignature::build<void, JavaThread*, Instance*>());
+  invoke->setArg(0, mThread);
+  invoke->setArg(1, exception);
+
+  // After 'ATHROW' the operand stack has only one element
+  mStackPointer = 0;
+  this->push(exception);
+}
+
 void JitCompilerX86Impl::adjustStackPointer()
 {
   auto& frame = mStackMap.frameAt(mBytes.pos());
   if (frame.startPos == mBytes.pos()) {
     mStackPointer = frame.operandStack.size();
   }
+}
+
+static bool checkExceptionInstanceOf(InstanceClass* currentClass, Instance* exceptionPtr, types::u2 catchType)
+{
+  assert(catchType != 0);
+  auto exceptionClass = currentClass->runtimeConstantPool().getClass(catchType);
+
+  assert(exceptionClass.has_value());
+  return exceptionPtr->getClass()->isInstanceOf(*exceptionClass);
+}
+
+static void clearException(JavaThread* thread)
+{
+  thread->clearException();
+}
+
+void JitCompilerX86Impl::generateExceptionHandlingCode()
+{
+  // First, generate code for individual handlers.
+  // These handlers only retrieve the current program counter for the specific instruction.
+  asmjit::Label exceptionHandlerLabel = mCompiler.newLabel();
+  asmjit::x86::Gp pc = mCompiler.newGpq();
+  for (auto& [pos, label] : mExceptionHandlers) {
+    mCompiler.bind(label);
+    mCompiler.mov(pc, asmjit::Imm{pos});
+    mCompiler.jmp(exceptionHandlerLabel);
+  }
+
+  // Try to handle exception in the current function.
+  mCompiler.bind(exceptionHandlerLabel);
+
+  auto exceptionInstance = mCompiler.newIntPtr();
+  // The value `mExceptionPointer`fetched from the current frame is a `GcRootRef` node.
+  // We need to resolve the pointer to the actual exception instance.
+  mCompiler.mov(exceptionInstance, qword_ptr(mExceptionPointer, RootList::NodeInstancePointerOffset));
+
+  // The exception instance must be at the first slot of the stack
+  mCompiler.mov(mStack[0], exceptionInstance);
+
+  for (auto& entry : mMethod->getCode().exceptionTable()) {
+    auto nextIterLabel = mCompiler.newLabel();
+    auto targetLabel = mLabels.at(entry.handlerPc);
+
+    // Check if the program counter is in range for this entry
+    mCompiler.cmp(pc, asmjit::Imm{entry.startPc});
+    mCompiler.jl(nextIterLabel);
+    mCompiler.cmp(pc, asmjit::Imm{entry.endPc});
+    mCompiler.jge(nextIterLabel);
+    // If control reached here, the exception handler scope is active.
+    // Check if it is the right class.
+    if (entry.catchType != 0) {
+      auto exceptionClass = mMethod->getClass()->runtimeConstantPool().getClass(entry.catchType);
+      assert(exceptionClass.has_value());
+
+      // Note that this is safe because classes are never relocated
+      asmjit::InvokeNode* invoke;
+      mCompiler.invoke(&invoke, checkExceptionInstanceOf, asmjit::FuncSignature::build<bool, InstanceClass*, Instance*, types::u2>());
+      invoke->setArg(0, mMethod->getClass()->asInstanceClass());
+      invoke->setArg(1, exceptionInstance);
+      invoke->setArg(2, asmjit::Imm{entry.catchType});
+      mCompiler.jz(nextIterLabel);
+    } else {
+      // The exception handler is valid for all classes.
+    }
+
+    // If control reached here, then the exception was caught by the exception entry, otherwise control would have jumped to `nextIterLabel`.
+    asmjit::InvokeNode* clearExceptionInvoke;
+    mCompiler.invoke(&clearExceptionInvoke, clearException, asmjit::FuncSignature::build<void, JavaThread*>());
+    clearExceptionInvoke->setArg(0, mThread);
+
+    mCompiler.jmp(targetLabel);
+    mCompiler.bind(nextIterLabel);
+  }
+
+  // Exception not handled in a catch block, return to caller.
+  // Control reaches here if the last entry in the exception table did not handle the exception.
+  mCompiler.ret();
 }
 
 static void debugCall(uint64_t value)

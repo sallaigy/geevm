@@ -15,6 +15,61 @@ std::string geevm::opcodeToString(Opcode opcode)
   return "UNKNOWN";
 }
 
+bool geevm::canThrowException(Opcode opcode)
+{
+  switch (opcode) {
+    using enum Opcode;
+    case LDC:
+    case LDC_W:
+    case LDC2_W:
+    case IALOAD:
+    case LALOAD:
+    case FALOAD:
+    case DALOAD:
+    case AALOAD:
+    case BALOAD:
+    case CALOAD:
+    case IASTORE:
+    case LASTORE:
+    case FASTORE:
+    case DASTORE:
+    case AASTORE:
+    case BASTORE:
+    case CASTORE:
+    case SASTORE:
+    case SALOAD:
+    case IDIV:
+    case LDIV:
+    case FDIV:
+    case DDIV:
+    case IREM:
+    case LREM:
+    case FREM:
+    case DREM:
+    case GETSTATIC:
+    case PUTSTATIC:
+    case GETFIELD:
+    case PUTFIELD:
+    case INVOKEVIRTUAL:
+    case INVOKESPECIAL:
+    case INVOKESTATIC:
+    case INVOKEINTERFACE:
+    case NEW:
+    case NEWARRAY:
+    case ANEWARRAY:
+    case ARRAYLENGTH:
+    case ATHROW:
+    case CHECKCAST:
+    case INSTANCEOF:
+    case MONITORENTER:
+    case MONITOREXIT:
+    case MULTIANEWARRAY:
+      // FIXME: add exceptions for return instructions
+      return true;
+    default: return false;
+  }
+}
+
 size_t geevm::bytesConsumedByOpcode(Opcode opcode)
 {
   switch (opcode) {

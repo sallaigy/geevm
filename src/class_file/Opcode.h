@@ -18,6 +18,8 @@ std::string opcodeToString(Opcode opcode);
 
 size_t bytesConsumedByOpcode(Opcode opcode);
 
+bool canThrowException(Opcode opcode);
+
 } // namespace geevm
 
 #endif // GEEVM_CLASS_FILE_OPCODE_H

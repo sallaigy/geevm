@@ -14,6 +14,8 @@ using namespace geevm;
 JavaThread::JavaThread(Vm& vm)
   : mVm(vm), mCurrentException(nullptr), mThreadInstance(nullptr)
 {
+  static bool offsetIsInitialized = false;
+
   mCallStackSpace = std::unique_ptr<char[]>(new char[vm.settings().maxStackSize]);
   mCallStackTop = mCallStackSpace.get();
 }
@@ -395,4 +397,9 @@ void JavaThread::popFrame()
   assert(mCurrentFrame != nullptr);
   mCallStackTop = reinterpret_cast<char*>(mCurrentFrame);
   mCurrentFrame = mCurrentFrame->previous();
+}
+
+size_t JavaThread::currentExceptionOffset() const
+{
+  return reinterpret_cast<const char*>(&mCurrentException) - reinterpret_cast<const char*>(this);
 }

@@ -4,6 +4,11 @@
 
 using namespace geevm;
 
+size_t CallFrame::LocalVariablesOffset = offsetof(CallFrame, mLocalVariables);
+size_t CallFrame::OperandStackOffset = offsetof(CallFrame, mOperandStack);
+size_t CallFrame::StackPointerOffset = offsetof(CallFrame, mOperandStackPointer);
+size_t CallFrame::ProgramCounterOffset = offsetof(CallFrame, mPos);
+
 CallFrame::CallFrame(JMethod* method, CallFrame* previous, std::uint64_t* localVariables, std::uint64_t* operandStack)
   : mMethod(method), mPrevious(previous), mLocalVariables(localVariables), mOperandStack(operandStack)
 {

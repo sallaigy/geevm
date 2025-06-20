@@ -87,6 +87,12 @@ public:
     return mCurrentException;
   }
 
+  /// Returns the offset from the start of this object to the current exception pointer.
+  /// This is useful for the JIT compiler, as it needs to fetch the current exception pointer from the thread for exception handling.
+  /// JavaThread is not a standard layout class (and we do not want it to be), so we cannot use `offsetof` to find the offset.
+  /// This method uses some pointer arithmetic to find the appropriate offset.
+  size_t currentExceptionOffset() const;
+
   // JNI references
   //==------------------------------------------------------------------------==
 
@@ -122,7 +128,7 @@ private:
   CallFrame* mCurrentFrame = nullptr;
 
   // Exceptions
-  GcRootRef<Instance> mCurrentException;
+  GcRootRef<> mCurrentException;
   // True if the thread is executing an uncaught exception handler
   bool mHasUncaughtException = false;
 

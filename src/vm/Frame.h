@@ -25,9 +25,10 @@ public:
 
   // Constants
   //==--------------------------------------------------------------------==//
-  static constexpr size_t LocalVariablesOffset = 0;
-  static constexpr size_t OperandStackOffset = 8;
-  static constexpr size_t StackPointerOffset = 16;
+  static size_t LocalVariablesOffset;
+  static size_t OperandStackOffset;
+  static size_t StackPointerOffset;
+  static size_t ProgramCounterOffset;
 
   // Current frame information
   //==--------------------------------------------------------------------==//
