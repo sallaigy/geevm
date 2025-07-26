@@ -1,4 +1,5 @@
 ; RUN: %compile -d %t "%s" 2>&1 | FileCheck "%s"
+; RUN: %compile -d %t -f "-Xjit org/geevm/tests/basic/Wide#wideIInc()V,org/geevm/tests/basic/Wide#wideILoadIStore()V,org/geevm/tests/basic/Wide#wideLLoadLStore()V,org/geevm/tests/basic/Wide#wideFLoadFStore()V,org/geevm/tests/basic/Wide#wideDLoadDStore()V,org/geevm/tests/basic/Wide#wideALoadAStore()V" "%s" 2>&1 | FileCheck "%s"
 .class org/geevm/tests/basic/Wide
 .super java/lang/Object
 

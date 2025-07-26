@@ -195,6 +195,8 @@ private:
   void invokeVirtual();
   void invokeInterface();
 
+  void wide();
+
   /// After jumps, the stack pointer can be different between target branches, so it needs adjustment.
   void adjustStackPointer();
 
@@ -1473,7 +1475,7 @@ void JitCompilerX86Impl::doCompile()
         mStackPointer--;
         break;
       }
-      case Opcode::WIDE: notImplemented(opcode); break;
+      case Opcode::WIDE: this->wide(); break;
       case Opcode::MULTIANEWARRAY: notImplemented(opcode); break;
       case Opcode::GOTO_W: {
         auto opcodePos = mBytes.pos() - 1;
@@ -1998,6 +2000,34 @@ void JitCompilerX86Impl::throwException()
   // After 'ATHROW' the operand stack has only one element
   mStackPointer = 0;
   this->push(exception);
+}
+
+void JitCompilerX86Impl::wide()
+{
+  auto opcode = static_cast<Opcode>(mBytes.readU1());
+  auto index = mBytes.readU2();
+
+  switch (opcode) {
+    using enum Opcode;
+    case IINC: {
+      auto constant = static_cast<int16_t>(mBytes.readU2());
+      auto value = this->load(index);
+      mCompiler.add(value, asmjit::Imm{constant});
+      this->store(index, value);
+      break;
+    }
+    case ALOAD: [[fallthrough]];
+    case FLOAD: [[fallthrough]];
+    case ILOAD: this->push(this->load(index)); break;
+    case DLOAD: [[fallthrough]];
+    case LLOAD: this->pushCategoryTwo(this->load(index)); break;
+    case ISTORE: [[fallthrough]];
+    case FSTORE: [[fallthrough]];
+    case ASTORE: this->store(index, this->pop()); break;
+    case LSTORE: [[fallthrough]];
+    case DSTORE: this->store(index, this->popCategoryTwo()); break;
+    default: GEEVM_UNREACHBLE("Unknown modified opcode for WIDE");
+  }
 }
 
 void JitCompilerX86Impl::adjustStackPointer()
