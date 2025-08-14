@@ -196,6 +196,7 @@ private:
   void invokeInterface();
 
   void wide();
+  void checkCast();
 
   /// After jumps, the stack pointer can be different between target branches, so it needs adjustment.
   void adjustStackPointer();
@@ -342,18 +343,6 @@ void JitCompilerX86Impl::detectException(size_t opcodePos)
 void JitCompilerX86Impl::doCompile()
 {
   using namespace asmjit;
-  using namespace asmjit::x86;
-
-  AsmJitDebugLogger logger;
-  logger.addFlags(FormatFlags::kMachineCode);
-  logger.addFlags(FormatFlags::kHexOffsets);
-  logger.addFlags(FormatFlags::kExplainImms);
-  logger.addFlags(FormatFlags::kHexImms);
-  logger.addFlags(FormatFlags::kPositions);
-  logger.addFlags(FormatFlags::kRegCasts);
-  logger.addFlags(FormatFlags::kRegType);
-
-  AsmJitErrorHandler errorHandler;
 
   size_t opcodePos = 0;
   while (mBytes.pos() < mBytes.size()) {
@@ -1465,7 +1454,7 @@ void JitCompilerX86Impl::doCompile()
         break;
       }
       case Opcode::ATHROW: this->throwException(); break;
-      case Opcode::CHECKCAST: notImplemented(opcode); break;
+      case Opcode::CHECKCAST: this->checkCast(); break;
       case Opcode::INSTANCEOF: notImplemented(opcode); break;
       case Opcode::MONITORENTER: {
         mStackPointer--;
@@ -2030,6 +2019,48 @@ void JitCompilerX86Impl::wide()
   }
 }
 
+static bool doCheckCast(JavaThread* thread, Instance* objectRef, types::u2 index, types::u4 pos)
+{
+  auto klass = thread->currentFrame().currentClass()->runtimeConstantPool().getClass(index);
+  if (!klass) {
+    thread->throwException(klass.error().exception(), klass.error().message());
+    return true;
+  }
+
+  if (objectRef == nullptr) {
+    // Nothing to do
+    return false;
+  }
+
+  JClass* classToCheck = objectRef->getClass();
+  if (!classToCheck->isInstanceOf(*klass)) {
+    // Update the call frame with the program counter as a correct program counter value is needed for the exception line numbers
+    thread->currentFrame().set(pos);
+
+    types::JString message = u"class " + classToCheck->javaClassName() + u" cannot be cast to class " + (*klass)->javaClassName();
+    thread->throwException(u"java/lang/ClassCastException", message);
+    return true;
+  }
+
+  return false;
+}
+
+void JitCompilerX86Impl::checkCast()
+{
+  types::u2 index = mBytes.readU2();
+  auto& objectRef = mStack[mStackPointer - 1];
+
+  auto result = mCompiler.newIntPtr();
+
+  asmjit::InvokeNode* invoke;
+  mCompiler.invoke(&invoke, doCheckCast, asmjit::FuncSignature::build<bool, JavaThread*, Instance*, types::u2, types::u4>());
+  invoke->setArg(0, mThread);
+  invoke->setArg(1, objectRef);
+  invoke->setArg(2, asmjit::Imm{index});
+  invoke->setArg(3, asmjit::Imm{mBytes.pos()});
+  invoke->setRet(0, result);
+}
+
 void JitCompilerX86Impl::adjustStackPointer()
 {
   auto& frame = mStackMap.frameAt(mBytes.pos());
@@ -2061,9 +2092,12 @@ void JitCompilerX86Impl::generateExceptionHandlingCode()
   for (auto& [pos, label] : mExceptionHandlers) {
     mCompiler.bind(label);
     mCompiler.mov(pc, asmjit::Imm{pos});
+    // Write back the program counter to the stack frame
+    mCompiler.mov(asmjit::x86::qword_ptr(mCallFrame, CallFrame::ProgramCounterOffset), pc);
     mCompiler.jmp(exceptionHandlerLabel);
   }
 
+  runtimeDebug(mCallFrame);
   // Try to handle exception in the current function.
   mCompiler.bind(exceptionHandlerLabel);
 
