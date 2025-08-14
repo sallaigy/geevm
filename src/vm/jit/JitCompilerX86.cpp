@@ -197,6 +197,7 @@ private:
 
   void wide();
   void checkCast();
+  void instanceOf();
 
   /// After jumps, the stack pointer can be different between target branches, so it needs adjustment.
   void adjustStackPointer();
@@ -1455,7 +1456,7 @@ void JitCompilerX86Impl::doCompile()
       }
       case Opcode::ATHROW: this->throwException(); break;
       case Opcode::CHECKCAST: this->checkCast(); break;
-      case Opcode::INSTANCEOF: notImplemented(opcode); break;
+      case Opcode::INSTANCEOF: this->instanceOf(); break;
       case Opcode::MONITORENTER: {
         mStackPointer--;
         break;
@@ -2052,6 +2053,7 @@ void JitCompilerX86Impl::checkCast()
 
   auto result = mCompiler.newIntPtr();
 
+  this->safePoint();
   asmjit::InvokeNode* invoke;
   mCompiler.invoke(&invoke, doCheckCast, asmjit::FuncSignature::build<bool, JavaThread*, Instance*, types::u2, types::u4>());
   invoke->setArg(0, mThread);
@@ -2059,6 +2061,46 @@ void JitCompilerX86Impl::checkCast()
   invoke->setArg(2, asmjit::Imm{index});
   invoke->setArg(3, asmjit::Imm{mBytes.pos()});
   invoke->setRet(0, result);
+  this->endSafePoint();
+}
+
+static int32_t doInstanceOf(JavaThread* thread, Instance* objectRef, types::u2 index, types::u4 pos)
+{
+  if (objectRef == nullptr) {
+    return 0;
+  }
+
+  auto klass = thread->currentFrame().currentClass()->runtimeConstantPool().getClass(index);
+  if (!klass) {
+    thread->currentFrame().set(pos);
+    thread->throwException(klass.error().exception(), klass.error().message());
+    return 0;
+  }
+
+  JClass* classToCheck = objectRef->getClass();
+  if (classToCheck->isInstanceOf(*klass)) {
+    return 1;
+  }
+  return 0;
+}
+
+void JitCompilerX86Impl::instanceOf()
+{
+  types::u2 index = mBytes.readU2();
+  asmjit::x86::Gp result = mCompiler.newIntPtr();
+
+  this->safePoint();
+  auto& objectRef = mStack[mStackPointer - 1];
+  asmjit::InvokeNode* invoke;
+  mCompiler.invoke(&invoke, doInstanceOf, asmjit::FuncSignature::build<bool, JavaThread*, Instance*, types::u2, types::u4>());
+  invoke->setArg(0, mThread);
+  invoke->setArg(1, objectRef);
+  invoke->setArg(2, asmjit::Imm{index});
+  invoke->setArg(3, asmjit::Imm{mBytes.pos()});
+  invoke->setRet(0, result);
+  this->endSafePoint();
+
+  mCompiler.mov(mStack[mStackPointer - 1], result);
 }
 
 void JitCompilerX86Impl::adjustStackPointer()
