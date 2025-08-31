@@ -155,6 +155,7 @@ private:
   void newObject();
   void newArray();
   void newReferenceArray();
+  void newMultiArray();
 
   template<class T>
   void arrayStore();
@@ -1466,7 +1467,7 @@ void JitCompilerX86Impl::doCompile()
         break;
       }
       case Opcode::WIDE: this->wide(); break;
-      case Opcode::MULTIANEWARRAY: notImplemented(opcode); break;
+      case Opcode::MULTIANEWARRAY: this->newMultiArray(); break;
       case Opcode::GOTO_W: {
         auto opcodePos = mBytes.pos() - 1;
 
@@ -1906,6 +1907,67 @@ void JitCompilerX86Impl::newReferenceArray()
   this->endSafePoint();
 }
 
+static Instance* makeMultiArray(JavaThread* thread, uint16_t index, uint8_t dimensions)
+{
+  auto klass = thread->currentFrame().currentClass()->runtimeConstantPool().getClass(index);
+  if (!klass) {
+    thread->throwException(klass.error().exception(), klass.error().message());
+    return nullptr;
+  }
+
+  std::vector<int32_t> dimensionCounts;
+  for (uint8_t dim = 0; dim < dimensions; dim++) {
+    dimensionCounts.push_back(thread->currentFrame().popOperand<int32_t>());
+  }
+
+  auto makeInnerArray = [thread](auto& self, std::vector<int32_t> dimensionCounts, ArrayClass* arrayClass) -> GcRootRef<ArrayInstance> {
+    auto count = dimensionCounts.back();
+    dimensionCounts.pop_back();
+
+    GcRootRef<ArrayInstance> newArray = nullptr;
+    if (!dimensionCounts.empty()) {
+      auto outerArray = thread->heap().gc().pin(thread->heap().allocateArray<Instance*>(arrayClass, count)).release();
+      ArrayClass* innerArrayClass = (*arrayClass->elementClass())->asArrayClass();
+      for (int32_t i = 0; i < count; i++) {
+        auto innerArray = self(self, dimensionCounts, innerArrayClass);
+        outerArray->setArrayElement(i, innerArray.get());
+        thread->heap().gc().release(innerArray);
+      }
+      newArray = outerArray;
+    } else {
+      newArray = thread->heap().gc().pin(thread->heap().allocateArray(arrayClass, count)).release();
+    }
+
+    return newArray;
+  };
+
+  GcRootRef<ArrayInstance> result = makeInnerArray(makeInnerArray, dimensionCounts, (*klass)->asArrayClass());
+  ArrayInstance* array = result.get();
+  thread->heap().gc().release(result);
+  return array;
+}
+
+void JitCompilerX86Impl::newMultiArray()
+{
+  uint16_t index = mBytes.readU2();
+  uint8_t dimensions = mBytes.readU1();
+
+  // Add a safe point to sync the operand stack
+  this->safePoint();
+
+  auto result = mCompiler.newIntPtr();
+  asmjit::InvokeNode* invoke;
+  mCompiler.invoke(&invoke, makeMultiArray, asmjit::FuncSignature::build<Instance*, JavaThread*, uint16_t, uint8_t>());
+  invoke->setArg(0, mThread);
+  invoke->setArg(1, asmjit::Imm{index});
+  invoke->setArg(2, asmjit::Imm{dimensions});
+  invoke->setRet(0, result);
+  this->endSafePoint();
+
+  mStackPointer -= dimensions;
+  this->push(result);
+}
+
 static void resolveAndInvokeVirtualMethod(JMethod* baseMethod, Instance* objectRef, JavaThread* thread)
 {
   JClass* target = objectRef->getClass();
@@ -2139,7 +2201,6 @@ void JitCompilerX86Impl::generateExceptionHandlingCode()
     mCompiler.jmp(exceptionHandlerLabel);
   }
 
-  runtimeDebug(mCallFrame);
   // Try to handle exception in the current function.
   mCompiler.bind(exceptionHandlerLabel);
 

@@ -1,7 +1,6 @@
 // RUN: %compile -d %t "%s" | FileCheck "%s"
+// RUN: %compile -d %t -f "-Xjit org/geevm/tests/arrays/MultiDimensionalArrayFiveDim#main([Ljava/lang/String;)V" "%s" 2>&1 | FileCheck "%s"
 package org.geevm.tests.arrays;
-
-import org.geevm.util.Printer;
 
 public class MultiDimensionalArrayFiveDim {
 
@@ -19,7 +18,7 @@ public class MultiDimensionalArrayFiveDim {
             }
         }
 
-        Printer.println(t[5][4][3][2][1]);
+        System.out.println(t[5][4][3][2][1]);
         // CHECK: 54321
     }
 
