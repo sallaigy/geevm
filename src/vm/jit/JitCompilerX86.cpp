@@ -372,12 +372,13 @@ void JitCompilerX86Impl::doCompile()
       case Opcode::DCONST_0: this->pushCategoryTwo(Imm{std::bit_cast<uint64_t>(0.0)}); break;
       case Opcode::DCONST_1: this->pushCategoryTwo(Imm{std::bit_cast<uint64_t>(1.0)}); break;
       case Opcode::BIPUSH: {
-        this->push(Imm{mBytes.readU1()});
+        int32_t value = std::bit_cast<int8_t>(mBytes.readU1());
+        this->push(Imm{value});
         break;
       }
       case Opcode::SIPUSH: {
-        auto constantValue = mCompiler.newInt16Const(ConstPoolScope::kLocal, std::bit_cast<int16_t>(mBytes.readU2()));
-        this->push(constantValue);
+        auto value = std::bit_cast<int16_t>(mBytes.readU2());
+        this->push(Imm{value});
         break;
       }
       case Opcode::LDC: this->ldc(mBytes.readU1()); break;
