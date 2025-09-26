@@ -31,6 +31,7 @@ file(GLOB_RECURSE
 file(GLOB_RECURSE
   GEEVM_VM_SOURCES
   src/vm/*.cpp
+  src/vm/jit/*.cpp
 )
 
 set(GEEVM_SOURCES
@@ -44,6 +45,13 @@ if (CMAKE_BUILD_TYPE STREQUAL "Debug")
 else ()
   set(HARDENED_COMPILER_FLAGS "")
 endif ()
+
+FetchContent_Declare(asmjit
+  GIT_REPOSITORY "https://github.com/asmjit/asmjit"
+  GIT_HASH "4111caeca42cb092669d27165eec1fd958ffe9a6"
+)
+FetchContent_MakeAvailable(asmjit)
+target_compile_definitions(asmjit PUBLIC ASMJIT_EMBED)
 
 add_library(geevm ${GEEVM_SOURCES})
 target_compile_options(geevm PUBLIC ${HARDENED_COMPILER_FLAGS})
@@ -64,8 +72,10 @@ add_subdirectory(tests)
 
 target_include_directories(geevm PUBLIC src)
 target_include_directories(geevm PUBLIC ${JNI_INCLUDE_DIRS})
-target_link_libraries(geevm libzip::zip)
-target_link_libraries(geevm ffi)
+target_include_directories(geevm PUBLIC "{asmjit_SOURCE_DIR}/src")
+target_link_libraries(geevm PUBLIC libzip::zip)
+target_link_libraries(geevm PUBLIC ffi)
+target_link_libraries(geevm PUBLIC asmjit::asmjit)
 
 FetchContent_Declare(
   argparse

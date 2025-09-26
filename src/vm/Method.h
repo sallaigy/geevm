@@ -5,12 +5,16 @@
 #include "class_file/Descriptor.h"
 #include "vm/StackMap.h"
 
-#include <utility>
-
 namespace geevm
 {
 class InstanceClass;
 class JClass;
+class CallFrame;
+class JavaThread;
+
+/// Calling convention for calling a JIT'ed function.
+/// The return value is the value returned by the function (if the function is void, the value is ignored).
+using JitFunction = std::uint64_t (*)(JavaThread*, CallFrame*);
 
 class JMethod
 {
@@ -72,12 +76,25 @@ public:
     return mClass;
   }
 
+  void setJitFunction(JitFunction fn)
+  {
+    mJitFunction = fn;
+  }
+
+  JitFunction jitFunction() const
+  {
+    return mJitFunction;
+  }
+
+  std::string signatureString() const;
+
 private:
   const MethodInfo& mMethodInfo;
   InstanceClass* mClass;
   types::JString mName;
   types::JString mRawDescriptor;
   MethodDescriptor mDescriptor;
+  JitFunction mJitFunction = nullptr;
 };
 
 } // namespace geevm

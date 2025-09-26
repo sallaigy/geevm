@@ -202,7 +202,7 @@ void InstanceClass::prepareStaticFields()
       auto fieldType = FieldType::parse(descriptor);
 
       auto jfield = std::make_unique<JField>(field, this, types::JString{fieldName}, types::JString{descriptor}, *fieldType, staticFieldOffset++);
-      mStaticFieldValues.emplace_back(Value::defaultValue(*fieldType));
+      mStaticFieldValues.emplace_back(0);
 
       NameAndDescriptor key{fieldName, descriptor};
       mFields.try_emplace(key, std::move(jfield));
@@ -214,7 +214,7 @@ void InstanceClass::initializeFields()
 {
   for (auto& [fieldName, field] : this->fields()) {
     if (field->isStatic() && field->isFinal() && field->fieldInfo().constantValue().has_value()) {
-      mStaticFieldValues.at(field->offset()) = getInitialFieldValue(field->fieldType(), *(field->fieldInfo().constantValue()));
+      mStaticFieldValues[field->offset()] = getInitialFieldValue(field->fieldType(), *(field->fieldInfo().constantValue())).toRaw();
     }
   }
 }
@@ -340,7 +340,7 @@ Value JClass::getStaticFieldValue(const types::JString& name, const types::JStri
 Value JClass::getStaticFieldValue(size_t offset)
 {
   assert(offset < mStaticFieldValues.size());
-  return mStaticFieldValues[offset];
+  return Value{mStaticFieldValues[offset]};
 }
 
 void JClass::setStaticFieldValue(const types::JString& name, const types::JString& descriptor, Value value)
@@ -354,7 +354,7 @@ void JClass::setStaticFieldValue(const types::JString& name, const types::JStrin
 void JClass::setStaticFieldValue(size_t offset, Value value)
 {
   assert(offset < mStaticFieldValues.size());
-  mStaticFieldValues[offset] = value;
+  mStaticFieldValues[offset] = value.toRaw();
 }
 
 bool JClass::isInstanceOf(const JClass* other) const

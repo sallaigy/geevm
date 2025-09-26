@@ -1,6 +1,7 @@
 #ifndef GEEVM_JVMTYPES_H
 #define GEEVM_JVMTYPES_H
 
+#include "common/Debug.h"
 #include "common/TypeTraits.h"
 
 #include <cstdint>
@@ -28,14 +29,14 @@ namespace geevm
 
 enum class PrimitiveType
 {
-  Byte,
-  Char,
-  Double,
-  Float,
-  Int,
-  Long,
-  Short,
-  Boolean,
+  Byte = 8,
+  Char = 5,
+  Double = 7,
+  Float = 6,
+  Int = 10,
+  Long = 11,
+  Short = 9,
+  Boolean = 4,
 };
 
 class JClass;
@@ -69,77 +70,41 @@ struct JvmTypeTraits;
 template<PrimitiveType Type>
 struct PrimitiveTypeTraits;
 
-template<>
-struct PrimitiveTypeTraits<PrimitiveType::Byte>
-{
-  using Representation = std::int8_t;
-  static constexpr types::JStringRef Descriptor = u"B";
-  static constexpr types::JStringRef Name = u"byte";
-  static constexpr types::JStringRef ClassName = u"java/lang/Byte";
-};
+#define PRIMITIVE_TYPE_DEFINITION(TYPE, REPR, DESCRIPTOR, NAME, CLASSNAME) \
+  template<>                                                               \
+  struct PrimitiveTypeTraits<PrimitiveType::TYPE>                          \
+  {                                                                        \
+    using Representation = REPR;                                           \
+    static constexpr types::JStringRef Descriptor = DESCRIPTOR;            \
+    static constexpr types::JStringRef Name = NAME;                        \
+    static constexpr types::JStringRef ClassName = CLASSNAME;              \
+    static constexpr types::JStringRef ArrayClassName = u"[" DESCRIPTOR;   \
+  };
 
-template<>
-struct PrimitiveTypeTraits<PrimitiveType::Char>
-{
-  using Representation = char16_t;
-  static constexpr types::JStringRef Descriptor = u"C";
-  static constexpr types::JStringRef Name = u"char";
-  static constexpr types::JStringRef ClassName = u"java/lang/Char";
-};
+PRIMITIVE_TYPE_DEFINITION(Byte, std::int8_t, u"B", u"byte", u"java/lang/Byte");
+PRIMITIVE_TYPE_DEFINITION(Char, char16_t, u"C", u"char", u"java/lang/Char");
+PRIMITIVE_TYPE_DEFINITION(Double, double, u"D", u"double", u"java/lang/Double");
+PRIMITIVE_TYPE_DEFINITION(Float, float, u"F", u"float", u"java/lang/Float");
+PRIMITIVE_TYPE_DEFINITION(Int, std::int32_t, u"I", u"int", u"java/lang/Int");
+PRIMITIVE_TYPE_DEFINITION(Long, std::int64_t, u"J", u"long", u"java/lang/Long");
+PRIMITIVE_TYPE_DEFINITION(Short, std::int16_t, u"S", u"short", u"java/lang/Short");
+PRIMITIVE_TYPE_DEFINITION(Boolean, std::int8_t, u"Z", u"boolean", u"java/lang/Boolean");
 
-template<>
-struct PrimitiveTypeTraits<PrimitiveType::Double>
+template<class MapFunc>
+decltype(auto) mapPrimitive(PrimitiveType type, const MapFunc& mapper)
 {
-  using Representation = double;
-  static constexpr types::JStringRef Descriptor = u"D";
-  static constexpr types::JStringRef Name = u"double";
-  static constexpr types::JStringRef ClassName = u"java/lang/Double";
-};
-
-template<>
-struct PrimitiveTypeTraits<PrimitiveType::Float>
-{
-  using Representation = float;
-  static constexpr types::JStringRef Descriptor = u"F";
-  static constexpr types::JStringRef Name = u"float";
-  static constexpr types::JStringRef ClassName = u"java/lang/Float";
-};
-
-template<>
-struct PrimitiveTypeTraits<PrimitiveType::Int>
-{
-  using Representation = std::int32_t;
-  static constexpr types::JStringRef Descriptor = u"I";
-  static constexpr types::JStringRef Name = u"int";
-  static constexpr types::JStringRef ClassName = u"java/lang/Integer";
-};
-
-template<>
-struct PrimitiveTypeTraits<PrimitiveType::Long>
-{
-  using Representation = std::int64_t;
-  static constexpr types::JStringRef Descriptor = u"J";
-  static constexpr types::JStringRef Name = u"long";
-  static constexpr types::JStringRef ClassName = u"java/lang/Long";
-};
-
-template<>
-struct PrimitiveTypeTraits<PrimitiveType::Short>
-{
-  using Representation = std::int16_t;
-  static constexpr types::JStringRef Descriptor = u"S";
-  static constexpr types::JStringRef Name = u"short";
-  static constexpr types::JStringRef ClassName = u"java/lang/Short";
-};
-
-template<>
-struct PrimitiveTypeTraits<PrimitiveType::Boolean>
-{
-  using Representation = std::int8_t;
-  static constexpr types::JStringRef Descriptor = u"Z";
-  static constexpr types::JStringRef Name = u"boolean";
-  static constexpr types::JStringRef ClassName = u"java/lang/Boolean";
-};
+  switch (type) {
+    case PrimitiveType::Byte: return mapper.template operator()<PrimitiveType::Byte>();
+    case PrimitiveType::Char: return mapper.template operator()<PrimitiveType::Char>();
+    case PrimitiveType::Double: return mapper.template operator()<PrimitiveType::Double>();
+    case PrimitiveType::Float: return mapper.template operator()<PrimitiveType::Float>();
+    case PrimitiveType::Int: return mapper.template operator()<PrimitiveType::Int>();
+    case PrimitiveType::Long: return mapper.template operator()<PrimitiveType::Long>();
+    case PrimitiveType::Short: return mapper.template operator()<PrimitiveType::Short>();
+    case PrimitiveType::Boolean: return mapper.template operator()<PrimitiveType::Boolean>();
+  }
+  GEEVM_UNREACHBLE("Unknown primitive type");
+}
 
 using NameAndDescriptor = std::pair<types::JString, types::JString>;
 

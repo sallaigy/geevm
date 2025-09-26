@@ -1,4 +1,5 @@
 // RUN: %compile -d %t "%s" | FileCheck "%s"
+// RUN: %compile -d %t -f "-Xjit org/geevm/tests/basic/IntegerAnd#calculateAnd(II)I" "%s" 2>&1 | FileCheck "%s"
 package org.geevm.tests.basic;
 
 import org.geevm.util.Printer;
@@ -7,29 +8,29 @@ public class IntegerAnd {
 
     public static void main(String[] args) {
         // CHECK: 0
-        andAndPrint(0, 1);
+        Printer.println(calculateAnd(0, 1));
         // CHECK-NEXT: 1
-        andAndPrint(1, 1);
+        Printer.println(calculateAnd(1, 1));
         // CHECK-NEXT: 0
-        andAndPrint(2, 1);
+        Printer.println(calculateAnd(2, 1));
         // CHECK-NEXT: 2
-        andAndPrint(2, 2);
+        Printer.println(calculateAnd(2, 2));
         // CHECK-NEXT: 2
-        andAndPrint(3, 2);
+        Printer.println(calculateAnd(3, 2));
         // CHECK-NEXT: 8
-        andAndPrint(12, 8);
+        Printer.println(calculateAnd(12, 8));
         // CHECK-NEXT: 0
-        andAndPrint(0, 15);
+        Printer.println(calculateAnd(0, 15));
         // CHECK-NEXT: 0
-        andAndPrint(10, 5);
+        Printer.println(calculateAnd(10, 5));
         // CHECK-NEXT: -16
-        andAndPrint(-16, -16);
+        Printer.println(calculateAnd(-16, -16));
         // CHECK-NEXT: 0
-        andAndPrint(-16, 15);
+        Printer.println(calculateAnd(-16, 15));
     }
 
-    public static void andAndPrint(int x, int y) {
-        Printer.println(x & y);
+    public static int calculateAnd(int x, int y) {
+        return x & y;
     }
 
 }

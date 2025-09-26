@@ -1,4 +1,5 @@
 // RUN: %compile -d %t "%s" | FileCheck "%s"
+// RUN: %compile -d %t -f "-Xjit org/geevm/tests/casting/LongToFloat#castAndPrint(J)V" "%s" 2>&1 | FileCheck "%s"
 package org.geevm.tests.casting;
 
 import org.geevm.util.Printer;

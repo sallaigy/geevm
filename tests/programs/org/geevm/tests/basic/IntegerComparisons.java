@@ -1,4 +1,5 @@
 // RUN: %compile -d %t "%s" | FileCheck "%s"
+// RUN: %compile -d %t -f "-Xjit org/geevm/tests/basic/IntegerComparisons#compare(II)V" "%s" 2>&1 | FileCheck "%s"
 package org.geevm.tests.basic;
 
 import org.geevm.util.Printer;
@@ -6,38 +7,38 @@ import org.geevm.util.Printer;
 public class IntegerComparisons {
 
     public static void main(String[] args) {
-         // CHECK: 0
-         // CHECK-NEXT: 3
-         // CHECK-NEXT: 5
+         // CHECK: a < b
+         // CHECK-NEXT: a <= b
+         // CHECK-NEXT: a != b
         compare(0, 1);
-         // CHECK-NEXT: 1
-         // CHECK-NEXT: 2
-         // CHECK-NEXT: 5
+         // CHECK-NEXT: a > b
+         // CHECK-NEXT: a >= b
+         // CHECK-NEXT: a != b
         compare(1, 0);
-         // CHECK-NEXT: 2
-         // CHECK-NEXT: 3
-         // CHECK-NEXT: 4
+         // CHECK-NEXT: a >= b
+         // CHECK-NEXT: a <= b
+         // CHECK-NEXT: a == b
         compare(1, 1);
     }
 
     private static void compare(int a, int b) {
         if (a < b) {
-            Printer.println(0);
+            Printer.println("a < b");
         }
         if (a > b) {
-            Printer.println(1);
+            Printer.println("a > b");
         }
         if (a >= b) {
-            Printer.println(2);
+            Printer.println("a >= b");
         }
         if (a <= b) {
-            Printer.println(3);
+            Printer.println("a <= b");
         }
         if (a == b) {
-            Printer.println(4);
+            Printer.println("a == b");
         }
         if (a != b) {
-            Printer.println(5);
+            Printer.println("a != b");
         }
     }
 

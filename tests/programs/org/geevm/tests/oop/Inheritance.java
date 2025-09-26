@@ -1,6 +1,8 @@
 // RUN: split-file %s %t
 // RUN: %compile --no-copy-sources -d %t -m org.geevm.tests.oop.Inheritance %t/org/geevm/tests/oop/Base.java \
 // RUN: %t/org/geevm/tests/oop/Derived.java %t/org/geevm/tests/oop/Inheritance.java | FileCheck "%s"
+// RUN: %compile --no-copy-sources -d %t -m org.geevm.tests.oop.Inheritance -f "-Xjit org/geevm/tests/oop/Inheritance#main([Ljava/lang/String;)V" \
+// RUN: %t/org/geevm/tests/oop/Base.java %t/org/geevm/tests/oop/Derived.java %t/org/geevm/tests/oop/Inheritance.java | FileCheck "%s"
 
 //--- org/geevm/tests/oop/Inheritance.java
 package org.geevm.tests.oop;

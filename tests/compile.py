@@ -38,6 +38,7 @@ if __name__ == "__main__":
     parser.add_argument('inputs', nargs='+')
     parser.add_argument('-d', '--directory', required=True, type=str)
     parser.add_argument('-m', '--main', type=str)
+    parser.add_argument('-f', '--flags', type=str)
     parser.add_argument('--no-copy-sources', action='store_true', default=False)
     parser.add_argument('-v', '--verbose', action='store_true')
 
@@ -90,7 +91,11 @@ if __name__ == "__main__":
     else:
         raise RuntimeError("main must be set!")
 
-    java_command = [java_tool_path, main_class]
+    java_command = [java_tool_path]
+    if args.flags is not None:
+        java_command.extend(args.flags.split())
+
+    java_command.append(main_class)
     if verbose:
         print(f'Running java command: {java_command}')
     r = subprocess.run(java_command, stdout=sys.stdout, stderr=sys.stderr, cwd=destdir)

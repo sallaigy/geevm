@@ -1,4 +1,5 @@
 // RUN: %compile -d %t "%s" | FileCheck "%s"
+// RUN: %compile -d %t -f "-Xjit org/geevm/tests/basic/IntegerShiftRight#calculateShift(II)I" "%s" 2>&1 | FileCheck "%s"
 package org.geevm.tests.basic;
 
 import org.geevm.util.Printer;
@@ -7,28 +8,29 @@ public class IntegerShiftRight {
 
     public static void main(String[] args) {
         // CHECK: 0
-        shiftAndPrint(1, 1);
+        Printer.println(calculateShift(1, 1));
         // CHECK-NEXT: 1
-        shiftAndPrint(3, 1);
+        Printer.println(calculateShift(3, 1));
         // CHECK-NEXT: 42
-        shiftAndPrint(42, 0);
+        Printer.println(calculateShift(42, 0));
         // CHECK-NEXT: -1
-        shiftAndPrint(-1, 1);
+        Printer.println(calculateShift(-1, 1));
         // CHECK-NEXT: -3
-        shiftAndPrint(-5, 1);
+        Printer.println(calculateShift(-5, 1));
         // CHECK-NEXT: 0
-        shiftAndPrint(0, 5);
+        Printer.println(calculateShift(0, 5));
         // CHECK-NEXT: 1
-        shiftAndPrint(1, 32);
+        Printer.println(calculateShift(1, 32));
         // CHECK-NEXT: -1
-        shiftAndPrint(-1, 32);
+        Printer.println(calculateShift(-1, 32));
         // CHECK-NEXT: 1073741823
-        shiftAndPrint(Integer.MAX_VALUE, 1);
+        Printer.println(calculateShift(Integer.MAX_VALUE, 1));
         // CHECK-NEXT: -1073741824
-        shiftAndPrint(Integer.MIN_VALUE, 1);
+        Printer.println(calculateShift(Integer.MIN_VALUE, 1));
     }
-    public static void shiftAndPrint(int x, int y) {
-        Printer.println(x >> y);
+
+    public static int calculateShift(int x, int y) {
+        return x >> y;
     }
 
 }

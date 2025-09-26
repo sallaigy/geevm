@@ -1,9 +1,9 @@
 #include "vm/GarbageCollector.h"
-
 #include "common/Debug.h"
 #include "common/JvmError.h"
 #include "common/Memory.h"
 #include "vm/Class.h"
+#include "vm/Frame.h"
 #include "vm/GcRoots.h"
 #include "vm/Vm.h"
 
@@ -98,6 +98,8 @@ void GarbageCollector::performGarbageCollection()
   }
   this->lockGC();
 
+  size_t startSize = mBumpPtr - mFromRegion;
+
   ASAN_UNPOISON_MEMORY_REGION(mToRegion, mHeapSize / 2);
   std::swap(mFromRegion, mToRegion);
   mBumpPtr = mFromRegion;
@@ -163,6 +165,10 @@ void GarbageCollector::performGarbageCollection()
   // Clear up the previous region
   std::memset(mToRegion, 0, mHeapSize / 2);
   ASAN_POISON_MEMORY_REGION(mToRegion, mHeapSize / 2);
+
+  size_t endSize = mBumpPtr - mFromRegion;
+  debug::DebugLogger::get().log(
+      "GC", std::format("Copied {} objects, heap size: {:.2f}M -> {:.2f}M", map.size(), startSize / 1024.0 / 1024.0, endSize / 1024.0 / 1024.0));
 
   this->unlockGC();
 }

@@ -1,4 +1,5 @@
 ; RUN: %compile -d %t "%s" | FileCheck "%s"
+; RUN: %compile -d %t -f "-Xjit org/geevm/tests/basic/Dup#main([Ljava/lang/String;)V" "%s" 2>&1 | FileCheck "%s"
 .bytecode 61.0
 .class org/geevm/tests/basic/Dup
 .super java/lang/Object

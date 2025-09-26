@@ -123,6 +123,8 @@ protected:
   ArrayInstance(ArrayClass* arrayClass, int32_t length);
 
 public:
+  static constexpr size_t LengthFieldOffset = sizeof(InstanceHeader);
+
   int32_t length() const
   {
     return mLength;
@@ -149,6 +151,9 @@ template<JvmType T>
 class JavaArray : public ArrayInstance
 {
 public:
+  static constexpr size_t ElementStartOffset = sizeof(ArrayInstance);
+  static constexpr size_t ElementIndexScale = sizeof(T);
+
   JavaArray(ArrayClass* arrayClass, size_t length)
     : ArrayInstance(arrayClass, length)
   {

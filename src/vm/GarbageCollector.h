@@ -22,6 +22,8 @@ class GarbageCollector;
 class RootList
 {
 public:
+  static const size_t NodeInstancePointerOffset;
+
   struct Node
   {
     Instance* instance;

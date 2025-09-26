@@ -2,6 +2,8 @@
 
 using namespace geevm;
 
+const size_t RootList::NodeInstancePointerOffset = offsetof(RootList::Node, instance);
+
 RootList::Node* RootList::insert(Instance* reference)
 {
   Node* newNode = new Node(reference, mHead, nullptr);

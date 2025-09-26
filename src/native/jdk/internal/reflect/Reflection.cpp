@@ -1,3 +1,4 @@
+#include "vm/Frame.h"
 #include "vm/Heap.h"
 #include "vm/JniImplementation.h"
 #include "vm/Thread.h"

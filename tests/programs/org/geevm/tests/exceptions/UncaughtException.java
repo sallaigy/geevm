@@ -1,4 +1,6 @@
 // RUN: %compile -d %t "%s" 2>&1 | FileCheck "%s"
+// RUN: %compile -d %t -f "-Xjit org/geevm/tests/exceptions/UncaughtException#main([Ljava/lang/String;),org/geevm/tests/exceptions/UncaughtException#callee([Ljava/lang/String;)V" \
+// RUN: "%s" 2>&1 | FileCheck "%s"
 package org.geevm.tests.exceptions;
 
 import org.geevm.util.Printer;
@@ -7,8 +9,8 @@ public class UncaughtException {
     public static void main(String[] args) {
         callee();
         // CHECK: Exception in thread "main" java.lang.IllegalStateException: Exception thrown in callee.
-        // CHECK-NEXT: at org.geevm.tests.exceptions.UncaughtException.callee(UncaughtException.java:16)
-        // CHECK-NEXT: at org.geevm.tests.exceptions.UncaughtException.main(UncaughtException.java:8)
+        // CHECK-NEXT: at org.geevm.tests.exceptions.UncaughtException.callee(UncaughtException.java:18)
+        // CHECK-NEXT: at org.geevm.tests.exceptions.UncaughtException.main(UncaughtException.java:10)
     }
 
     public static void callee() {

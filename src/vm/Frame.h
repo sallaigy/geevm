@@ -7,7 +7,6 @@
 #include "vm/Value.h"
 
 #include <cassert>
-#include <generator>
 
 namespace geevm
 {
@@ -23,6 +22,16 @@ public:
   CallFrame& operator=(const CallFrame&) = delete;
 
   ~CallFrame();
+
+  // Constants
+  //==--------------------------------------------------------------------==//
+  static size_t LocalVariablesOffset;
+  static size_t OperandStackOffset;
+  static size_t StackPointerOffset;
+  static size_t ProgramCounterOffset;
+
+  // Current frame information
+  //==--------------------------------------------------------------------==//
 
   InstanceClass* currentClass() const
   {
@@ -120,13 +129,18 @@ public:
   Value popGenericOperand()
   {
     assert(mOperandStackPointer > 0 && "Cannot pop from an empty operand stack!");
-    Value value(mOperandStack[mOperandStackPointer - 1], false);
+    Value value{mOperandStack[mOperandStackPointer - 1]};
     mOperandStackPointer--;
 
     return value;
   }
 
-  uint16_t stackPointer()
+  uint64_t* locals() const
+  {
+    return mLocalVariables;
+  }
+
+  uint16_t stackPointer() const
   {
     return mOperandStackPointer;
   }
